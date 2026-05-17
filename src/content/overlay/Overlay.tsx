@@ -13,7 +13,14 @@ import {
   type MediaSelection,
   type MessageFilters,
 } from '../../engine/checkpoint-types';
-import { ChannelType, type RawChannel, type RawGuild } from '../../engine/types';
+import {
+  ChannelType,
+  type RawAttachment,
+  type RawChannel,
+  type RawGuild,
+  type RawMessage,
+  type RawUser,
+} from '../../engine/types';
 import type { EnqueueExtras, QueueItemView } from '../../messaging';
 import type { RemoteController } from '../../ui/remote-controller';
 import { t } from '../../ui/i18n';
@@ -84,8 +91,17 @@ interface CategoryGroup {
   channels: RawChannel[];
 }
 
-/** Regroupe les salons textuels par catégorie, dans l'ordre Discord. */
-function groupChannels(all: RawChannel[]): CategoryGroup[] {
+/** Vrai si le salon est une conversation privée (DM ou DM de groupe). */
+function isDmChannel(c: RawChannel): boolean {
+  return c.type === ChannelType.DM || c.type === ChannelType.GROUP_DM;
+}
+
+/**
+ * Regroupe les salons par catégorie, dans l'ordre Discord. Pour la zone des
+ * messages privés (`dmZone`), pas de catégories : un seul groupe nommé
+ * « Conversations » — un DM n'est pas un « salon ».
+ */
+function groupChannels(all: RawChannel[], dmZone: boolean): CategoryGroup[] {
   const cats = all
     .filter((c) => c.type === ChannelType.GUILD_CATEGORY)
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
@@ -95,7 +111,11 @@ function groupChannels(all: RawChannel[]): CategoryGroup[] {
   const groups: CategoryGroup[] = [];
   const orphans = text.filter((c) => !c.parent_id);
   if (orphans.length) {
-    groups.push({ id: '_', name: t('overlay.uncategorized'), channels: orphans });
+    groups.push({
+      id: '_',
+      name: dmZone ? t('overlay.conversations') : t('overlay.uncategorized'),
+      channels: orphans,
+    });
   }
   for (const cat of cats) {
     const channels = text.filter((c) => c.parent_id === cat.id);
@@ -127,6 +147,8 @@ export function Overlay({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [media, setMedia] = useState<MediaSelection>({ ...ALL_MEDIA });
   const [focus, setFocus] = useState<RawChannel | null>(null);
+  const [preview, setPreview] = useState<RawMessage[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [afterDate, setAfterDate] = useState('');
   const [beforeDate, setBeforeDate] = useState('');
   const [search, setSearch] = useState('');
@@ -161,6 +183,25 @@ export function Overlay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [controller.guilds.length]);
 
+  // Aperçu : charge les messages récents du salon cliqué (façon Discord).
+  useEffect(() => {
+    if (!focus) {
+      setPreview([]);
+      setPreviewLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setPreview([]);
+    setPreviewLoading(true);
+    void controller.preview(focus.id).then((msgs) => {
+      if (cancelled) return;
+      setPreview(msgs);
+      setPreviewLoading(false);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.id]);
+
   function selectGuild(guild: RawGuild): void {
     setActiveGuild(guild);
     setChannels([]);
@@ -173,7 +214,10 @@ export function Overlay({
     });
   }
 
-  const groups = useMemo(() => groupChannels(channels), [channels]);
+  const groups = useMemo(
+    () => groupChannels(channels, activeGuild?.id === DM_ZONE),
+    [channels, activeGuild],
+  );
   const totalChannels = useMemo(
     () => groups.reduce((s, g) => s + g.channels.length, 0),
     [groups],
@@ -306,20 +350,6 @@ export function Overlay({
             t('overlay.choose_server')
           )}
         </span>
-        <div class="v-mchips">
-          {MEDIA_KEYS.map((key) => (
-            <span
-              key={key}
-              class={`v-mchip ${media[key] ? 'on' : ''}`}
-              onClick={() => setMedia({ ...media, [key]: !media[key] })}
-            >
-              {t(`media.${key}`)}
-            </span>
-          ))}
-        </div>
-        <button class="v-btn" disabled={selected.size === 0} onClick={enqueue}>
-          {t('overlay.add_to_queue')}
-        </button>
         <span class="v-close" onClick={() => setMinimized(true)} title={t('overlay.minimize')}>
           <IconMinimize />
         </span>
@@ -422,7 +452,7 @@ export function Overlay({
                       >
                         {selected.has(c.id) ? <IconCheck /> : null}
                       </span>
-                      <span class="v-hash">#</span>
+                      {!isDmChannel(c) && <span class="v-hash">#</span>}
                       {c.name}
                     </div>
                   ))}
@@ -432,16 +462,24 @@ export function Overlay({
           </div>
         </div>
 
-        {/* personnalisation */}
-        <div class="v-main">
+        {/* aperçu des messages — façon Discord */}
+        <div class="v-chat">
           <div class="v-chat-hd">
-            {focus && <span class="v-hash" style="font-size:20px">#</span>}
-            <span class="v-name">{focus?.name ?? t('overlay.settings')}</span>
+            {focus && !isDmChannel(focus) && (
+              <span class="v-hash" style="font-size:20px">#</span>
+            )}
+            <span class="v-name">{focus?.name ?? t('overlay.preview')}</span>
           </div>
-          <div class="v-main-body">
+          <MessagePreview channel={focus} messages={preview} loading={previewLoading} />
+        </div>
+
+        {/* panneau d'export — à droite */}
+        <div class="v-side">
+          <div class="v-side-hd">{t('overlay.settings')}</div>
+          <div class="v-side-body">
             <div class="v-field">
               <label>{t('overlay.period_label')}</label>
-              <div style="display:flex;gap:10px;align-items:center">
+              <div class="v-daterow">
                 <input
                   class="v-date"
                   type="date"
@@ -455,6 +493,20 @@ export function Overlay({
                   value={beforeDate}
                   onInput={(e) => setBeforeDate((e.target as HTMLInputElement).value)}
                 />
+              </div>
+            </div>
+            <div class="v-field">
+              <label>{t('overlay.media_label')}</label>
+              <div class="v-mchips">
+                {MEDIA_KEYS.map((key) => (
+                  <span
+                    key={key}
+                    class={`v-mchip ${media[key] ? 'on' : ''}`}
+                    onClick={() => setMedia({ ...media, [key]: !media[key] })}
+                  >
+                    {t(`media.${key}`)}
+                  </span>
+                ))}
               </div>
             </div>
             <div class="v-field">
@@ -517,6 +569,11 @@ export function Overlay({
                 : t('overlay.hint_selected', { n: selected.size })}
             </div>
           </div>
+          <div class="v-side-foot">
+            <button class="v-btn" disabled={selected.size === 0} onClick={enqueue}>
+              {t('overlay.add_to_queue')}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -542,8 +599,135 @@ function Shell({
   return (
     <div class="v-root" data-theme={theme}>
       <div class="v-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
+        {/* fond bokeh — taches floues douces derrière la fenêtre */}
+        <div class="v-bokeh" aria-hidden="true">
+          <i /><i /><i /><i /><i /><i />
+        </div>
         <div class={`v-win ${compact ? 'v-win--compact' : ''}`}>{children}</div>
       </div>
+    </div>
+  );
+}
+
+/** URL d'avatar Discord d'un utilisateur (avatar par défaut si aucun). */
+function avatarUrl(u: RawUser): string {
+  if (u.avatar) {
+    const ext = u.avatar.startsWith('a_') ? 'gif' : 'png';
+    return `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.${ext}?size=64`;
+  }
+  let idx = 0;
+  try {
+    idx = Number((BigInt(u.id) >> 22n) % 6n);
+  } catch {
+    /* id non numérique — avatar 0 par défaut */
+  }
+  return `https://cdn.discordapp.com/embed/avatars/${idx}.png`;
+}
+
+/** Horodatage court et lisible. */
+function formatTime(ts: string): string {
+  return new Date(ts).toLocaleString('fr-FR', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+/** Rend le contenu lisible : remplace les balises Discord brutes. */
+function cleanContent(text: string): string {
+  return text
+    .replace(/<a?:(\w+):\d+>/g, ':$1:')
+    .replace(/<@!?\d+>/g, '@membre')
+    .replace(/<@&\d+>/g, '@rôle')
+    .replace(/<#\d+>/g, '#salon');
+}
+
+/** Vrai si la pièce jointe est une image (affichable en vignette). */
+function isImageAtt(a: RawAttachment): boolean {
+  return (a.content_type ?? '').startsWith('image/')
+    || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(a.url);
+}
+
+/** Une ligne de message dans l'aperçu (groupée = même auteur enchaîné). */
+function MessageRow({
+  message,
+  grouped,
+}: {
+  message: RawMessage;
+  grouped: boolean;
+}): JSX.Element {
+  const m = message;
+  const name = m.author.global_name ?? m.author.username;
+  return (
+    <div class={`v-msg ${grouped ? 'v-msg--grouped' : ''}`}>
+      {grouped
+        ? <div class="v-msg-gutter" />
+        : <img class="v-msg-avatar" src={avatarUrl(m.author)} alt="" loading="lazy" />}
+      <div class="v-msg-main">
+        {!grouped && (
+          <div class="v-msg-head">
+            <span class="v-msg-author">{name}</span>
+            <span class="v-msg-time">{formatTime(m.timestamp)}</span>
+          </div>
+        )}
+        {m.content && <div class="v-msg-content">{cleanContent(m.content)}</div>}
+        {m.attachments.length > 0 && (
+          <div class="v-msg-atts">
+            {m.attachments.map((a) => (
+              isImageAtt(a)
+                ? (
+                  <img
+                    key={a.id}
+                    class="v-msg-img"
+                    src={a.proxy_url || a.url}
+                    alt={a.filename}
+                    loading="lazy"
+                  />
+                )
+                : <span key={a.id} class="v-msg-file">{a.filename}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Aperçu des messages récents d'un salon — affichage façon Discord. */
+function MessagePreview({
+  channel,
+  messages,
+  loading,
+}: {
+  channel: RawChannel | null;
+  messages: RawMessage[];
+  loading: boolean;
+}): JSX.Element {
+  if (!channel) {
+    return (
+      <div class="v-empty" style="flex:1">
+        <OwlMark class="v-mark" />
+        <span>{t('preview.pick')}</span>
+      </div>
+    );
+  }
+  if (loading) {
+    return <div class="v-empty" style="flex:1"><span>{t('overlay.loading')}</span></div>;
+  }
+  if (messages.length === 0) {
+    return <div class="v-empty" style="flex:1"><span>{t('preview.empty')}</span></div>;
+  }
+  // L'API renvoie du plus récent au plus ancien — on rétablit l'ordre.
+  const ordered = [...messages].reverse();
+  return (
+    <div class="v-msglist">
+      {ordered.map((m, i) => {
+        const prev = ordered[i - 1];
+        const grouped = Boolean(
+          prev
+          && prev.author.id === m.author.id
+          && Date.parse(m.timestamp) - Date.parse(prev.timestamp) < 7 * 60_000,
+        );
+        return <MessageRow key={m.id} message={m} grouped={grouped} />;
+      })}
     </div>
   );
 }

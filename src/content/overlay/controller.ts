@@ -20,7 +20,7 @@ import type {
   RunStatus,
 } from '../../engine/checkpoint-types';
 import { DiscordApiError } from '../../engine/types';
-import type { RawChannel, RawGuild, RawUser } from '../../engine/types';
+import type { RawChannel, RawGuild, RawMessage, RawUser } from '../../engine/types';
 import type { EnqueueExtras, VespryState } from '../../messaging';
 
 const MAX_LOG = 250;
@@ -223,6 +223,19 @@ export class VespryController {
       return dms.map((c) => ({ ...c, name: c.name ?? dmName(c) }));
     }
     return this.api.getGuildChannels(guildId);
+  }
+
+  /**
+   * Aperçu des messages récents d'un salon (lecture seule, une page ~100).
+   * Sert à montrer le contenu du salon dans l'overlay avant export.
+   */
+  async previewChannel(channelId: string): Promise<RawMessage[]> {
+    if (!this.api) return [];
+    try {
+      return await this.api.getMessages(channelId);
+    } catch {
+      return [];
+    }
   }
 
   /**

@@ -10,7 +10,7 @@
  * Le moteur d'export vit dans l'offscreen document (tab-indépendant).
  */
 import type { MediaSelection, MessageFilters } from './engine/checkpoint-types';
-import type { RawChannel, RawGuild } from './engine/types';
+import type { RawChannel, RawGuild, RawMessage } from './engine/types';
 
 // --- bridge MAIN → ISOLATED (capture du jeton) ---
 
@@ -73,7 +73,8 @@ export type VespryCommand =
       filters?: MessageFilters;
     }
   | { cmd: 'resume'; runId: string }
-  | { cmd: 'download'; runId: string };
+  | { cmd: 'download'; runId: string }
+  | { cmd: 'preview'; channelId: string };
 
 /**
  * Paramètres d'un export passés à `enqueue`, hors guild/channels/media.
@@ -93,6 +94,8 @@ export interface CommandResponse {
   error?: string;
   state?: VespryState;
   channels?: RawChannel[];
+  /** Aperçu de messages récents (commande `preview`). */
+  messages?: RawMessage[];
 }
 
 // --- messages de routage ---

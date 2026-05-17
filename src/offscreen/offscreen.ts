@@ -51,6 +51,8 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
     case 'download':
       controller.downloadZip(command.runId);
       return { ok: true };
+    case 'preview':
+      return { ok: true, messages: await controller.previewChannel(command.channelId) };
   }
 }
 

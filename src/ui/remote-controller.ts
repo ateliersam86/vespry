@@ -14,7 +14,7 @@ import {
   type VespryState,
 } from '../messaging';
 import type { MediaSelection } from '../engine/checkpoint-types';
-import type { RawChannel, RawGuild } from '../engine/types';
+import type { RawChannel, RawGuild, RawMessage } from '../engine/types';
 
 const EMPTY: VespryState = {
   ready: false,
@@ -86,6 +86,12 @@ export class RemoteController {
   async loadChannels(guildId: string): Promise<RawChannel[]> {
     const r = await this.send({ cmd: 'load-channels', guildId });
     return r.channels ?? [];
+  }
+
+  /** Aperçu des messages récents d'un salon (pour l'affichage type Discord). */
+  async preview(channelId: string): Promise<RawMessage[]> {
+    const r = await this.send({ cmd: 'preview', channelId });
+    return r.messages ?? [];
   }
 
   async enqueue(
