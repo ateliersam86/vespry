@@ -1,0 +1,72 @@
+/* Thème Vespry — palette alignée sur Discord pour une expérience continue. */
+:root {
+  --v-bg: #313338;
+  --v-bg-alt: #2b2d31;
+  --v-bg-elevated: #1e1f22;
+  --v-text: #dbdee1;
+  --v-text-muted: #949ba4;
+  --v-accent: #5865f2;
+  --v-accent-hover: #4752c4;
+  --v-green: #23a55a;
+  --v-red: #f23f43;
+  --v-border: #3f4147;
+  --v-radius: 8px;
+  --v-font: "gg sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--v-font);
+  background: var(--v-bg);
+  color: var(--v-text);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+h1, h2, h3 { margin: 0 0 8px; font-weight: 600; }
+
+.v-btn {
+  appearance: none;
+  border: none;
+  border-radius: var(--v-radius);
+  background: var(--v-accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.v-btn:hover { background: var(--v-accent-hover); }
+.v-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.v-btn--ghost {
+  background: transparent;
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+}
+.v-btn--ghost:hover { background: var(--v-bg-alt); }
+
+.v-muted { color: var(--v-text-muted); }
+.v-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.v-pill--ok { background: rgba(35, 165, 90, 0.16); color: var(--v-green); }
+.v-pill--off { background: rgba(242, 63, 67, 0.16); color: var(--v-red); }
+
+/* thème clair — appliqué via data-theme="light" sur <html> */
+:root[data-theme="light"] {
+  --v-bg: #ffffff;
+  --v-bg-alt: #f2f3f5;
+  --v-bg-elevated: #e3e5e8;
+  --v-text: #2e3338;
+  --v-text-muted: #5c5e66;
+  --v-border: #d4d6da;
+}

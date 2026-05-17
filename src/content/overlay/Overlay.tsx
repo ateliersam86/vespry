@@ -1,0 +1,648 @@
+/**
+ * Overlay Vespry — UI Preact injectée dans la page Discord (Shadow DOM).
+ *
+ * Header de confirmation · rail serveurs · liste salons sélectionnable ·
+ * personnalisation du salon · file d'export avec détails (stats + console).
+ * Toutes les chaînes passent par i18n (`t`).
+ */
+import { type ComponentChildren, type JSX } from 'preact';
+import { useEffect, useMemo, useReducer, useState } from 'preact/hooks';
+import { ALL_MEDIA, type MediaSelection } from '../../engine/checkpoint-types';
+import { ChannelType, type RawChannel, type RawGuild } from '../../engine/types';
+import type { QueueItemView } from '../../messaging';
+import type { RemoteController } from '../../ui/remote-controller';
+import { t } from '../../ui/i18n';
+import { getVersion } from '../../version';
+import { reportProblem } from '../../diagnostics';
+import { loadCredits, type Credits } from '../../credits';
+import {
+  getThemePref,
+  nextThemePref,
+  resolveTheme,
+  setThemePref,
+  type ThemePref,
+} from '../../ui/theme-pref';
+
+const THEME_ICON: Record<ThemePref, string> = { dark: '🌙', light: '☀️', auto: '◐' };
+
+const EXPORTABLE = new Set<number>([
+  ChannelType.GUILD_TEXT,
+  ChannelType.GUILD_ANNOUNCEMENT,
+  ChannelType.GUILD_FORUM,
+  ChannelType.DM,
+  ChannelType.GROUP_DM,
+]);
+
+/** Identifiant synthétique de la « zone » messages privés dans le rail. */
+const DM_ZONE = '@me';
+
+const MEDIA_KEYS: (keyof MediaSelection)[] = ['images', 'videos', 'audio', 'files'];
+
+interface CategoryGroup {
+  id: string;
+  name: string;
+  channels: RawChannel[];
+}
+
+/** Regroupe les salons textuels par catégorie, dans l'ordre Discord. */
+function groupChannels(all: RawChannel[]): CategoryGroup[] {
+  const cats = all
+    .filter((c) => c.type === ChannelType.GUILD_CATEGORY)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const text = all
+    .filter((c) => EXPORTABLE.has(c.type))
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const groups: CategoryGroup[] = [];
+  const orphans = text.filter((c) => !c.parent_id);
+  if (orphans.length) {
+    groups.push({ id: '_', name: t('overlay.uncategorized'), channels: orphans });
+  }
+  for (const cat of cats) {
+    const channels = text.filter((c) => c.parent_id === cat.id);
+    if (channels.length) {
+      groups.push({ id: cat.id, name: cat.name ?? '—', channels });
+    }
+  }
+  return groups;
+}
+
+/** Re-render quand le contrôleur notifie. */
+function useControllerTick(controller: RemoteController): void {
+  const [, force] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => controller.subscribe(force as () => void), [controller]);
+}
+
+export function Overlay({
+  controller,
+  onClose,
+}: {
+  controller: RemoteController;
+  onClose: () => void;
+}): JSX.Element {
+  useControllerTick(controller);
+
+  const [activeGuild, setActiveGuild] = useState<RawGuild | null>(null);
+  const [channels, setChannels] = useState<RawChannel[]>([]);
+  const [loadingChannels, setLoadingChannels] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [media, setMedia] = useState<MediaSelection>({ ...ALL_MEDIA });
+  const [focus, setFocus] = useState<RawChannel | null>(null);
+  const [afterDate, setAfterDate] = useState('');
+  const [beforeDate, setBeforeDate] = useState('');
+  const [search, setSearch] = useState('');
+  const [minimized, setMinimized] = useState(false);
+  const [includeThreads, setIncludeThreads] = useState(true);
+  const [view, setView] = useState<'export' | 'credits'>('export');
+  const [theme, setTheme] = useState<ThemePref>('dark');
+
+  useEffect(() => {
+    void getThemePref().then(setTheme);
+  }, []);
+
+  function cycleTheme(): void {
+    const next = nextThemePref(theme);
+    setTheme(next);
+    setThemePref(next);
+  }
+
+  const resolvedTheme = resolveTheme(theme);
+
+  // Sélectionne le premier serveur dès qu'ils sont chargés.
+  useEffect(() => {
+    if (!activeGuild && controller.guilds[0]) selectGuild(controller.guilds[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controller.guilds.length]);
+
+  function selectGuild(guild: RawGuild): void {
+    setActiveGuild(guild);
+    setChannels([]);
+    setSelected(new Set());
+    setFocus(null);
+    setLoadingChannels(true);
+    void controller.loadChannels(guild.id).then((ch) => {
+      setChannels(ch);
+      setLoadingChannels(false);
+    });
+  }
+
+  const groups = useMemo(() => groupChannels(channels), [channels]);
+  const totalChannels = useMemo(
+    () => groups.reduce((s, g) => s + g.channels.length, 0),
+    [groups],
+  );
+  const visibleGroups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return groups;
+    return groups
+      .map((g) => ({
+        ...g,
+        channels: g.channels.filter((c) => (c.name ?? '').toLowerCase().includes(q)),
+      }))
+      .filter((g) => g.channels.length > 0);
+  }, [groups, search]);
+
+  function toggleChannel(id: string): void {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  }
+
+  function toggleGroup(group: CategoryGroup): void {
+    const next = new Set(selected);
+    const allOn = group.channels.every((c) => next.has(c.id));
+    for (const c of group.channels) {
+      if (allOn) next.delete(c.id);
+      else next.add(c.id);
+    }
+    setSelected(next);
+  }
+
+  function selectAll(on: boolean): void {
+    if (!on) return setSelected(new Set());
+    const next = new Set<string>();
+    for (const g of groups) for (const c of g.channels) next.add(c.id);
+    setSelected(next);
+  }
+
+  function enqueue(): void {
+    if (!activeGuild || selected.size === 0) return;
+    const picked = channels.filter((c) => selected.has(c.id));
+    const range: { afterMs?: number; beforeMs?: number } = {};
+    if (afterDate) range.afterMs = Date.parse(afterDate);
+    if (beforeDate) range.beforeMs = Date.parse(beforeDate) + 86_399_999;
+    void controller.enqueue(activeGuild, picked, media, range, includeThreads);
+    setSelected(new Set());
+    setFocus(null);
+  }
+
+  if (minimized) {
+    return (
+      <div class="v-root" data-theme={resolvedTheme}>
+        <MiniWidget controller={controller} onExpand={() => setMinimized(false)} />
+      </div>
+    );
+  }
+  if (controller.error) {
+    const noToken = controller.error === 'no-token';
+    return (
+      <Shell onClose={onClose} theme={resolvedTheme}>
+        <div class="v-empty" style="flex:1">
+          <strong>{noToken ? t('overlay.no_token_title') : t('overlay.engine_error')}</strong>
+          <span>{noToken ? t('overlay.no_token_body') : controller.error}</span>
+          <div style="display:flex;gap:10px;margin-top:8px">
+            {noToken && (
+              <button
+                class="v-btn"
+                onClick={() => { window.location.href = 'https://discord.com/login'; }}
+              >
+                {t('overlay.go_login')}
+              </button>
+            )}
+            <button class="v-btn v-btn--ghost" onClick={() => window.location.reload()}>
+              {t('overlay.reload')}
+            </button>
+          </div>
+          {!noToken && (
+            <ReportLink
+              summary={`Overlay : ${controller.error}`}
+              log={[]}
+              label={t('report.problem')}
+            />
+          )}
+        </div>
+      </Shell>
+    );
+  }
+  if (!controller.ready) {
+    return (
+      <Shell onClose={onClose} theme={resolvedTheme}>
+        <div class="v-empty" style="flex:1">{t('overlay.loading')}</div>
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell onClose={onClose} theme={resolvedTheme}>
+      {/* header de confirmation */}
+      <div class="v-top">
+        <span class="v-logo">Vespry</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:600">v{getVersion()}</span>
+        <ReportLink summary="Problème signalé depuis Vespry" log={[]} label={t('report.problem')} />
+        <span class="v-support-link" onClick={() => setView('credits')}>
+          ♥ {t('credits.support')}
+        </span>
+        <span class="v-theme-btn" onClick={cycleTheme} title={t(`theme.${theme}`)}>
+          {THEME_ICON[theme]} {t(`theme.${theme}`)}
+        </span>
+        <span class="v-sum">
+          {activeGuild ? (
+            <>
+              <b>{activeGuild.name}</b> ·{' '}
+              {t('overlay.channels_summary', { n: selected.size, total: totalChannels })}
+            </>
+          ) : (
+            t('overlay.choose_server')
+          )}
+        </span>
+        <div class="v-mchips">
+          {MEDIA_KEYS.map((key) => (
+            <span
+              key={key}
+              class={`v-mchip ${media[key] ? 'on' : ''}`}
+              onClick={() => setMedia({ ...media, [key]: !media[key] })}
+            >
+              {t(`media.${key}`)}
+            </span>
+          ))}
+        </div>
+        <button class="v-btn" disabled={selected.size === 0} onClick={enqueue}>
+          {t('overlay.add_to_queue')}
+        </button>
+        <span class="v-close" onClick={() => setMinimized(true)} title={t('overlay.minimize')}>
+          —
+        </span>
+        <span class="v-close" onClick={onClose} title={t('overlay.close')}>✕</span>
+      </div>
+
+      {view === 'credits' ? (
+        <CreditsPanel onBack={() => setView('export')} />
+      ) : (
+      <>
+      <div class="v-mid">
+        {/* rail serveurs */}
+        <div class="v-rail">
+          <div
+            class={`v-sic ${activeGuild?.id === DM_ZONE ? 'act' : ''}`}
+            title={t('overlay.dms')}
+            onClick={() => selectGuild({ id: DM_ZONE, name: t('overlay.dms') })}
+          >
+            ✉
+          </div>
+          {controller.guilds.map((g) => (
+            <div
+              key={g.id}
+              class={`v-sic ${activeGuild?.id === g.id ? 'act' : ''}`}
+              title={g.name}
+              onClick={() => selectGuild(g)}
+            >
+              {g.name.slice(0, 2).toUpperCase()}
+            </div>
+          ))}
+        </div>
+
+        {/* liste des salons */}
+        <div class="v-clist">
+          <div class="v-clist-hd">
+            <span>{activeGuild?.name ?? '—'}</span>
+            <span class="v-link" onClick={() => selectAll(selected.size === 0)}>
+              {selected.size === 0 ? t('overlay.select_all') : t('overlay.select_none')}
+            </span>
+          </div>
+          <input
+            class="v-search"
+            type="text"
+            placeholder={t('overlay.search_channels')}
+            value={search}
+            onInput={(e) => setSearch((e.target as HTMLInputElement).value)}
+          />
+          <div class="v-clist-scroll">
+            {loadingChannels && <div class="v-cat">{t('overlay.loading')}</div>}
+            {visibleGroups.map((group) => {
+              const on = group.channels.filter((c) => selected.has(c.id)).length;
+              return (
+                <div key={group.id}>
+                  <div class="v-cat" onClick={() => toggleGroup(group)}>
+                    <span class={`v-cbx ${on === group.channels.length ? 'on' : ''}`}>
+                      {on === group.channels.length ? '✓' : on > 0 ? '–' : ''}
+                    </span>
+                    {group.name}
+                  </div>
+                  {group.channels.map((c) => (
+                    <div
+                      key={c.id}
+                      class={`v-crow ${focus?.id === c.id ? 'sel' : ''}`}
+                      onClick={() => setFocus(c)}
+                    >
+                      <span
+                        class={`v-cbx ${selected.has(c.id) ? 'on' : ''}`}
+                        onClick={(e: MouseEvent) => {
+                          e.stopPropagation();
+                          toggleChannel(c.id);
+                        }}
+                      >
+                        {selected.has(c.id) ? '✓' : ''}
+                      </span>
+                      <span class="v-hash">#</span>
+                      {c.name}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* personnalisation */}
+        <div class="v-main">
+          <div class="v-chat-hd">
+            <span class="v-hash" style="font-size:20px">#</span>
+            <span class="v-name">{focus?.name ?? t('overlay.settings')}</span>
+          </div>
+          <div class="v-main-body">
+            <div class="v-field">
+              <label>{t('overlay.period_label')}</label>
+              <div style="display:flex;gap:10px;align-items:center">
+                <input
+                  class="v-date"
+                  type="date"
+                  value={afterDate}
+                  onInput={(e) => setAfterDate((e.target as HTMLInputElement).value)}
+                />
+                <span class="v-muted">→</span>
+                <input
+                  class="v-date"
+                  type="date"
+                  value={beforeDate}
+                  onInput={(e) => setBeforeDate((e.target as HTMLInputElement).value)}
+                />
+              </div>
+            </div>
+            <div class="v-field">
+              <div
+                class="v-crow"
+                style="padding:6px 0;color:var(--text)"
+                onClick={() => setIncludeThreads(!includeThreads)}
+              >
+                <span class={`v-cbx ${includeThreads ? 'on' : ''}`}>
+                  {includeThreads ? '✓' : ''}
+                </span>
+                {t('overlay.include_threads')}
+              </div>
+            </div>
+            <div class="v-hint">
+              {selected.size === 0
+                ? t('overlay.hint_empty')
+                : t('overlay.hint_selected', { n: selected.size })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ExportQueue controller={controller} onSupport={() => setView('credits')} />
+      </>
+      )}
+    </Shell>
+  );
+}
+
+function Shell({
+  children,
+  onClose,
+  theme,
+}: {
+  children: ComponentChildren;
+  onClose: () => void;
+  theme: 'dark' | 'light';
+}): JSX.Element {
+  return (
+    <div class="v-root" data-theme={theme}>
+      <div class="v-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
+        <div class="v-win">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Widget flottant affiché quand l'overlay est réduit (bas-droite). */
+function MiniWidget({
+  controller,
+  onExpand,
+}: {
+  controller: RemoteController;
+  onExpand: () => void;
+}): JSX.Element {
+  const running = controller.queue.find((q) => q.status === 'in_progress');
+  const pct = running && running.channelsTotal > 0
+    ? Math.round((running.channelsDone / running.channelsTotal) * 100)
+    : 0;
+  return (
+    <div class="v-mini" onClick={onExpand} title={t('mini.open')}>
+      <div class="v-mini-hd">
+        <span class="v-logo">Vespry</span>
+        <span class="v-muted" style="font-size:12px">{running ? `${pct}%` : '↗'}</span>
+      </div>
+      <div class="v-mini-sub">
+        {running
+          ? `${running.guildName} · ${running.messages.toLocaleString()} msg`
+          : t('mini.no_export')}
+      </div>
+      {running && (
+        <div class="v-bar"><i style={`width:${pct}%`} /></div>
+      )}
+    </div>
+  );
+}
+
+/** Panneau Soutiens — don + reconnaissance des soutiens et contributeurs. */
+function CreditsPanel({ onBack }: { onBack: () => void }): JSX.Element {
+  const [credits, setCredits] = useState<Credits | null>(null);
+  useEffect(() => {
+    void loadCredits().then(setCredits);
+  }, []);
+
+  return (
+    <div class="v-credits">
+      <span class="v-link" onClick={onBack}>{t('credits.back')}</span>
+      <h2>{t('credits.title')}</h2>
+      <p class="v-intro">{t('credits.intro')}</p>
+      {credits?.koFiUrl ? (
+        <button
+          class="v-btn v-donate"
+          onClick={() => window.open(credits.koFiUrl, '_blank', 'noopener')}
+        >
+          {t('credits.donate')}
+        </button>
+      ) : (
+        <button class="v-btn v-donate" disabled>{t('credits.donate_soon')}</button>
+      )}
+      <div class="v-cred-grid">
+        <div class="v-cred-col">
+          <h3>{t('credits.supporters')}</h3>
+          {credits && credits.supporters.length > 0 ? (
+            <ul class="v-cred-list">
+              {credits.supporters.map((s) => <li key={s}>{s}</li>)}
+            </ul>
+          ) : (
+            <div class="v-cred-empty">{t('credits.none_yet')}</div>
+          )}
+        </div>
+        <div class="v-cred-col">
+          <h3>{t('credits.contributors')}</h3>
+          <ul class="v-cred-list">
+            {(credits?.contributors ?? []).map((c) => (
+              <li key={c.name}>
+                {c.name}
+                <span class="v-role">{c.role}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExportQueue({
+  controller,
+  onSupport,
+}: {
+  controller: RemoteController;
+  onSupport: () => void;
+}): JSX.Element {
+  const [open, setOpen] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const { queue } = controller;
+  const active = queue.filter((q) => q.status === 'in_progress').length;
+
+  function toggle(id: string): void {
+    const next = new Set(expanded);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setExpanded(next);
+  }
+
+  return (
+    <div class="v-queue">
+      <div class="v-q-hd" onClick={() => setOpen(!open)}>
+        {open ? '▾' : '▸'} {t('queue.title', { n: queue.length, a: active })}
+      </div>
+      {open && (
+        <div class="v-q-body">
+          {queue.length === 0 && (
+            <span class="v-muted" style="font-size:13px">{t('queue.empty')}</span>
+          )}
+          {queue.map((item) => (
+            <TaskCard
+              key={item.runId}
+              item={item}
+              expanded={expanded.has(item.runId)}
+              onToggle={() => toggle(item.runId)}
+              onDownload={() => controller.downloadZip(item.runId)}
+              onResume={() => controller.resume(item.runId)}
+              onSupport={onSupport}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TaskCard({
+  item,
+  expanded,
+  onToggle,
+  onDownload,
+  onResume,
+  onSupport,
+}: {
+  item: QueueItemView;
+  expanded: boolean;
+  onToggle: () => void;
+  onDownload: () => void;
+  onResume: () => void;
+  onSupport: () => void;
+}): JSX.Element {
+  const pct = item.channelsTotal > 0
+    ? Math.round((item.channelsDone / item.channelsTotal) * 100)
+    : 0;
+  const done = item.status === 'completed' || item.status === 'partial';
+
+  return (
+    <div class="v-task">
+      <div class="v-task-main">
+        <span class="v-nm">{item.guildName}</span>
+        <span class={`v-st v-st--${item.status}`}>{t(`status.${item.status}`)}</span>
+        <div class="v-bar">
+          <i class={done ? 'ok' : ''} style={`width:${done ? 100 : pct}%`} />
+        </div>
+        {item.status === 'paused' && (
+          <span class="v-exp" onClick={onResume}>{t('queue.resume')}</span>
+        )}
+        {item.status === 'failed' && (
+          <ReportLink
+            summary={`Export échoué : ${item.guildName}`}
+            log={item.log}
+            label={t('report.this')}
+          />
+        )}
+        {done && item.zipReady && (
+          <span class="v-exp" onClick={onDownload}>{t('queue.download')}</span>
+        )}
+        <span class="v-exp" onClick={onToggle}>
+          {expanded ? t('queue.details_hide') : t('queue.details_show')}
+        </span>
+      </div>
+      {done && (
+        <div class="v-thanks" onClick={onSupport}>{t('credits.thanks')}</div>
+      )}
+      {expanded && (
+        <div class="v-details">
+          <div class="v-stats">
+            <Stat n={item.messages} k={t('stat.messages')} />
+            <Stat n={item.assetsByKind.image} k={t('stat.images')} />
+            <Stat n={item.assetsByKind.video} k={t('stat.videos')} />
+            <Stat n={item.assetsByKind.audio} k={t('stat.audio')} />
+            <Stat n={item.reactions} k={t('stat.reactions')} />
+            <Stat n={item.assetsByKind.file} k={t('stat.files')} />
+          </div>
+          <div class="v-console">
+            {item.log.length === 0 && <div class="ln v-muted">{t('queue.waiting')}</div>}
+            {item.log.slice(-60).map((line, i) => (
+              <div class="ln" key={i}>{line}</div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Lien « Signaler un problème » — ouvre une issue GitHub pré-remplie. */
+function ReportLink({
+  summary,
+  log,
+  label,
+}: {
+  summary: string;
+  log: string[];
+  label: string;
+}): JSX.Element {
+  const [done, setDone] = useState<'' | 'issue' | 'clipboard'>('');
+  function go(e: MouseEvent): void {
+    e.stopPropagation();
+    void reportProblem(summary, log).then((r) => {
+      setDone(r);
+      setTimeout(() => setDone(''), 3000);
+    });
+  }
+  return (
+    <span class="v-link" onClick={go}>
+      {done === 'clipboard'
+        ? t('report.copied')
+        : done === 'issue'
+          ? t('report.opened')
+          : label}
+    </span>
+  );
+}
+
+function Stat({ n, k }: { n: number; k: string }): JSX.Element {
+  return (
+    <div class="v-dcell">
+      <div class="n">{n.toLocaleString()}</div>
+      <div class="k">{k}</div>
+    </div>
+  );
+}

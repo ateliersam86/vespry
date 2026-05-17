@@ -1,0 +1,336 @@
+/**
+ * Orchestrateur d'export — checkpoint-natif.
+ *
+ * Pour chaque salon : pagination par 100, écriture immédiate de chaque lot
+ * dans IndexedDB (messages + curseur), médias téléchargés au fil de l'eau.
+ * Tout est resumable : `run()` reprend chaque salon à son curseur.
+ *
+ * Tourne dans `export.html` (contexte persistant), jamais dans le service
+ * worker.
+ */
+import type { DiscordApi } from './discord-api';
+import type { CheckpointStore } from './checkpoint-store';
+import type {
+  AssetKind,
+  ChannelProgress,
+  ExportOptions,
+  ExportRun,
+  RunStatus,
+  StoredAsset,
+  StoredMessage,
+} from './checkpoint-types';
+import { DiscordApiError, type RawChannel, type RawMessage, type Snowflake } from './types';
+import { collectAssets } from './media';
+
+/** Au-delà de ce ratio d'occupation IndexedDB, on met le run en pause. */
+const QUOTA_PAUSE_RATIO = 0.9;
+
+export interface ProgressSnapshot {
+  runId: string;
+  status: RunStatus;
+  channelsTotal: number;
+  channelsDone: number;
+  currentChannel: string | null;
+  messagesTotal: number;
+  assetsDone: number;
+  assetsFailed: number;
+  /** Décompte des médias téléchargés par type (pour le détail 100 %). */
+  assetsByKind: Record<AssetKind, number>;
+  /** Total des réactions rencontrées. */
+  reactions: number;
+}
+
+/** Évènement temps réel pour la mini-console de l'UI. */
+export type RunnerLogEvent =
+  | { type: 'channel-start'; channel: string }
+  | { type: 'batch'; channel: string; count: number }
+  | { type: 'media'; channel: string; count: number; kind: AssetKind }
+  | { type: 'channel-done'; channel: string; total: number };
+
+export interface RunnerEvents {
+  onProgress?: (p: ProgressSnapshot) => void;
+  /** Flux d'évènements de bas niveau (lots, médias) — alimente la console. */
+  onLog?: (e: RunnerLogEvent) => void;
+  onPaused?: (reason: string) => void;
+  onDone?: (status: RunStatus) => void;
+}
+
+/** Crée le run + les enregistrements de salon. Renvoie l'id du run. */
+export async function planGuildExport(
+  store: CheckpointStore,
+  guild: { id: Snowflake; name: string },
+  channels: RawChannel[],
+  options: ExportOptions,
+): Promise<string> {
+  const runId = `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = Date.now();
+  const run: ExportRun = {
+    id: runId,
+    guildId: guild.id,
+    guildName: guild.name,
+    status: 'in_progress',
+    options,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await store.putRun(run);
+  for (const ch of channels) {
+    const progress: ChannelProgress = {
+      runId,
+      channelId: ch.id,
+      name: ch.name ?? ch.id,
+      category: null,
+      type: ch.type,
+      status: 'pending',
+      cursor: null,
+      messageCount: 0,
+    };
+    await store.putChannel(progress);
+  }
+  return runId;
+}
+
+export class ExportRunner {
+  private assetsDone = 0;
+  private assetsFailed = 0;
+  private reactions = 0;
+  private readonly assetsByKind: Record<AssetKind, number> = {
+    image: 0,
+    video: 0,
+    audio: 0,
+    file: 0,
+  };
+
+  constructor(
+    private readonly api: DiscordApi,
+    private readonly store: CheckpointStore,
+    private readonly events: RunnerEvents = {},
+  ) {}
+
+  /**
+   * Exécute (ou reprend) un run. Les enregistrements de salon doivent déjà
+   * exister (cf. `planGuildExport`). Renvoie le statut final.
+   */
+  async run(runId: string): Promise<RunStatus> {
+    const run = await this.store.getRun(runId);
+    if (!run) throw new Error(`run introuvable : ${runId}`);
+    await this.store.patchRun(runId, { status: 'in_progress' });
+
+    const channels = await this.store.getChannels(runId);
+    let anyPartial = false;
+
+    for (const ch of channels) {
+      if (ch.status === 'done' || ch.status === 'skipped') continue;
+
+      const outcome = await this.runChannel(run, ch);
+      if (outcome === 'paused') {
+        this.events.onPaused?.('quota ou session — run en pause');
+        this.events.onDone?.('paused');
+        return 'paused';
+      }
+      if (outcome === 'partial') anyPartial = true;
+    }
+
+    const finalStatus: RunStatus = anyPartial ? 'partial' : 'completed';
+    await this.store.patchRun(runId, { status: finalStatus });
+    this.events.onDone?.(finalStatus);
+    return finalStatus;
+  }
+
+  /** Traite un salon. Renvoie 'done' | 'partial' | 'paused'. */
+  private async runChannel(
+    run: ExportRun,
+    channel: ChannelProgress,
+  ): Promise<'done' | 'partial' | 'paused'> {
+    await this.store.patchChannel(run.id, channel.channelId, {
+      status: 'in_progress',
+    });
+    this.events.onLog?.({ type: 'channel-start', channel: channel.name });
+    let cursor = channel.cursor;
+    let count = channel.messageCount;
+
+    for (;;) {
+      // Garde-fou quota avant chaque lot.
+      const quota = await this.store.estimateQuota();
+      if (quota && quota.ratio >= QUOTA_PAUSE_RATIO) {
+        await this.store.patchRun(run.id, {
+          status: 'paused',
+          error: 'Quota de stockage presque atteint',
+        });
+        return 'paused';
+      }
+
+      let batch: RawMessage[];
+      try {
+        batch = await this.api.getMessages(channel.channelId, cursor ?? undefined);
+      } catch (e) {
+        if (e instanceof DiscordApiError && e.kind === 'auth') {
+          await this.store.patchRun(run.id, {
+            status: 'paused',
+            error: 'Session Discord expirée — reconnecte-toi puis reprends',
+          });
+          return 'paused';
+        }
+        if (
+          e instanceof DiscordApiError
+          && (e.kind === 'forbidden' || e.kind === 'not_found')
+        ) {
+          await this.store.patchChannel(run.id, channel.channelId, {
+            status: 'partial',
+            error: e.message,
+          });
+          return 'partial';
+        }
+        throw e;
+      }
+
+      if (batch.length === 0) break;
+
+      const kept = this.filterByDate(batch, run.options);
+      await this.persistBatch(run, channel, kept);
+      count += kept.length;
+
+      // Curseur = id du plus ancien message du lot (lot trié récent→ancien).
+      cursor = batch[batch.length - 1]?.id ?? cursor;
+      await this.store.patchChannel(run.id, channel.channelId, {
+        cursor,
+        messageCount: count,
+      });
+      this.emitProgress(run, channel.channelId, count);
+
+      // Borne basse atteinte (plus vieux que `afterMs`) → on arrête ce salon.
+      if (this.reachedLowerBound(batch, run.options)) break;
+      if (batch.length < 100) break;
+    }
+
+    await this.store.patchChannel(run.id, channel.channelId, {
+      status: 'done',
+      messageCount: count,
+    });
+    this.events.onLog?.({ type: 'channel-done', channel: channel.name, total: count });
+    return 'done';
+  }
+
+  /** Écrit les messages puis télécharge leurs médias au fil de l'eau. */
+  private async persistBatch(
+    run: ExportRun,
+    channel: ChannelProgress,
+    messages: RawMessage[],
+  ): Promise<void> {
+    const stored: StoredMessage[] = messages.map((m) => ({
+      runId: run.id,
+      channelId: channel.channelId,
+      messageId: m.id,
+      message: m,
+    }));
+    await this.store.appendMessages(stored);
+    for (const m of messages) {
+      for (const r of m.reactions ?? []) this.reactions += r.count;
+    }
+    if (messages.length > 0) {
+      this.events.onLog?.({
+        type: 'batch',
+        channel: channel.name,
+        count: messages.length,
+      });
+    }
+
+    const byKind: Partial<Record<AssetKind, number>> = {};
+    for (const message of messages) {
+      for (const asset of collectAssets(message, run.options.media)) {
+        const ok = await this.downloadAsset(run.id, channel.channelId, asset);
+        if (ok) byKind[asset.kind] = (byKind[asset.kind] ?? 0) + 1;
+      }
+    }
+    for (const [kind, count] of Object.entries(byKind)) {
+      this.events.onLog?.({
+        type: 'media',
+        channel: channel.name,
+        count,
+        kind: kind as AssetKind,
+      });
+    }
+  }
+
+  /** Télécharge un média. Renvoie true si réussi. */
+  private async downloadAsset(
+    runId: string,
+    channelId: Snowflake,
+    asset: { assetId: string; url: string; kind: StoredAsset['kind']; filename: string },
+  ): Promise<boolean> {
+    const pending: StoredAsset = {
+      runId,
+      assetId: asset.assetId,
+      channelId,
+      url: asset.url,
+      kind: asset.kind,
+      filename: asset.filename,
+      status: 'pending',
+    };
+    await this.store.putAsset(pending);
+
+    const blob = await this.api.downloadAsset(asset.url);
+    if (blob) {
+      await this.store.putAsset({ ...pending, status: 'done', blob });
+      this.assetsDone += 1;
+      this.assetsByKind[asset.kind] += 1;
+      return true;
+    }
+    await this.store.putAsset({
+      ...pending,
+      status: 'failed',
+      error: 'téléchargement échoué (lien expiré ?)',
+    });
+    this.assetsFailed += 1;
+    return false;
+  }
+
+  /** Garde les messages plus récents que `afterMs` et plus vieux que `beforeMs`. */
+  private filterByDate(batch: RawMessage[], opts: ExportOptions): RawMessage[] {
+    if (opts.afterMs === undefined && opts.beforeMs === undefined) return batch;
+    return batch.filter((m) => {
+      const t = Date.parse(m.timestamp);
+      if (opts.afterMs !== undefined && t < opts.afterMs) return false;
+      if (opts.beforeMs !== undefined && t > opts.beforeMs) return false;
+      return true;
+    });
+  }
+
+  /** Vrai si le lot contient un message plus vieux que la borne `afterMs`. */
+  private reachedLowerBound(batch: RawMessage[], opts: ExportOptions): boolean {
+    if (opts.afterMs === undefined) return false;
+    return batch.some((m) => Date.parse(m.timestamp) < opts.afterMs!);
+  }
+
+  private emitProgress(
+    run: ExportRun,
+    currentChannel: string,
+    messagesInChannel: number,
+  ): void {
+    void messagesInChannel;
+    if (!this.events.onProgress) return;
+    void this.snapshot(run.id, currentChannel).then(this.events.onProgress);
+  }
+
+  private async snapshot(
+    runId: string,
+    currentChannel: string | null,
+  ): Promise<ProgressSnapshot> {
+    const channels = await this.store.getChannels(runId);
+    const run = await this.store.getRun(runId);
+    return {
+      runId,
+      status: run?.status ?? 'in_progress',
+      channelsTotal: channels.length,
+      channelsDone: channels.filter(
+        (c) => c.status === 'done' || c.status === 'partial' || c.status === 'skipped',
+      ).length,
+      currentChannel,
+      messagesTotal: channels.reduce((s, c) => s + c.messageCount, 0),
+      assetsDone: this.assetsDone,
+      assetsFailed: this.assetsFailed,
+      assetsByKind: { ...this.assetsByKind },
+      reactions: this.reactions,
+    };
+  }
+}

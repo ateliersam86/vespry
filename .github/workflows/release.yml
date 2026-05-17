@@ -1,0 +1,39 @@
+# Release — déclenché à la publication d'une release GitHub.
+#
+# La version vient du tag de la release (source de vérité unique). Aucune
+# version n'est saisie à la main : le tag est inscrit dans package.json, le
+# build le propage à manifest.json, et le .zip est attaché à la release.
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-attach:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Inscrire la version depuis le tag
+        run: node scripts/stamp-version.mjs "${{ github.event.release.tag_name }}"
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+
+      - name: Empaqueter l'extension
+        run: cd dist && zip -r "../vespry-${{ github.event.release.tag_name }}.zip" .
+
+      - name: Attacher le .zip à la release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: vespry-*.zip

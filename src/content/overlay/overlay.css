@@ -1,0 +1,235 @@
+/* Overlay Vespry — injecté dans un Shadow DOM, styles isolés de Discord. */
+:host { all: initial; }
+* { box-sizing: border-box; }
+
+.v-root {
+  --bg: #313338; --bg2: #2b2d31; --bg3: #1e1f22; --rail: #1e1f22;
+  --text: #dbdee1; --muted: #949ba4; --accent: #5865f2; --accent-h: #4752c4;
+  --green: #23a55a; --amber: #f0b232; --red: #f23f43; --border: #3f4147;
+  --font: "gg sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: var(--font);
+  color: var(--text);
+}
+
+/* launcher button injected in Discord */
+.v-launch {
+  position: fixed; top: 10px; right: 16px; z-index: 2147482000;
+  background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+  font: 600 13px var(--font); padding: 7px 13px; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.v-launch:hover { background: var(--accent-h); }
+
+.v-backdrop {
+  position: fixed; inset: 0; z-index: 2147483000;
+  background: rgba(0,0,0,.55); display: flex;
+  align-items: center; justify-content: center;
+}
+.v-win {
+  width: min(1080px, 94vw); height: min(720px, 92vh);
+  background: var(--bg); border-radius: 10px; overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 18px 56px rgba(0,0,0,.6);
+}
+
+.v-btn {
+  border: 0; border-radius: 6px; background: var(--accent); color: #fff;
+  font: 700 13px var(--font); padding: 9px 14px; cursor: pointer;
+}
+.v-btn:hover { background: var(--accent-h); }
+.v-btn:disabled { opacity: .45; cursor: not-allowed; }
+.v-btn--ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.v-link { color: #00a8fc; font-size: 12px; cursor: pointer; font-weight: 600; }
+.v-muted { color: var(--muted); }
+
+/* top confirm header */
+.v-top {
+  height: 54px; background: var(--bg3); border-bottom: 1px solid #000;
+  display: flex; align-items: center; gap: 14px; padding: 0 16px; flex: none;
+}
+.v-logo { font-size: 16px; font-weight: 800; }
+.v-sum { font-size: 13px; color: var(--muted); }
+.v-sum b { color: var(--text); }
+.v-mchips { display: flex; gap: 5px; margin-left: auto; }
+.v-mchip {
+  font: 700 11px var(--font); padding: 4px 9px; border-radius: 999px;
+  background: var(--bg2); border: 1px solid var(--border); color: var(--muted);
+  cursor: pointer;
+}
+.v-mchip.on { border-color: var(--accent); color: #fff; }
+.v-close { color: var(--muted); cursor: pointer; font-size: 20px; padding: 0 4px; }
+
+/* middle */
+.v-mid { flex: 1; display: flex; min-height: 0; }
+.v-rail {
+  width: 64px; background: var(--rail); display: flex; flex-direction: column;
+  align-items: center; gap: 8px; padding: 10px 0; overflow-y: auto;
+}
+.v-sic {
+  width: 46px; height: 46px; border-radius: 50%; background: #36373d;
+  display: flex; align-items: center; justify-content: center; font-size: 17px;
+  cursor: pointer; position: relative; flex: none; font-weight: 700;
+  transition: border-radius .12s ease;
+}
+.v-sic:hover { border-radius: 16px; }
+.v-sic.act { border-radius: 16px; background: var(--accent); }
+.v-sic .v-badge {
+  position: absolute; bottom: -2px; right: -2px; width: 17px; height: 17px;
+  background: var(--green); border: 2px solid var(--rail); border-radius: 50%;
+  font-size: 9px; display: flex; align-items: center; justify-content: center; color: #fff;
+}
+
+.v-clist { width: 240px; background: var(--bg2); display: flex; flex-direction: column; }
+.v-clist-hd {
+  height: 48px; border-bottom: 1px solid var(--bg3); display: flex;
+  align-items: center; justify-content: space-between; padding: 0 14px;
+  font-weight: 700; font-size: 14px; flex: none;
+}
+.v-search {
+  margin: 8px 10px; padding: 7px 10px; border-radius: 6px;
+  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  font: 13px var(--font); outline: none;
+}
+.v-search:focus { border-color: var(--accent); }
+.v-clist-scroll { flex: 1; overflow-y: auto; padding: 6px 0; }
+.v-cat {
+  font: 700 11px var(--font); color: var(--muted); padding: 10px 12px 3px;
+  text-transform: uppercase; display: flex; align-items: center; gap: 7px; cursor: pointer;
+}
+.v-crow {
+  display: flex; align-items: center; gap: 8px; padding: 5px 12px;
+  font-size: 14px; color: var(--muted); cursor: pointer;
+}
+.v-crow:hover { background: #34363c; }
+.v-crow.sel { background: #404249; color: #fff; }
+.v-cbx {
+  width: 17px; height: 17px; border-radius: 4px; border: 1.6px solid var(--muted);
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; cursor: pointer;
+}
+.v-cbx.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.v-hash { color: var(--muted); }
+
+/* main */
+.v-main { flex: 1; display: flex; flex-direction: column; background: var(--bg); min-width: 0; }
+.v-chat-hd {
+  height: 48px; border-bottom: 1px solid var(--bg3); display: flex;
+  align-items: center; gap: 10px; padding: 0 16px; flex: none;
+}
+.v-chat-hd .v-name { font-weight: 700; font-size: 15px; }
+.v-main-body { flex: 1; overflow-y: auto; padding: 18px 18px; }
+.v-field { margin-bottom: 18px; }
+.v-field label {
+  display: block; font: 700 11px var(--font); color: var(--muted);
+  text-transform: uppercase; letter-spacing: .3px; margin-bottom: 7px;
+}
+.v-date {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 10px; color: var(--text); font: 13px var(--font); width: 180px;
+}
+.v-empty {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; color: var(--muted); text-align: center; gap: 6px;
+}
+.v-hint { font-size: 12px; color: var(--muted); background: var(--bg2);
+  border-radius: 6px; padding: 9px 12px; }
+
+/* export queue */
+.v-queue { background: var(--bg3); border-top: 1px solid #000; flex: none; max-height: 230px;
+  display: flex; flex-direction: column; }
+.v-q-hd {
+  height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 16px;
+  font: 700 12px var(--font); text-transform: uppercase; color: var(--muted);
+  letter-spacing: .3px; cursor: pointer; flex: none;
+}
+.v-q-body { padding: 0 16px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; }
+.v-task { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; }
+.v-task-main { padding: 9px 12px; display: flex; align-items: center; gap: 10px; }
+.v-task-main .v-nm { font-weight: 600; font-size: 13px; }
+.v-st { font: 800 10px var(--font); padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.v-st--run { background: rgba(88,101,242,.22); color: #aab1ff; }
+.v-st--paused { background: rgba(242,63,67,.16); color: var(--red); }
+.v-st--queued, .v-st--wait { background: rgba(240,178,50,.16); color: var(--amber); }
+.v-st--done, .v-st--completed { background: rgba(35,165,90,.18); color: var(--green); }
+.v-st--partial { background: rgba(240,178,50,.18); color: var(--amber); }
+.v-st--failed { background: rgba(242,63,67,.18); color: var(--red); }
+.v-bar { flex: 1; height: 6px; background: var(--bg); border-radius: 999px; overflow: hidden; }
+.v-bar > i { display: block; height: 100%; background: var(--accent); transition: width .3s ease; }
+.v-bar > i.ok { background: var(--green); }
+.v-exp { color: var(--muted); cursor: pointer; font: 600 12px var(--font); white-space: nowrap; }
+
+.v-details { border-top: 1px solid var(--border); padding: 10px 12px; display: flex; gap: 12px; }
+.v-stats { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-content: start; }
+.v-dcell { background: var(--bg3); border-radius: 5px; padding: 7px 9px; }
+.v-dcell .n { font-size: 16px; font-weight: 800; }
+.v-dcell .k { font-size: 11px; color: var(--muted); }
+.v-console {
+  width: 320px; flex: none; background: #0f1012; border: 1px solid var(--border);
+  border-radius: 5px; padding: 8px 10px; max-height: 150px; overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+  line-height: 1.6; color: #c9ccce;
+}
+.v-console .ln { white-space: nowrap; }
+
+/* panneau Soutiens / crédits */
+.v-credits {
+  flex: 1; overflow-y: auto; padding: 28px 32px;
+  display: flex; flex-direction: column; gap: 18px;
+}
+.v-credits h2 { font-size: 20px; margin: 0; }
+.v-credits .v-intro { color: var(--muted); font-size: 14px; max-width: 520px; }
+.v-credits .v-donate {
+  align-self: flex-start; font-size: 15px; padding: 12px 22px;
+}
+.v-cred-grid { display: flex; gap: 28px; flex-wrap: wrap; }
+.v-cred-col { min-width: 220px; }
+.v-cred-col h3 {
+  font: 700 12px var(--font); text-transform: uppercase; letter-spacing: .4px;
+  color: var(--muted); margin: 0 0 10px;
+}
+.v-cred-list { list-style: none; margin: 0; padding: 0; display: flex;
+  flex-direction: column; gap: 6px; }
+.v-cred-list li { font-size: 14px; }
+.v-cred-list li .v-role { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.v-cred-empty { color: var(--muted); font-size: 13px; font-style: italic; }
+.v-support-link {
+  cursor: pointer; color: #ff5e5b; font-weight: 700; font-size: 12px;
+  white-space: nowrap;
+}
+.v-thanks {
+  border-top: 1px solid var(--border); padding: 8px 12px;
+  font-size: 12px; color: #ff8d6b; cursor: pointer;
+}
+.v-thanks:hover { color: #ff5e5b; }
+
+/* minimized — widget de progression flottant (mieux que l'onglet Discrub) */
+.v-mini {
+  position: fixed; bottom: 18px; right: 18px; z-index: 2147483000;
+  width: 260px; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.45);
+  padding: 12px 14px; cursor: pointer;
+}
+.v-mini:hover { border-color: var(--accent); }
+.v-mini-hd { display: flex; justify-content: space-between; align-items: center; }
+.v-mini-hd .v-logo { font-size: 14px; }
+.v-mini-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.v-mini .v-bar { margin-top: 8px; }
+
+/* thème clair — appliqué via data-theme="light" (sélecteur manuel) */
+.v-root[data-theme="light"] {
+  --bg: #ffffff;
+  --bg2: #f2f3f5;
+  --bg3: #ebedef;
+  --rail: #e3e5e8;
+  --text: #2e3338;
+  --muted: #5c5e66;
+  --border: #d4d6da;
+}
+/* la console reste sombre en thème clair — c'est un terminal. */
+
+/* bouton de thème dans le header */
+.v-theme-btn {
+  cursor: pointer; font-size: 13px; user-select: none;
+  padding: 2px 6px; border-radius: 5px; white-space: nowrap;
+}
+.v-theme-btn:hover { background: var(--bg2); }
