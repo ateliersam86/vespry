@@ -9,7 +9,11 @@
  *
  * Le moteur d'export vit dans l'offscreen document (tab-indépendant).
  */
-import type { MediaSelection, SelectionZone } from './engine/checkpoint-types';
+import type {
+  ExportFormat,
+  MediaSelection,
+  SelectionZone,
+} from './engine/checkpoint-types';
 import type { RawChannel, RawGuild, RawMessage } from './engine/types';
 import type { DonorFeed } from './donors';
 
@@ -70,6 +74,7 @@ export type VespryCommand =
       includeThreads: boolean;
       includeReactionUsers?: boolean;
       zones: SelectionZone[];
+      formats: ExportFormat[];
     }
   | { cmd: 'resume'; runId: string }
   | { cmd: 'download'; runId: string }
@@ -92,6 +97,7 @@ export interface EnqueueExtras {
   includeThreads: boolean;
   includeReactionUsers?: boolean;
   zones: SelectionZone[];
+  formats: ExportFormat[];
 }
 
 /** Réponse à une commande. `data` selon la commande. */

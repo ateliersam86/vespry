@@ -11,7 +11,12 @@ function run(id: string): ExportRun {
     guildId: 'g1',
     guildName: 'Groupe Test',
     status: 'completed',
-    options: { includeThreads: false, media: ALL_MEDIA, zones: [] },
+    options: {
+      includeThreads: false,
+      media: ALL_MEDIA,
+      zones: [],
+      formats: ['json', 'html', 'csv', 'txt'],
+    },
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };

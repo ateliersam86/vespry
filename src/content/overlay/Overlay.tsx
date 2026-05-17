@@ -15,8 +15,11 @@ import {
   useState,
 } from 'preact/hooks';
 import {
+  ALL_FORMATS,
   ALL_MEDIA,
+  DEFAULT_FORMATS,
   messageMatchesZones,
+  type ExportFormat,
   type MediaSelection,
   type SelectionZone,
 } from '../../engine/checkpoint-types';
@@ -175,6 +178,7 @@ export function Overlay({
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [media, setMedia] = useState<MediaSelection>({ ...ALL_MEDIA });
+  const [formats, setFormats] = useState<ExportFormat[]>([...DEFAULT_FORMATS]);
   const [focus, setFocus] = useState<RawChannel | null>(null);
   /** Sélection manuelle de messages, par salon (salonId → ids de messages). */
   const [manualSel, setManualSel] = useState<Map<string, Set<string>>>(new Map());
@@ -344,7 +348,12 @@ export function Overlay({
       (c) => selected.has(c.id) || (manualSel.get(c.id)?.size ?? 0) > 0,
     );
     if (!activeGuild || picked.length === 0) return;
-    const extras: EnqueueExtras = { includeThreads, zones };
+    const extras: EnqueueExtras = {
+      includeThreads,
+      zones,
+      // Garde-fou : au moins un format, sinon le paquet serait vide.
+      formats: formats.length > 0 ? formats : [...DEFAULT_FORMATS],
+    };
     if (reactionUsers) extras.includeReactionUsers = true;
     void controller.enqueue(activeGuild, picked, media, extras);
     setSelected(new Set());
@@ -627,6 +636,28 @@ export function Overlay({
                     {t(`media.${key}`)}
                   </span>
                 ))}
+              </div>
+            </div>
+            <div class="v-field">
+              <label>{t('overlay.format_label')}</label>
+              <div class="v-mchips">
+                {ALL_FORMATS.map((f) => {
+                  const on = formats.includes(f);
+                  return (
+                    <span
+                      key={f}
+                      class={`v-mchip ${on ? 'on' : ''}`}
+                      onClick={() =>
+                        setFormats(
+                          on
+                            ? formats.filter((x) => x !== f)
+                            : [...formats, f],
+                        )}
+                    >
+                      {t(`format.${f}`)}
+                    </span>
+                  );
+                })}
               </div>
             </div>
             <div class="v-field">

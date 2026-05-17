@@ -117,6 +117,21 @@ export function messageMatchesZones(
   return zones.some((z) => zoneMatches(z, m, channelId));
 }
 
+/**
+ * Format d'un fichier d'export, généré par le packager.
+ * - `json` : structuré, fidèle, idéal pour l'archivage et l'analyse.
+ * - `html` : page lisible façon Discord, ouvrable dans un navigateur.
+ * - `csv`  : tableur (Excel, LibreOffice…).
+ * - `txt`  : texte brut, le plus léger.
+ */
+export type ExportFormat = 'json' | 'html' | 'csv' | 'txt';
+
+/** Tous les formats, dans l'ordre d'affichage. */
+export const ALL_FORMATS: ExportFormat[] = ['json', 'html', 'csv', 'txt'];
+
+/** Défaut : JSON (archivage) + HTML (lecture). */
+export const DEFAULT_FORMATS: ExportFormat[] = ['json', 'html'];
+
 /** Ce que l'utilisateur a choisi d'exporter (modes simple/avancé). */
 export interface ExportOptions {
   includeThreads: boolean;
@@ -129,6 +144,8 @@ export interface ExportOptions {
   includeReactionUsers?: boolean;
   /** Zones de sélection. Vide = tout le salon ; sinon = union des zones. */
   zones: SelectionZone[];
+  /** Formats de fichier à générer. Défaut : `DEFAULT_FORMATS`. */
+  formats: ExportFormat[];
 }
 
 /** Un export. */

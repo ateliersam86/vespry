@@ -1,8 +1,11 @@
 /**
- * Packager — génère le paquet agent-ready à partir du checkpoint IndexedDB.
+ * Packager — génère le paquet d'export à partir du checkpoint IndexedDB.
  *
- * Sortie (cf. design doc) :
+ * Sortie (selon les formats choisis) :
  *   json/<salon>.json   un fichier par salon, messages chronologiques
+ *   html/<salon>.html   page lisible façon Discord
+ *   csv/<salon>.csv     tableur
+ *   txt/<salon>.txt     texte brut
  *   media/<salon>/...    images
  *   video/<salon>/...    vidéos
  *   audio/<salon>/...    audio
@@ -15,8 +18,15 @@
  */
 import { Writer } from '@transcend-io/conflux';
 import type { CheckpointStore } from './checkpoint-store';
-import type { AssetKind } from './checkpoint-types';
+import type { AssetKind, ExportFormat } from './checkpoint-types';
+import { DEFAULT_FORMATS } from './checkpoint-types';
+import { toCsv, toHtml, toTxt, type ExportContext } from './exporters';
 import type { RawMessage } from './types';
+
+/** Sous-dossier et extension de chaque format. */
+const FORMAT_DIR: Record<ExportFormat, string> = {
+  json: 'json', html: 'html', csv: 'csv', txt: 'txt',
+};
 
 /** Dossier de sortie selon le type de média. */
 const KIND_DIR: Record<AssetKind, string> = {
@@ -59,7 +69,8 @@ function enrichMessage(msg: RawMessage, urlToPath: Map<string, string>): unknown
 
 interface ChannelStat {
   name: string;
-  file: string;
+  /** Fichiers générés pour ce salon, un par format choisi. */
+  files: string[];
   messages: number;
   media: number;
 }
@@ -111,31 +122,53 @@ export async function packageRun(
     await writer.write({ name, stream: () => new Blob([text]).stream() });
   };
 
+  // Formats choisis — défaut robuste si un run d'avant cette option est repris.
+  const formats = run.options.formats?.length
+    ? run.options.formats
+    : DEFAULT_FORMATS;
+
   const stats: ChannelStat[] = [];
 
   for (const ch of channels) {
     const slug = channelSlug.get(ch.channelId) ?? 'unknown';
-    const messages: unknown[] = [];
+    // Messages bruts collectés une fois, réutilisés par tous les formats.
+    const raw: RawMessage[] = [];
     await store.forEachMessage(runId, ch.channelId, (sm) => {
-      messages.push(enrichMessage(sm.message, urlToPath));
+      raw.push(sm.message);
     });
-    const fileName = `${slug}.json`;
-    await writeText(
-      `json/${fileName}`,
-      JSON.stringify(
-        {
-          channel: { id: ch.channelId, name: ch.name, type: ch.type },
-          messageCount: messages.length,
-          messages,
-        },
-        null,
-        2,
-      ),
-    );
+    const ctx: ExportContext = {
+      guildName: run.guildName,
+      channelName: ch.name,
+      urlToPath,
+    };
+    const files: string[] = [];
+
+    for (const format of formats) {
+      const file = `${FORMAT_DIR[format]}/${slug}.${format}`;
+      if (format === 'json') {
+        await writeText(file, JSON.stringify(
+          {
+            channel: { id: ch.channelId, name: ch.name, type: ch.type },
+            messageCount: raw.length,
+            messages: raw.map((m) => enrichMessage(m, urlToPath)),
+          },
+          null,
+          2,
+        ));
+      } else if (format === 'html') {
+        await writeText(file, toHtml(ctx, raw));
+      } else if (format === 'csv') {
+        await writeText(file, toCsv(ctx, raw));
+      } else {
+        await writeText(file, toTxt(ctx, raw));
+      }
+      files.push(file);
+    }
+
     stats.push({
       name: ch.name,
-      file: `json/${fileName}`,
-      messages: messages.length,
+      files,
+      messages: raw.length,
       media: mediaPerChannel.get(ch.channelId) ?? 0,
     });
   }
@@ -186,23 +219,25 @@ function buildIndex(
     '',
     '## Comment lire',
     '',
+    '- `html/<salon>.html` — page lisible façon Discord, à ouvrir dans un',
+    '  navigateur.',
     '- `json/<salon>.json` — un fichier par salon, messages chronologiques.',
     "  Chaque message : `id`, `timestamp`, `author`, `content`, `attachments`,",
     '  `embeds`, `reactions`, `mentions`, `message_reference` (= réponse à un',
     "  message d'origine). Les médias téléchargés portent un champ `localPath`.",
+    '- `csv/<salon>.csv` — tableur. `txt/<salon>.txt` — texte brut.',
     '- `media/` images · `video/` vidéos · `audio/` audio · `files/` autres',
     '  fichiers — rangés par salon.',
     '- `manifest.json` — statistiques.',
     '',
-    'Fils de réponses : suivre `message_reference.message_id` vers le message',
-    'portant cet `id` dans le JSON du salon `message_reference.channel_id`.',
-    '',
     '## Salons',
     '',
-    '| Salon | Messages | Médias | JSON |',
+    '| Salon | Messages | Médias | Fichiers |',
     '|---|--:|--:|---|',
     ...stats.map(
-      (c) => `| ${c.name} | ${c.messages} | ${c.media} | \`${c.file}\` |`,
+      (c) =>
+        `| ${c.name} | ${c.messages} | ${c.media} | `
+        + `${c.files.map((f) => `\`${f}\``).join(' ')} |`,
     ),
     '',
   ];

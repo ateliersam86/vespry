@@ -15,7 +15,9 @@ import {
   type SelectionZone,
 } from './checkpoint-types';
 
-const OPTS: ExportOptions = { includeThreads: false, media: ALL_MEDIA, zones: [] };
+const OPTS: ExportOptions = {
+  includeThreads: false, media: ALL_MEDIA, zones: [], formats: ['json'],
+};
 
 function fakeMessage(id: string, withImage = false): RawMessage {
   return {

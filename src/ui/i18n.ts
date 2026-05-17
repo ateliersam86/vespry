@@ -83,6 +83,12 @@ const EN: Dict = {
   'media.audio': 'Audio',
   'media.files': 'Files',
 
+  'overlay.format_label': 'Export format',
+  'format.json': 'JSON',
+  'format.html': 'HTML',
+  'format.csv': 'CSV',
+  'format.txt': 'Text',
+
   'queue.title': 'Export queue — {n} task(s), {a} active',
   'queue.empty': 'No task.',
   'queue.details_show': 'Details ▾',
@@ -248,6 +254,12 @@ const FR: Dict = {
   'media.videos': 'Vidéos',
   'media.audio': 'Audio',
   'media.files': 'Fichiers',
+
+  'overlay.format_label': 'Format d’export',
+  'format.json': 'JSON',
+  'format.html': 'HTML',
+  'format.csv': 'CSV',
+  'format.txt': 'Texte',
 
   'queue.title': 'File d’export — {n} tâche(s), {a} active(s)',
   'queue.empty': 'Aucune tâche.',
