@@ -196,6 +196,7 @@ export function Overlay({
   const [credits, setCredits] = useState<Credits | null>(null);
   const [donorFeed, setDonorFeed] = useState<DonorFeed | null>(null);
   const [showSupport, setShowSupport] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
 
   useEffect(() => {
     void getThemePref().then(setTheme);
@@ -213,15 +214,22 @@ export function Overlay({
   }, [controller.ready]);
 
   // La page de retour Stripe (popup) prévient l'overlay par postMessage : on
-  // ferme la modale et on rafraîchit le mur pour voir le nouveau soutien.
+  // ferme la modale, on fête le don (confettis + toast), et on rafraîchit le
+  // mur. Double rafraîchissement : le webhook Stripe peut arriver après le
+  // postMessage — le second passage rattrape le nouveau soutien.
   useEffect(() => {
     function onMsg(e: MessageEvent): void {
-      if (e.data === 'vespry-donation-ok') {
-        setShowSupport(false);
+      if (e.data !== 'vespry-donation-ok') return;
+      setShowSupport(false);
+      setCelebrate(true);
+      const refresh = (): void => {
         void controller.getDonors().then((f) => {
           if (f) setDonorFeed(f);
         });
-      }
+      };
+      refresh();
+      window.setTimeout(refresh, 4200);
+      window.setTimeout(() => setCelebrate(false), 3400);
     }
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
@@ -709,6 +717,12 @@ export function Overlay({
         }}
       />
     )}
+    {celebrate && (
+      <div class="v-root" data-theme={resolvedTheme}>
+        <Confetti />
+        <Toast text={t('wall.thank_toast')} />
+      </div>
+    )}
     </>
   );
 }
@@ -1136,12 +1150,99 @@ function DonorChip({ donor }: { donor: Donor }): JSX.Element {
   );
 }
 
+/** Couleurs des confettis — palette crépuscule. */
+const CONFETTI_COLORS = ['#6c5ce0', '#ec6a93', '#8b7be8', '#f0b54a', '#b3a6e6'];
+
+/** Cycle entre plusieurs lignes toutes les ~5 s. Une seule ligne → pas de cycle. */
+function useRotatingLine(lines: string[]): string {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (lines.length <= 1) return undefined;
+    const id = window.setInterval(
+      () => setI((n) => (n + 1) % lines.length),
+      5200,
+    );
+    return () => window.clearInterval(id);
+  }, [lines.length]);
+  return lines[i % Math.max(1, lines.length)] ?? '';
+}
+
+/** Date relative courte et lisible. */
+function relativeTime(ms: number): string {
+  const days = Math.floor((Date.now() - ms) / 86_400_000);
+  if (days <= 0) return t('wall.today');
+  if (days === 1) return t('wall.yesterday');
+  return t('wall.days_ago', { n: days });
+}
+
+/**
+ * Lignes de motivation du footer — UNIQUEMENT des affirmations vraies pour
+ * l'état courant. La ligne de momentum n'entre dans le cycle que s'il y a
+ * réellement eu de l'activité : jamais « 0 soutien cette semaine ».
+ */
+function motivationLines(feed: DonorFeed): string[] {
+  const lines: string[] = [nextMilestoneLine(feed)];
+  if (feed.nextMilestone) {
+    lines.push(t('wall.you_could', { n: feed.nextMilestone.seq }));
+  }
+  if (feed.weekCount >= 1) {
+    lines.push(
+      feed.weekCount === 1
+        ? t('wall.week_one')
+        : t('wall.week', { n: feed.weekCount }),
+    );
+  } else {
+    const last = feed.recent[0];
+    if (last && Date.now() - last.createdAt < 30 * 86_400_000) {
+      lines.push(t('wall.last', { when: relativeTime(last.createdAt) }));
+    }
+  }
+  return lines;
+}
+
+/** Pluie de confettis crépuscule — célèbre un don. Inhibée si reduce-motion. */
+function Confetti(): JSX.Element | null {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 38 }, () => ({
+        left: Math.random() * 100,
+        bg:
+          CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)]
+          ?? '#6c5ce0',
+        delay: Math.random() * 0.5,
+        dur: 1.9 + Math.random() * 1.5,
+        rot: Math.round(Math.random() * 720 - 360),
+      })),
+    [],
+  );
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
+  return (
+    <div class="v-confetti" aria-hidden="true">
+      {pieces.map((p, i) => (
+        <i
+          key={i}
+          style={`left:${p.left}%;background:${p.bg};animation-delay:${p.delay}s;animation-duration:${p.dur}s;--r:${p.rot}deg`}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Toast de remerciement, en bas de l'écran. */
+function Toast({ text }: { text: string }): JSX.Element {
+  return (
+    <div class="v-toast">
+      <IconHeart /> {text}
+    </div>
+  );
+}
+
 /**
  * Footer « Mur des soutiens » — pleine largeur, bas de fenêtre.
  *
- * Compteur animé, bandeau défilant des remerciements, accroche du prochain
- * palier, bouton de soutien. Toujours présent ; en l'absence de données il
- * bascule sur un état d'accroche, jamais d'erreur visible.
+ * Barre de progression vers le prochain palier, compteur animé, bandeau
+ * défilant des remerciements, ligne de motivation rotative (toujours
+ * cohérente avec l'état réel), bouton de soutien.
  */
 function DonorWall({
   feed,
@@ -1155,10 +1256,23 @@ function DonorWall({
   const total = feed?.total ?? 0;
   const recent = feed?.recent ?? [];
   const shown = useCountUp(total);
-  const canDonate = Boolean(credits && (credits.koFiUrl || credits.gitHubSponsorsUrl));
+  const line = useRotatingLine(feed && total > 0 ? motivationLines(feed) : []);
+  const canDonate = Boolean(
+    credits
+    && (credits.donorApiUrl || credits.koFiUrl || credits.gitHubSponsorsUrl),
+  );
+  const nm = feed?.nextMilestone ?? null;
+  const progressPct = nm ? Math.min(100, (total / nm.seq) * 100) : 100;
 
   return (
     <div class="v-wall">
+      {feed && (
+        <div
+          class="v-wall-progress"
+          style={`width:${progressPct}%`}
+          aria-hidden="true"
+        />
+      )}
       <div class="v-wall-count">
         <OwlMark class="v-mark" />
         {total > 0 ? (
@@ -1187,9 +1301,7 @@ function DonorWall({
       </div>
 
       <div class="v-wall-aside">
-        {feed && total > 0 && (
-          <span class="v-wall-next">{nextMilestoneLine(feed)}</span>
-        )}
+        {line && <span class="v-wall-next">{line}</span>}
         <button
           class="v-wall-cta"
           onClick={onSupport}

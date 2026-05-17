@@ -35,6 +35,8 @@ export interface DonorFeed {
   recent: Donor[];
   /** Prochain palier à atteindre, ou null si tous franchis. */
   nextMilestone: { key: string; seq: number; remaining: number } | null;
+  /** Soutiens reçus durant les 7 derniers jours (ligne de momentum). */
+  weekCount: number;
 }
 
 /** Une nouvelle entrée à insérer (issue d'un webhook). */
@@ -77,6 +79,12 @@ export async function getFeed(db: D1Database): Promise<DonorFeed> {
     .first<{ n: number }>();
   const total = totalRow?.n ?? 0;
 
+  const weekRow = await db
+    .prepare('SELECT COUNT(*) AS n FROM donors WHERE hidden = 0 AND created_at > ?')
+    .bind(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    .first<{ n: number }>();
+  const weekCount = weekRow?.n ?? 0;
+
   const res = await db
     .prepare(
       `SELECT seq, source, name, message, created_at FROM donors
@@ -93,7 +101,7 @@ export async function getFeed(db: D1Database): Promise<DonorFeed> {
     milestone: milestoneFor(r.seq),
   }));
 
-  return { total, recent, nextMilestone: nextMilestone(total) };
+  return { total, recent, nextMilestone: nextMilestone(total), weekCount };
 }
 
 /** Masque une entrée (modération manuelle). */

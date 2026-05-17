@@ -32,6 +32,8 @@ export interface DonorFeed {
   recent: Donor[];
   /** Prochain palier à atteindre, ou null si tous franchis. */
   nextMilestone: { key: string; seq: number; remaining: number } | null;
+  /** Soutiens reçus durant les 7 derniers jours. */
+  weekCount: number;
 }
 
 /**
@@ -51,6 +53,7 @@ export async function fetchDonorFeed(apiUrl: string): Promise<DonorFeed | null> 
       total: typeof data.total === 'number' ? data.total : 0,
       recent: Array.isArray(data.recent) ? data.recent : [],
       nextMilestone: data.nextMilestone ?? null,
+      weekCount: typeof data.weekCount === 'number' ? data.weekCount : 0,
     };
   } catch {
     return null;

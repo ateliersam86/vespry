@@ -96,7 +96,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .v-bokeh i, .v-backdrop, .v-win, .v-msg, .v-credits, .v-task, .v-mini,
-  .v-wall, .v-ticker-track, .v-chip-spark {
+  .v-wall, .v-ticker-track, .v-chip-spark, .v-confetti i, .v-toast {
     animation: none !important;
   }
 }
@@ -437,6 +437,7 @@
 
 /* ============ footer — mur des soutiens ============ */
 .v-wall {
+  position: relative;
   flex: none; height: 56px; display: flex; align-items: center;
   gap: 14px; padding: 0 16px;
   border-top: 1px solid var(--border);
@@ -575,6 +576,37 @@
 .v-modal-alt .v-link { display: flex; align-items: center; gap: 5px; }
 .v-modal-wall { text-align: center; }
 
+/* barre de progression vers le prochain palier (bord haut du footer) */
+.v-wall-progress {
+  position: absolute; top: 0; left: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent), #ec6a93);
+  box-shadow: 0 0 8px rgba(236,106,147,.6);
+  transition: width .7s cubic-bezier(.16, 1, .3, 1);
+}
+
+/* confettis de célébration d'un don */
+.v-confetti {
+  position: fixed; inset: 0; z-index: 2147483600;
+  pointer-events: none; overflow: hidden;
+}
+.v-confetti i {
+  position: absolute; top: -16px; width: 9px; height: 9px;
+  border-radius: 2px; opacity: 0;
+  animation-name: v-confetti-fall;
+  animation-timing-function: cubic-bezier(.3, .6, .5, 1);
+  animation-fill-mode: forwards;
+}
+
+/* toast de remerciement */
+.v-toast {
+  position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
+  z-index: 2147483600; display: flex; align-items: center; gap: 8px;
+  background: var(--support); color: #fff;
+  font: 700 13.5px var(--font); padding: 11px 20px; border-radius: 999px;
+  box-shadow: 0 10px 32px rgba(0,0,0,.45);
+  animation: v-toast 3.4s ease both;
+}
+
 /* minimized — widget de progression flottant */
 .v-mini {
   position: fixed; bottom: 18px; right: 18px; z-index: 2147483000;
@@ -627,6 +659,17 @@
 @keyframes v-spark {
   0%, 100% { transform: scale(1) rotate(0); opacity: .8; }
   50%      { transform: scale(1.28) rotate(22deg); opacity: 1; }
+}
+@keyframes v-confetti-fall {
+  0%   { opacity: 1; transform: translateY(0) rotate(0); }
+  85%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(102vh) rotate(var(--r, 360deg)); }
+}
+@keyframes v-toast {
+  0%   { opacity: 0; transform: translate(-50%, 16px); }
+  10%  { opacity: 1; transform: translate(-50%, 0); }
+  88%  { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 10px); }
 }
 
 /* entrées en scène */
