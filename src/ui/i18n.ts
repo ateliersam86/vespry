@@ -20,6 +20,7 @@ const EN: Dict = {
     'Open Discord and log in — Vespry captures your session, then the export panel appears in the page.',
   'popup.finished': '✓ {n} export(s) done — grab the .zip in the Vespry panel on Discord.',
   'popup.open_discord': 'Open Discord',
+  'popup.go_discord': 'Go to Discord',
   'popup.tagline': 'Crash-proof export · AI-ready output',
   'popup.task_sub': '{m} messages · channel {d}/{t}',
 
@@ -185,6 +186,7 @@ const FR: Dict = {
     'Ouvre Discord et connecte-toi — Vespry capte ta session, puis le panneau d’export apparaît dans la page.',
   'popup.finished': '✓ {n} export(s) terminé(s) — récupère le .zip dans le panneau Vespry sur Discord.',
   'popup.open_discord': 'Ouvrir Discord',
+  'popup.go_discord': 'Aller sur Discord',
   'popup.tagline': 'Export increvable · sortie prête pour l’IA',
   'popup.task_sub': '{m} messages · salon {d}/{t}',
 

@@ -27,10 +27,15 @@ function openDiscord(): void {
 function Popup(): JSX.Element {
   const [, force] = useReducer((n: number) => n + 1, 0);
   const [loaded, setLoaded] = useState(false);
+  const [discordOpen, setDiscordOpen] = useState(false);
 
   useEffect(() => {
     const off = controller.subscribe(force as () => void);
     void controller.init().then(() => setLoaded(true));
+    // Détecte si un onglet Discord est déjà ouvert → le bouton s'adapte.
+    void chrome.tabs
+      .query({ url: ['https://discord.com/*', 'https://*.discord.com/*'] })
+      .then((tabs) => setDiscordOpen(tabs.length > 0));
     return off;
   }, []);
 
@@ -92,8 +97,11 @@ function Popup(): JSX.Element {
         </p>
       )}
 
-      <button class="v-btn" onClick={openDiscord}>
-        {t('popup.open_discord')}
+      <button
+        class={`v-btn ${discordOpen ? 'v-btn--ghost' : ''}`}
+        onClick={openDiscord}
+      >
+        {discordOpen ? t('popup.go_discord') : t('popup.open_discord')}
       </button>
 
       <footer class="popup__foot v-muted">
