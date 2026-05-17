@@ -601,7 +601,7 @@ function Shell({
       <div class="v-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
         {/* fond bokeh — taches floues douces derrière la fenêtre */}
         <div class="v-bokeh" aria-hidden="true">
-          <i /><i /><i /><i /><i /><i />
+          {Array.from({ length: 12 }, (_, i) => <i key={i} />)}
         </div>
         <div class={`v-win ${compact ? 'v-win--compact' : ''}`}>{children}</div>
       </div>
@@ -650,14 +650,19 @@ function isImageAtt(a: RawAttachment): boolean {
 function MessageRow({
   message,
   grouped,
+  index,
 }: {
   message: RawMessage;
   grouped: boolean;
+  index: number;
 }): JSX.Element {
   const m = message;
   const name = m.author.global_name ?? m.author.username;
   return (
-    <div class={`v-msg ${grouped ? 'v-msg--grouped' : ''}`}>
+    <div
+      class={`v-msg ${grouped ? 'v-msg--grouped' : ''}`}
+      style={`animation-delay:${Math.min(index, 18) * 22}ms`}
+    >
       {grouped
         ? <div class="v-msg-gutter" />
         : <img class="v-msg-avatar" src={avatarUrl(m.author)} alt="" loading="lazy" />}
@@ -726,7 +731,7 @@ function MessagePreview({
           && prev.author.id === m.author.id
           && Date.parse(m.timestamp) - Date.parse(prev.timestamp) < 7 * 60_000,
         );
-        return <MessageRow key={m.id} message={m} grouped={grouped} />;
+        return <MessageRow key={m.id} message={m} grouped={grouped} index={i} />;
       })}
     </div>
   );

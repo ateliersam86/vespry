@@ -39,8 +39,14 @@
 
 .v-backdrop {
   position: fixed; inset: 0; z-index: 2147483000;
-  background: rgba(0,0,0,.55); display: flex;
-  align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center;
+  /* fond crépuscule : couvre tout l'écran (les taches bokeh dérivent dessus) */
+  background:
+    radial-gradient(58% 50% at 22% 16%, rgba(108,92,224,.30), transparent 72%),
+    radial-gradient(55% 48% at 82% 84%, rgba(236,106,147,.22), transparent 72%),
+    radial-gradient(50% 50% at 88% 14%, rgba(139,123,232,.20), transparent 72%),
+    rgba(16,13,24,.86);
+  animation: v-fade-in .25s ease both;
 }
 .v-win {
   width: min(1080px, 94vw); height: min(720px, 92vh);
@@ -48,6 +54,8 @@
   display: flex; flex-direction: column;
   box-shadow: 0 18px 56px rgba(0,0,0,.6);
   position: relative; z-index: 1;
+  /* entrée en scène à l'ouverture */
+  animation: v-win-in .42s cubic-bezier(.16, 1, .3, 1) both;
   /* l'overlay grandit en douceur quand la session se charge */
   transition: width .5s cubic-bezier(.16, 1, .3, 1),
               height .5s cubic-bezier(.16, 1, .3, 1);
@@ -55,25 +63,40 @@
 /* état compact : pas (encore) de session — carte « connecte-toi » */
 .v-win--compact { width: 440px; height: 360px; }
 
-/* fond bokeh — taches de couleur floues qui dérivent derrière la fenêtre */
+/* fond bokeh — 12 taches floues réparties sur tout l'écran, qui dérivent */
 .v-bokeh { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
 .v-bokeh i {
   position: absolute; display: block; border-radius: 50%;
-  filter: blur(50px); will-change: transform;
+  filter: blur(55px); will-change: transform;
   animation: v-bokeh-drift 20s ease-in-out infinite alternate;
 }
-.v-bokeh i:nth-child(1) { width: 340px; height: 340px; left: 7%;  top: 10%; background: #6c5ce0; opacity: .50; animation-duration: 21s; }
-.v-bokeh i:nth-child(2) { width: 280px; height: 280px; left: 63%; top: 6%;  background: #ec6a93; opacity: .42; animation-duration: 17s; }
-.v-bokeh i:nth-child(3) { width: 300px; height: 300px; left: 78%; top: 54%; background: #8b7be8; opacity: .46; animation-duration: 25s; }
-.v-bokeh i:nth-child(4) { width: 240px; height: 240px; left: 16%; top: 60%; background: #f0b54a; opacity: .32; animation-duration: 19s; }
-.v-bokeh i:nth-child(5) { width: 220px; height: 220px; left: 44%; top: 76%; background: #5d4eae; opacity: .44; animation-duration: 23s; }
-.v-bokeh i:nth-child(6) { width: 170px; height: 170px; left: 40%; top: 28%; background: #b3a6e6; opacity: .30; animation-duration: 15s; }
+.v-bokeh i:nth-child(1)  { width: 320px; height: 320px; left: 4%;  top: 6%;  background: #6c5ce0; opacity: .46; animation-duration: 21s; }
+.v-bokeh i:nth-child(2)  { width: 280px; height: 280px; left: 40%; top: -4%; background: #ec6a93; opacity: .38; animation-duration: 17s; }
+.v-bokeh i:nth-child(3)  { width: 300px; height: 300px; left: 74%; top: 4%;  background: #8b7be8; opacity: .42; animation-duration: 25s; }
+.v-bokeh i:nth-child(4)  { width: 260px; height: 260px; left: -3%; top: 42%; background: #5d4eae; opacity: .44; animation-duration: 19s; }
+.v-bokeh i:nth-child(5)  { width: 230px; height: 230px; left: 30%; top: 36%; background: #b3a6e6; opacity: .28; animation-duration: 23s; }
+.v-bokeh i:nth-child(6)  { width: 280px; height: 280px; left: 62%; top: 40%; background: #6c5ce0; opacity: .34; animation-duration: 15s; }
+.v-bokeh i:nth-child(7)  { width: 300px; height: 300px; left: 84%; top: 48%; background: #ec6a93; opacity: .30; animation-duration: 27s; }
+.v-bokeh i:nth-child(8)  { width: 250px; height: 250px; left: 6%;  top: 74%; background: #8b7be8; opacity: .40; animation-duration: 20s; }
+.v-bokeh i:nth-child(9)  { width: 240px; height: 240px; left: 38%; top: 80%; background: #f0b54a; opacity: .26; animation-duration: 24s; }
+.v-bokeh i:nth-child(10) { width: 280px; height: 280px; left: 66%; top: 78%; background: #5d4eae; opacity: .38; animation-duration: 18s; }
+.v-bokeh i:nth-child(11) { width: 220px; height: 220px; left: 90%; top: 84%; background: #b3a6e6; opacity: .30; animation-duration: 22s; }
+.v-bokeh i:nth-child(12) { width: 200px; height: 200px; left: 50%; top: 14%; background: #ec6a93; opacity: .24; animation-duration: 16s; }
 @keyframes v-bokeh-drift {
   from { transform: translate(0, 0) scale(1); }
-  to   { transform: translate(38px, -28px) scale(1.16); }
+  to   { transform: translate(34px, -26px) scale(1.18); }
+}
+.v-bokeh i:nth-child(even) {
+  animation-name: v-bokeh-drift2;
+}
+@keyframes v-bokeh-drift2 {
+  from { transform: translate(0, 0) scale(1.08); }
+  to   { transform: translate(-30px, 28px) scale(0.92); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .v-bokeh i { animation: none; }
+  .v-bokeh i, .v-backdrop, .v-win, .v-msg, .v-credits, .v-task, .v-mini {
+    animation: none !important;
+  }
 }
 
 .v-btn {
@@ -367,5 +390,59 @@
   cursor: pointer; font-size: 13px; user-select: none;
   padding: 3px 8px; border-radius: 5px; white-space: nowrap;
   display: flex; align-items: center; gap: 5px; color: var(--muted);
+  transition: background .12s ease, color .12s ease;
 }
 .v-theme-btn:hover { background: var(--hover); color: var(--text); }
+
+/* ====================== ANIMATIONS ====================== */
+@keyframes v-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes v-win-in {
+  from { opacity: 0; transform: scale(.93) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes v-msg-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes v-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes v-pop {
+  0%   { transform: scale(0); }
+  60%  { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+@keyframes v-float {
+  from { transform: translateY(-4px); }
+  to   { transform: translateY(4px); }
+}
+
+/* entrées en scène */
+.v-credits { animation: v-fade-in .3s ease both; }
+.v-task { animation: v-slide-in .32s ease both; }
+.v-mini { animation: v-win-in .34s cubic-bezier(.16, 1, .3, 1) both; }
+.v-side, .v-chat, .v-clist { animation: v-fade-in .3s ease both; }
+
+/* mascotte des états vides : flottement doux */
+.v-empty .v-mark { animation: v-float 3.6s ease-in-out infinite alternate; }
+
+/* la coche surgit quand on coche */
+.v-cbx .v-ico { animation: v-pop .22s ease both; }
+
+/* micro-interactions au survol */
+.v-msg {
+  border-radius: 7px; transition: background .12s ease;
+  animation: v-msg-in .3s ease both;
+}
+.v-msg:hover { background: var(--hover); }
+.v-sic { transition: border-radius .14s ease, transform .14s ease; }
+.v-sic:hover { transform: scale(1.07); }
+.v-btn { transition: background .12s ease, transform .12s ease; }
+.v-btn:not(:disabled):hover { transform: translateY(-1px); }
+.v-btn:not(:disabled):active { transform: translateY(0); }
+.v-mchip { transition: background .12s ease, color .12s ease, transform .12s ease; }
+.v-mchip:active { transform: scale(.93); }
+.v-crow, .v-cat, .v-clist-master, .v-checkrow { transition: background .1s ease, color .1s ease; }
+.v-exp, .v-link, .v-support-link, .v-close { transition: color .12s ease, background .12s ease; }
+.v-cbx { transition: background .12s ease, border-color .12s ease; }
