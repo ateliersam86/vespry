@@ -46,6 +46,7 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
         formats: command.formats,
       };
       if (command.includeReactionUsers) extras.includeReactionUsers = true;
+      if (command.incremental) extras.incremental = true;
       await controller.enqueue(command.guild, command.channels, command.media, extras);
       return { ok: true, state: controller.toState() };
     }

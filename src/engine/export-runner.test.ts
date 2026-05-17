@@ -145,6 +145,29 @@ describe('ExportRunner', () => {
     expect((await store.getRun(runId))?.status).toBe('completed');
   });
 
+  it('export incrémental — n\'exporte que les messages après sinceMs', async () => {
+    const dated = (id: string, iso: string): RawMessage => ({
+      ...fakeMessage(id), timestamp: iso,
+    });
+    const runId = await planGuildExport(
+      store,
+      { id: 'g1', name: 'G' },
+      [channel],
+      { ...OPTS, sinceMs: Date.parse('2026-03-01T00:00:00.000Z') },
+    );
+    // lot trié récent → ancien ; le dernier est antérieur au plancher.
+    const api = fakeApi([[
+      dated('3', '2026-03-10T00:00:00.000Z'),
+      dated('2', '2026-03-05T00:00:00.000Z'),
+      dated('1', '2026-02-01T00:00:00.000Z'),
+    ]]);
+
+    await new ExportRunner(api, store).run(runId);
+
+    // seuls les 2 messages postés après le plancher sont conservés.
+    expect(await store.countMessages(runId, 'c1')).toBe(2);
+  });
+
   it('met le run en pause sur une erreur d\'authentification', async () => {
     const runId = await planGuildExport(store, { id: 'g1', name: 'G' }, [channel], OPTS);
     const api = {

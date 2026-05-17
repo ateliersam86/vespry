@@ -366,22 +366,38 @@ export class ExportRunner {
     return false;
   }
 
-  /** Garde les messages couverts par les zones de sélection (mode + négation). */
+  /**
+   * Garde les messages retenus : zones de sélection (mode + négation), ET le
+   * plancher incrémental `sinceMs` s'il est défini.
+   */
   private filterMessages(
     batch: RawMessage[],
     opts: ExportOptions,
     channelId: string,
   ): RawMessage[] {
-    if (opts.zones.length === 0) return batch;
-    return batch.filter(
+    let kept = batch;
+    if (opts.sinceMs !== undefined) {
+      const floor = opts.sinceMs;
+      kept = kept.filter((m) => Date.parse(m.timestamp) >= floor);
+    }
+    if (opts.zones.length === 0) return kept;
+    return kept.filter(
       (m) => messageMatchesZones(m, opts.zones, channelId, opts.zoneMode),
     );
   }
 
-  /** Vrai si le lot dépasse la borne basse de pagination (zones périodes). */
+  /**
+   * Vrai si le lot dépasse la borne basse de pagination — on peut alors
+   * arrêter ce salon. La borne est le plus contraignant de : la borne dérivée
+   * des zones, et le plancher incrémental `sinceMs` (toujours un ET strict).
+   */
   private reachedLowerBound(batch: RawMessage[], opts: ExportOptions): boolean {
-    const bound = paginationLowerBound(opts.zones, opts.zoneMode);
-    if (bound === undefined) return false;
+    const zoneBound = paginationLowerBound(opts.zones, opts.zoneMode);
+    const bounds = [zoneBound, opts.sinceMs].filter(
+      (b): b is number => b !== undefined,
+    );
+    if (bounds.length === 0) return false;
+    const bound = Math.max(...bounds);
     return batch.some((m) => Date.parse(m.timestamp) < bound);
   }
 

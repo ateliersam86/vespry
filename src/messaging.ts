@@ -76,6 +76,9 @@ export type VespryCommand =
       includeReactionUsers?: boolean;
       zones: SelectionZone[];
       zoneMode: ZoneMode;
+      /** Export incrémental — ne reprendre que les messages postés depuis
+       *  le dernier export du même serveur. */
+      incremental?: boolean;
       formats: ExportFormat[];
     }
   | { cmd: 'resume'; runId: string }
@@ -100,6 +103,8 @@ export interface EnqueueExtras {
   includeReactionUsers?: boolean;
   zones: SelectionZone[];
   zoneMode: ZoneMode;
+  /** Export incrémental — résolu en `sinceMs` par le contrôleur. */
+  incremental?: boolean;
   formats: ExportFormat[];
 }
 

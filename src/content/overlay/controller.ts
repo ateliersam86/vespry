@@ -272,6 +272,19 @@ export class VespryController {
     return [...channels, ...threads.values()];
   }
 
+  /**
+   * Date de début du dernier export abouti d'un serveur — sert de plancher
+   * à l'export incrémental. `undefined` si le serveur n'a jamais été exporté.
+   */
+  private async lastExportTime(guildId: string): Promise<number | undefined> {
+    const runs = await this.store.listRuns(); // déjà trié récent → ancien
+    const prev = runs.find(
+      (r) => r.guildId === guildId
+        && (r.status === 'completed' || r.status === 'partial'),
+    );
+    return prev?.createdAt;
+  }
+
   /** Ajoute une tâche d'export à la file et lance le traitement. */
   async enqueue(
     guild: RawGuild,
@@ -279,7 +292,13 @@ export class VespryController {
     media: MediaSelection,
     extras: EnqueueExtras,
   ): Promise<void> {
-    const options: ExportOptions = { media, ...extras };
+    const { incremental, ...rest } = extras;
+    const options: ExportOptions = { media, ...rest };
+    // Export incrémental : plancher temporel = début du dernier export abouti.
+    if (incremental) {
+      const since = await this.lastExportTime(guild.id);
+      if (since !== undefined) options.sinceMs = since;
+    }
     const expanded = extras.includeThreads && guild.id !== '@me'
       ? await this.withThreads(guild.id, channels)
       : channels;

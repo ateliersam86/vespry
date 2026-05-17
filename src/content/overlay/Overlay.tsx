@@ -225,6 +225,8 @@ export function Overlay({
   /** Signatures de zones inversées (NON logique). */
   const [negated, setNegated] = useState<Set<string>>(new Set());
   const [reactionUsers, setReactionUsers] = useState(false);
+  /** Export incrémental — seulement les messages depuis le dernier export. */
+  const [incremental, setIncremental] = useState(false);
   const [view, setView] = useState<'export' | 'credits'>('export');
   const [theme, setTheme] = useState<ThemePref>('dark');
   const [credits, setCredits] = useState<Credits | null>(null);
@@ -386,6 +388,7 @@ export function Overlay({
       formats: formats.length > 0 ? formats : [...DEFAULT_FORMATS],
     };
     if (reactionUsers) extras.includeReactionUsers = true;
+    if (incremental) extras.incremental = true;
     void controller.enqueue(activeGuild, picked, media, extras);
     setSelected(new Set());
     setManualSel(new Map());
@@ -786,6 +789,11 @@ export function Overlay({
                 on={reactionUsers}
                 onToggle={() => setReactionUsers(!reactionUsers)}
                 label={t('filter.reaction_users')}
+              />
+              <CheckRow
+                on={incremental}
+                onToggle={() => setIncremental(!incremental)}
+                label={t('filter.incremental')}
               />
             </div>
           </div>

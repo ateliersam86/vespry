@@ -215,6 +215,12 @@ export interface ExportOptions {
   zones: SelectionZone[];
   /** Combinaison des zones de critères : `any` = OU, `all` = ET. */
   zoneMode: ZoneMode;
+  /**
+   * Plancher temporel absolu (epoch ms) — export incrémental. Les messages
+   * antérieurs sont exclus, en ET par-dessus les zones (indépendant du mode).
+   * Calculé depuis le dernier export du même serveur.
+   */
+  sinceMs?: number;
   /** Formats de fichier à générer. Défaut : `DEFAULT_FORMATS`. */
   formats: ExportFormat[];
 }
