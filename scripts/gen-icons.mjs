@@ -19,7 +19,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const assets = join(root, 'src/assets');
 
 const PAL = { o: '#1F1A33', b: '#5D4EAE', f: '#F4EBD4', w: '#FEFDF8', p: '#1F1A33', k: '#F0B54A' };
-const RIM = '#F4EBD4';
+// Liseré lavande discret — l'icône PNG sert sur barre claire ET sombre,
+// le liseré ne peut pas y être conditionnel ; le violet clair est le
+// compromis le moins voyant.
+const RIM = '#B3A6E6';
 
 // Hibou tête seule, 14×13 — identique au mockup et à src/ui/owl.ts.
 const HEAD = [
@@ -42,18 +45,14 @@ const H = HEAD.length;
 const W = HEAD[0].length;
 const filled = (x, y) => x >= 0 && x < W && y >= 0 && y < H && HEAD[y][x] !== '.';
 
-// Liseré : cases vides au contact du hibou (8-voisinage).
+// Liseré : cases vides au contact orthogonal du hibou (4-voisinage — fin).
 const rim = [];
 for (let y = -1; y <= H; y += 1) {
   for (let x = -1; x <= W; x += 1) {
     if (filled(x, y)) continue;
-    let touches = false;
-    for (let dy = -1; dy <= 1; dy += 1) {
-      for (let dx = -1; dx <= 1; dx += 1) {
-        if (filled(x + dx, y + dy)) touches = true;
-      }
+    if (filled(x - 1, y) || filled(x + 1, y) || filled(x, y - 1) || filled(x, y + 1)) {
+      rim.push({ x, y });
     }
-    if (touches) rim.push({ x, y });
   }
 }
 

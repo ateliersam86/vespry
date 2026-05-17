@@ -10,6 +10,8 @@
   --hover: #322b42; --sel: #3a3350;
   --green: #3fb27a; --amber: #f0b54a; --red: #e5556a; --support: #ec6a93;
   --border: #352e44;
+  /* liseré de la mascotte — visible sur fond sombre uniquement */
+  --owl-rim: #b3a6e6;
   --font: "gg sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-family: var(--font);
   color: var(--text);
@@ -22,6 +24,8 @@
   --hover: #ebe7f5; --sel: #e4def2;
   --green: #1f9b5e; --amber: #b9831c; --red: #d23b54; --support: #d6457a;
   --border: #ddd8ea;
+  /* fond clair → pas de liseré (il serait disgracieux) */
+  --owl-rim: transparent;
 }
 
 /* launcher button injected in Discord */

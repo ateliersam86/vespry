@@ -14,8 +14,8 @@ export const OWL_PALETTE: Record<string, string> = {
   o: '#1F1A33', b: '#5D4EAE', f: '#F4EBD4', w: '#FEFDF8', p: '#1F1A33', k: '#F0B54A',
 };
 
-/** Couleur du liseré de contraste. */
-export const OWL_RIM_COLOR = '#F4EBD4';
+/** Couleur du liseré — lavande discrète (pas du blanc franc). */
+export const OWL_RIM_COLOR = '#B3A6E6';
 
 /** Carte de pixels — hibou tête seule, 14×13. */
 export const OWL_HEAD: readonly string[] = [
@@ -35,25 +35,22 @@ export const OWL_HEAD: readonly string[] = [
 ];
 
 /**
- * Cellules du liseré : cases vides au contact du hibou (8-voisinage).
+ * Cellules du liseré : cases vides au contact orthogonal du hibou
+ * (4-voisinage — liseré fin, sans pâtés dans les angles diagonaux).
  * Coordonnées dans `[-1 .. largeur]` — le liseré déborde d'1px du hibou.
  */
 export function owlRimCells(): ReadonlyArray<{ x: number; y: number }> {
   const h = OWL_HEAD.length;
   const w = OWL_HEAD[0]?.length ?? 0;
   const filled = (x: number, y: number): boolean =>
-    x >= 0 && x < w && y >= 0 && y < h && OWL_HEAD[y]?.[x] !== '.' && OWL_HEAD[y]?.[x] !== undefined;
+    x >= 0 && x < w && y >= 0 && y < h && (OWL_HEAD[y]?.[x] ?? '.') !== '.';
   const rim: { x: number; y: number }[] = [];
   for (let y = -1; y <= h; y += 1) {
     for (let x = -1; x <= w; x += 1) {
       if (filled(x, y)) continue;
-      let touches = false;
-      for (let dy = -1; dy <= 1 && !touches; dy += 1) {
-        for (let dx = -1; dx <= 1 && !touches; dx += 1) {
-          if (filled(x + dx, y + dy)) touches = true;
-        }
+      if (filled(x - 1, y) || filled(x + 1, y) || filled(x, y - 1) || filled(x, y + 1)) {
+        rim.push({ x, y });
       }
-      if (touches) rim.push({ x, y });
     }
   }
   return rim;

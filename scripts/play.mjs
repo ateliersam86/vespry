@@ -1,41 +1,47 @@
 #!/usr/bin/env node
 /**
- * Ouvre un navigateur Chromium avec l'extension Vespry chargée et la session
- * pré-injectée, pour un test manuel. Le navigateur reste ouvert jusqu'à ce
- * que tu fermes la fenêtre.
+ * Ouvre un Chromium pour tester Vespry à la main, avec un profil PERSISTANT
+ * (`.test-profile-manual/`). Conséquence : tu te connectes à Discord une
+ * seule fois — la session est conservée à chaque `npm run play` suivant.
  *
- * Usage : VESPRY_TEST_TOKEN="..." node scripts/play.mjs
- *     ou : npm run play   (avec VESPRY_TEST_TOKEN dans l'environnement)
+ * Pas d'injection de jeton ici : c'est le vrai parcours (tu es connecté à
+ * Discord, le bridge capte ta session naturellement).
+ *
+ * Astuce : après un rebuild de l'extension, recharge-la depuis
+ * `chrome://extensions` (icône ↻) pour être sûr d'avoir le dernier code.
+ *
+ * Usage : npm run play
  */
-import { launchWithToken } from './harness.mjs';
+import { chromium } from 'playwright';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
-const TOKEN = process.env.VESPRY_TEST_TOKEN;
-if (!TOKEN) {
-  console.log('VESPRY_TEST_TOKEN requis');
-  process.exit(1);
-}
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const extDir = join(root, 'dist');
+const profile = join(root, '.test-profile-manual');
 
-const { ctx, cleanup } = await launchWithToken(TOKEN);
-const page = await ctx.newPage();
+const ctx = await chromium.launchPersistentContext(profile, {
+  headless: false,
+  locale: 'fr-FR',
+  args: [
+    `--disable-extensions-except=${extDir}`,
+    `--load-extension=${extDir}`,
+    '--window-size=1320,900',
+  ],
+});
+
+const page = ctx.pages()[0] ?? (await ctx.newPage());
 await page
-  .goto('https://discord.com/channels/@me', { waitUntil: 'load', timeout: 45_000 })
-  .catch(() => { /* page de login ou hors-ligne — sans gravité */ });
-
-// Ouvre l'overlay automatiquement : le profil de test n'est pas connecté à
-// Discord (profil jetable), donc la PAGE montre l'écran de login — mais
-// l'extension, elle, a la session via le jeton injecté. On ouvre directement
-// l'overlay pour montrer Vespry qui fonctionne, pas la page de login derrière.
-await page.locator('#vespry-launch-btn').click({ timeout: 20_000 }).catch(() => {});
+  .goto('https://discord.com/channels/@me', { waitUntil: 'load', timeout: 60_000 })
+  .catch(() => { /* hors-ligne — sans gravité */ });
 
 console.log('────────────────────────────────────────────────────────');
-console.log('  Navigateur Vespry ouvert — overlay déjà affiché.');
-console.log('  La page Discord derrière montre un écran de login : c\'est');
-console.log('  normal, le profil de test n\'est pas connecté à Discord.');
-console.log('  L\'extension, elle, a la session (jeton injecté pour le test).');
-console.log('  Ferme la fenêtre du navigateur pour quitter.');
+console.log('  Navigateur Vespry ouvert (profil persistant).');
+console.log('  1. Connecte-toi à Discord (une seule fois — ça reste).');
+console.log('  2. Clique le bouton « Vespry » en haut à droite.');
+console.log('  Les prochains `npm run play` te garderont connecté.');
+console.log('  Ferme la fenêtre pour quitter.');
 console.log('────────────────────────────────────────────────────────');
 
-// Reste en vie jusqu'à la fermeture de la fenêtre.
 await new Promise((resolve) => ctx.on('close', () => resolve()));
-await cleanup();
 console.log('Navigateur fermé.');
