@@ -36,6 +36,7 @@ import { t } from '../../ui/i18n';
 import { getVersion } from '../../version';
 import { reportProblem } from '../../diagnostics';
 import { loadCredits, type Credits } from '../../credits';
+import type { Donor, DonorFeed } from '../../donors';
 import {
   getThemePref,
   nextThemePref,
@@ -46,7 +47,7 @@ import {
 import {
   IconMoon, IconSun, IconAuto, IconHeart, IconMail, IconCheck, IconMinus,
   IconChevronDown, IconChevronRight, IconClose, IconMinimize, IconExpand,
-  IconDownload, OwlMark,
+  IconDownload, IconGitHub, IconSparkle, OwlMark,
 } from '../../ui/icons';
 
 /** Icône du thème courant (cyclé sombre → clair → auto). */
@@ -192,10 +193,23 @@ export function Overlay({
   const [reactionUsers, setReactionUsers] = useState(false);
   const [view, setView] = useState<'export' | 'credits'>('export');
   const [theme, setTheme] = useState<ThemePref>('dark');
+  const [credits, setCredits] = useState<Credits | null>(null);
+  const [donorFeed, setDonorFeed] = useState<DonorFeed | null>(null);
 
   useEffect(() => {
     void getThemePref().then(setTheme);
+    void loadCredits().then(setCredits);
   }, []);
+
+  // Le mur des soutiens se charge dès que le moteur (offscreen) répond — c'est
+  // lui qui fait le fetch, la CSP de Discord bloquant l'overlay.
+  useEffect(() => {
+    if (!controller.ready) return;
+    void controller.getDonors().then((f) => {
+      if (f) setDonorFeed(f);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controller.ready]);
 
   function cycleTheme(): void {
     const next = nextThemePref(theme);
@@ -387,9 +401,6 @@ export function Overlay({
         <span class="v-logo"><OwlMark class="v-mark" />Vespry</span>
         <span style="font-size:11px;color:var(--muted);font-weight:600">v{getVersion()}</span>
         <ReportLink summary="Problème signalé depuis Vespry" log={[]} label={t('report.problem')} />
-        <span class="v-support-link" onClick={() => setView('credits')}>
-          <IconHeart /> {t('credits.support')}
-        </span>
         <span class="v-theme-btn" onClick={cycleTheme} title={t(`theme.${theme}`)}>
           <ThemeIcon pref={theme} /> {t(`theme.${theme}`)}
         </span>
@@ -412,7 +423,11 @@ export function Overlay({
       </div>
 
       {view === 'credits' ? (
-        <CreditsPanel onBack={() => setView('export')} />
+        <CreditsPanel
+          onBack={() => setView('export')}
+          credits={credits}
+          feed={donorFeed}
+        />
       ) : (
       <>
       <div class="v-mid">
@@ -657,6 +672,11 @@ export function Overlay({
       </div>
 
       <ExportQueue controller={controller} onSupport={() => setView('credits')} />
+      <DonorWall
+        feed={donorFeed}
+        credits={credits}
+        onSupport={() => setView('credits')}
+      />
       </>
       )}
     </Shell>
@@ -1027,15 +1047,169 @@ function MiniWidget({
   );
 }
 
-/** Panneau Soutiens — don + reconnaissance des soutiens et contributeurs. */
-function CreditsPanel({ onBack }: { onBack: () => void }): JSX.Element {
-  const [credits, setCredits] = useState<Credits | null>(null);
+/** Anime un entier 0 → `target` en ~900 ms (ease-out cubique). */
+function useCountUp(target: number): number {
+  const [value, setValue] = useState(0);
   useEffect(() => {
-    void loadCredits().then(setCredits);
-  }, []);
+    if (target <= 0) {
+      setValue(0);
+      return undefined;
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setValue(target);
+      return undefined;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const step = (now: number): void => {
+      const p = Math.min(1, (now - start) / 900);
+      setValue(Math.round(target * (1 - (1 - p) ** 3)));
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
+  return value;
+}
 
-  const supporters = credits?.supporters ?? [];
+/** Phrase d'accroche du prochain palier — le moteur de motivation. */
+function nextMilestoneLine(feed: DonorFeed): string {
+  const nm = feed.nextMilestone;
+  if (!nm) return t('wall.next_done');
+  const tier = t(nm.key);
+  return nm.remaining <= 1
+    ? t('wall.next_one', { tier })
+    : t('wall.next', { n: nm.remaining, tier });
+}
+
+/** Une puce du bandeau défilant — remerciement simple ou palier décroché. */
+function DonorChip({ donor }: { donor: Donor }): JSX.Element {
+  const who = donor.name ?? t('wall.thanks_anon');
+  if (donor.milestone) {
+    return (
+      <span class="v-chip v-chip--ms" title={t(donor.milestone)}>
+        <IconSparkle class="v-chip-spark" />
+        <span class="v-chip-name">
+          {t('wall.milestone', { name: who, tier: t(donor.milestone) })}
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span class="v-chip">
+      <span class="v-chip-av">{who.slice(0, 1).toUpperCase()}</span>
+      <span class="v-chip-name">
+        {donor.name ? t('wall.thanks', { name: donor.name }) : t('wall.thanks_anon')}
+      </span>
+      {donor.message && <span class="v-chip-msg">“{donor.message}”</span>}
+    </span>
+  );
+}
+
+/**
+ * Footer « Mur des soutiens » — pleine largeur, bas de fenêtre.
+ *
+ * Compteur animé, bandeau défilant des remerciements, accroche du prochain
+ * palier, bouton de soutien. Toujours présent ; en l'absence de données il
+ * bascule sur un état d'accroche, jamais d'erreur visible.
+ */
+function DonorWall({
+  feed,
+  credits,
+  onSupport,
+}: {
+  feed: DonorFeed | null;
+  credits: Credits | null;
+  onSupport: () => void;
+}): JSX.Element {
+  const total = feed?.total ?? 0;
+  const recent = feed?.recent ?? [];
+  const shown = useCountUp(total);
+  const canDonate = Boolean(credits && (credits.koFiUrl || credits.gitHubSponsorsUrl));
+
+  return (
+    <div class="v-wall">
+      <div class="v-wall-count">
+        <OwlMark class="v-mark" />
+        {total > 0 ? (
+          <span class="v-wall-num">
+            <b>{shown.toLocaleString()}</b>{' '}
+            {total === 1 ? t('wall.supporter_one') : t('wall.supporters')}
+          </span>
+        ) : (
+          <span class="v-wall-tag">{t('wall.tagline')}</span>
+        )}
+      </div>
+
+      <div class="v-wall-stream">
+        {recent.length > 0 ? (
+          <div class="v-ticker">
+            <div class="v-ticker-track">
+              {recent.map((d, i) => <DonorChip key={`a${i}`} donor={d} />)}
+              {recent.map((d, i) => <DonorChip key={`b${i}`} donor={d} />)}
+            </div>
+          </div>
+        ) : (
+          <span class="v-wall-hook">
+            <IconSparkle class="v-wall-hook-ico" /> {t('wall.first_hook')}
+          </span>
+        )}
+      </div>
+
+      <div class="v-wall-aside">
+        {feed && total > 0 && (
+          <span class="v-wall-next">{nextMilestoneLine(feed)}</span>
+        )}
+        <button
+          class="v-wall-cta"
+          onClick={onSupport}
+          disabled={!canDonate}
+          title={t('wall.cta')}
+        >
+          <IconHeart /> {t('wall.cta')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Bouton de don vers une plateforme — désactivé si l'URL n'est pas configurée. */
+function DonateButton({
+  url,
+  icon,
+  label,
+}: {
+  url: string | undefined;
+  icon: JSX.Element;
+  label: string;
+}): JSX.Element {
+  if (!url) {
+    return (
+      <button class="v-donate" disabled>
+        {icon} {t('credits.donate_soon')}
+      </button>
+    );
+  }
+  return (
+    <button class="v-donate" onClick={() => window.open(url, '_blank', 'noopener')}>
+      {icon} {label}
+    </button>
+  );
+}
+
+/** Panneau Soutiens — appel au don, mur des soutiens complet, contributeurs. */
+function CreditsPanel({
+  onBack,
+  credits,
+  feed,
+}: {
+  onBack: () => void;
+  credits: Credits | null;
+  feed: DonorFeed | null;
+}): JSX.Element {
   const contributors = credits?.contributors ?? [];
+  const recent = feed?.recent ?? [];
+  const total = feed?.total ?? 0;
 
   return (
     <div class="v-credits">
@@ -1044,33 +1218,44 @@ function CreditsPanel({ onBack }: { onBack: () => void }): JSX.Element {
         <h2><OwlMark class="v-mark" />{t('credits.title')}</h2>
         <p class="v-intro">{t('credits.intro')}</p>
       </div>
+      <div class="v-donate-row">
+        <DonateButton
+          url={credits?.koFiUrl}
+          icon={<IconHeart />}
+          label={t('credits.kofi')}
+        />
+        <DonateButton
+          url={credits?.gitHubSponsorsUrl}
+          icon={<IconGitHub />}
+          label={t('credits.github')}
+        />
+      </div>
       <div class="v-cred-grid">
-        {/* carte Soutiens — appel au don + donateurs */}
+        {/* carte Mur des soutiens */}
         <div class="v-cred-card">
-          <h3><IconHeart /> {t('credits.supporters')}</h3>
-          {credits?.koFiUrl ? (
-            <button
-              class="v-donate"
-              onClick={() => window.open(credits.koFiUrl, '_blank', 'noopener')}
-            >
-              <IconHeart /> {t('credits.donate')}
-            </button>
-          ) : (
-            <button class="v-donate" disabled>
-              <IconHeart /> {t('credits.donate_soon')}
-            </button>
+          <h3><IconHeart /> {t('credits.wall_title')}</h3>
+          {total > 0 && (
+            <div class="v-cred-total">{t('credits.total', { n: total })}</div>
           )}
-          {supporters.length > 0 ? (
+          {recent.length > 0 ? (
             <ul class="v-cred-list">
-              {supporters.map((s) => (
-                <li key={s}>
-                  <span class="v-avatar">{s.slice(0, 1).toUpperCase()}</span>
-                  <span>{s}</span>
+              {recent.map((d) => (
+                <li key={d.seq} class={d.milestone ? 'v-cred-ms' : ''}>
+                  <span class="v-avatar">
+                    {d.milestone
+                      ? <IconSparkle />
+                      : (d.name ?? '?').slice(0, 1).toUpperCase()}
+                  </span>
+                  <span class="v-cred-who">
+                    {d.name ?? t('wall.thanks_anon')}
+                    {d.message && <span class="v-cred-msg">“{d.message}”</span>}
+                  </span>
+                  {d.milestone && <span class="v-role">{t(d.milestone)}</span>}
                 </li>
               ))}
             </ul>
           ) : (
-            <div class="v-cred-empty">{t('credits.none_yet')}</div>
+            <div class="v-cred-empty">{t('credits.no_donors')}</div>
           )}
         </div>
         {/* carte Contributeurs */}
@@ -1081,7 +1266,7 @@ function CreditsPanel({ onBack }: { onBack: () => void }): JSX.Element {
               {contributors.map((c) => (
                 <li key={c.name}>
                   <span class="v-avatar">{c.name.slice(0, 1).toUpperCase()}</span>
-                  <span>{c.name}</span>
+                  <span class="v-cred-who">{c.name}</span>
                   <span class="v-role">{c.role}</span>
                 </li>
               ))}

@@ -7,6 +7,8 @@
  */
 import { VespryController } from '../content/overlay/controller';
 import { installGlobalHandlers } from '../diagnostics';
+import { loadCredits } from '../credits';
+import { fetchDonorFeed } from '../donors';
 import {
   isExecEnvelope,
   type CommandResponse,
@@ -56,6 +58,12 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
         ok: true,
         messages: await controller.previewChannel(command.channelId, command.before),
       };
+    case 'get-donors': {
+      // Le fetch du mur des soutiens passe ICI (offscreen) : la CSP de
+      // discord.com bloquerait un fetch tiers depuis l'overlay.
+      const credits = await loadCredits();
+      return { ok: true, donors: await fetchDonorFeed(credits.donorApiUrl) };
+    }
   }
 }
 

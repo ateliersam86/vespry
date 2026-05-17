@@ -26,6 +26,14 @@ Quatre contextes d'exécution, à ne jamais confondre :
 - `export-runner.ts` — orchestrateur checkpoint-natif.
 - `packager.ts` — génère le paquet agent-ready (JSON, media, INDEX, zip).
 
+## Service de dons (`donor-service/`)
+
+Cloudflare Worker indépendant (sa propre `package.json`, hors build Vite).
+Ingère les webhooks Ko-Fi et GitHub Sponsors, range les soutiens dans D1, et
+expose `GET /donors`. L'extension consomme ce flux pour le footer « Mur des
+soutiens ». Le fetch passe par l'offscreen (la CSP de Discord bloque l'overlay).
+Contrat partagé : `donor-service/src/donors.ts` ↔ `src/donors.ts`.
+
 ## Règles
 
 - TypeScript strict, pas de `any`. Tests unitaires sur le moteur (vitest).

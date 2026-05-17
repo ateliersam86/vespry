@@ -78,6 +78,20 @@ export const IconMinimize = stroke(<path d="M6 18h12" />);
 export const IconExpand = stroke(<path d="M8 16 16 8M9 8h7v7" />);
 export const IconDownload = stroke(<path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" />);
 
+/** Marque GitHub (octocat) — pleine, currentColor. */
+export const IconGitHub = ({ class: cls }: IconProps): JSX.Element => (
+  <svg class={`v-ico ${cls ?? ''}`} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 .5C5.4.5 0 5.9 0 12.6c0 5.3 3.4 9.8 8.2 11.4.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.9 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2 0-.4-.5-1.6.2-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.6 18.3 5 18.3 5c.7 1.6.2 2.8.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 24 12.6C24 5.9 18.6.5 12 .5Z" />
+  </svg>
+);
+
+/** Étincelle 4 branches — décore les paliers. Pleine, currentColor. */
+export const IconSparkle = ({ class: cls }: IconProps): JSX.Element => (
+  <svg class={`v-ico ${cls ?? ''}`} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2c.5 4.6 2.4 6.5 7 7-4.6.5-6.5 2.4-7 7-.5-4.6-2.4-6.5-7-7 4.6-.5 6.5-2.4 7-7Z" />
+  </svg>
+);
+
 /**
  * Mascotte Vespry — hibou pixel-art (concept B, tête seule).
  * Le liseré n'apparaît que sur fond sombre : sa couleur vient de la variable

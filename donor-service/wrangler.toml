@@ -1,0 +1,19 @@
+# vespry-donors — Cloudflare Worker du mur des soutiens.
+#
+# Déploiement : voir donor-service/README.md (étapes détaillées).
+name = "vespry-donors"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+
+# Base D1 (SQLite). À créer une fois :
+#   npx wrangler d1 create vespry-donors
+# puis recopier le `database_id` renvoyé dans le champ ci-dessous.
+[[d1_databases]]
+binding = "DB"
+database_name = "vespry-donors"
+database_id = "REMPLIR_APRES_CREATION"
+
+# Les secrets ne se mettent JAMAIS dans ce fichier. Définis-les par la CLI :
+#   npx wrangler secret put KOFI_VERIFICATION_TOKEN
+#   npx wrangler secret put GITHUB_WEBHOOK_SECRET
+#   npx wrangler secret put ADMIN_SECRET

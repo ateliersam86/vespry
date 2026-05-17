@@ -21,3 +21,8 @@ Première version fonctionnelle (en construction).
 - Badge d'icône, notifications, bouton lanceur avec %.
 - Thème clair/sombre automatique.
 - Minimisation en widget de progression flottant.
+- Footer « Mur des soutiens » : compteur animé, bandeau défilant des
+  remerciements, paliers (1er, 10e, 100e…), accroche du prochain palier.
+- Service `vespry-donors` (Cloudflare Worker + D1) : ingestion des webhooks
+  Ko-Fi et GitHub Sponsors, flux public des donateurs, modération. Voir
+  `donor-service/README.md`.

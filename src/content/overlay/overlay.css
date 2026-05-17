@@ -95,7 +95,8 @@
   to   { transform: translate(-30px, 28px) scale(0.92); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .v-bokeh i, .v-backdrop, .v-win, .v-msg, .v-credits, .v-task, .v-mini {
+  .v-bokeh i, .v-backdrop, .v-win, .v-msg, .v-credits, .v-task, .v-mini,
+  .v-wall, .v-ticker-track, .v-chip-spark {
     animation: none !important;
   }
 }
@@ -427,16 +428,106 @@
 }
 .v-cred-list li .v-role { color: var(--muted); font-size: 12px; }
 .v-cred-empty { color: var(--muted); font-size: 13px; font-style: italic; }
-.v-support-link {
-  cursor: pointer; color: var(--support); font-weight: 700; font-size: 12px;
-  white-space: nowrap; display: flex; align-items: center; gap: 5px;
-}
 .v-thanks {
   border-top: 1px solid var(--border); padding: 8px 12px;
   font-size: 12px; color: var(--support); cursor: pointer;
   display: flex; align-items: center; gap: 6px;
 }
 .v-thanks:hover { filter: brightness(1.12); }
+
+/* ============ footer — mur des soutiens ============ */
+.v-wall {
+  flex: none; height: 56px; display: flex; align-items: center;
+  gap: 14px; padding: 0 16px;
+  border-top: 1px solid var(--border);
+  background:
+    linear-gradient(90deg, rgba(108,92,224,.16), rgba(236,106,147,.10) 62%, transparent),
+    var(--bg3);
+  overflow: hidden;
+  animation: v-slide-in .4s ease both;
+}
+.v-wall-count { display: flex; align-items: center; gap: 9px; flex: none; }
+.v-wall-count .v-mark { width: 26px; height: 26px; }
+.v-wall-num { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.v-wall-num b {
+  font-size: 19px; color: var(--text); font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.v-wall-tag {
+  font-size: 13px; color: var(--text); font-weight: 600; white-space: nowrap;
+}
+
+/* bandeau défilant des remerciements */
+.v-wall-stream {
+  flex: 1; min-width: 0; overflow: hidden;
+  display: flex; align-items: center;
+}
+.v-wall-hook {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; color: var(--text); font-weight: 600;
+}
+.v-wall-hook-ico { color: var(--amber); }
+.v-ticker {
+  width: 100%; overflow: hidden;
+  -webkit-mask: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+  mask: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+}
+.v-ticker-track {
+  display: flex; gap: 10px; width: max-content;
+  animation: v-marquee 46s linear infinite;
+}
+.v-ticker:hover .v-ticker-track { animation-play-state: paused; }
+.v-chip {
+  display: flex; align-items: center; gap: 7px; flex: none;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 999px; padding: 4px 12px 4px 5px;
+  font-size: 12.5px; color: var(--text); white-space: nowrap;
+}
+.v-chip-av {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 11px; flex: none;
+}
+.v-chip-name { font-weight: 600; }
+.v-chip-msg {
+  color: var(--muted); font-style: italic;
+  max-width: 240px; overflow: hidden; text-overflow: ellipsis;
+}
+.v-chip--ms {
+  padding-left: 11px;
+  background: linear-gradient(90deg, rgba(240,181,74,.24), rgba(236,106,147,.18));
+  border-color: rgba(240,181,74,.55);
+  box-shadow: 0 0 16px rgba(240,181,74,.28);
+}
+.v-chip-spark { color: var(--amber); animation: v-spark 2.4s ease-in-out infinite; }
+
+/* côté droit — prochain palier + appel au don */
+.v-wall-aside { display: flex; align-items: center; gap: 12px; flex: none; }
+.v-wall-next {
+  font-size: 12px; color: var(--muted); white-space: nowrap;
+  max-width: 250px; overflow: hidden; text-overflow: ellipsis;
+}
+.v-wall-cta {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--support); color: #fff; border: 0;
+  border-radius: 999px; font: 700 13px var(--font);
+  padding: 8px 16px; cursor: pointer; white-space: nowrap;
+  transition: transform .12s ease, filter .12s ease;
+}
+.v-wall-cta:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); }
+.v-wall-cta:disabled { opacity: .5; cursor: not-allowed; }
+
+/* panneau Soutiens — rangée des plateformes de don */
+.v-donate-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.v-cred-total { font-size: 13px; color: var(--text); font-weight: 700; }
+.v-cred-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.v-cred-msg {
+  font-size: 12px; color: var(--muted); font-style: italic;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.v-cred-list li.v-cred-ms .v-avatar { background: var(--amber); color: #221d2e; }
+.v-cred-list li.v-cred-ms .v-role { color: var(--amber); font-weight: 700; }
 
 /* minimized — widget de progression flottant */
 .v-mini {
@@ -483,6 +574,14 @@
   from { transform: translateY(-4px); }
   to   { transform: translateY(4px); }
 }
+@keyframes v-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@keyframes v-spark {
+  0%, 100% { transform: scale(1) rotate(0); opacity: .8; }
+  50%      { transform: scale(1.28) rotate(22deg); opacity: 1; }
+}
 
 /* entrées en scène */
 .v-credits { animation: v-fade-in .3s ease both; }
@@ -510,5 +609,5 @@
 .v-mchip { transition: background .12s ease, color .12s ease, transform .12s ease; }
 .v-mchip:active { transform: scale(.93); }
 .v-crow, .v-cat, .v-clist-master, .v-checkrow { transition: background .1s ease, color .1s ease; }
-.v-exp, .v-link, .v-support-link, .v-close { transition: color .12s ease, background .12s ease; }
+.v-exp, .v-link, .v-close { transition: color .12s ease, background .12s ease; }
 .v-cbx { transition: background .12s ease, border-color .12s ease; }

@@ -1,6 +1,7 @@
 {
   "koFiUrl": "",
-  "supporters": [],
+  "gitHubSponsorsUrl": "",
+  "donorApiUrl": "",
   "contributors": [
     { "name": "Atelier de Sam", "role": "Créateur" }
   ]

@@ -11,6 +11,7 @@
  */
 import type { MediaSelection, SelectionZone } from './engine/checkpoint-types';
 import type { RawChannel, RawGuild, RawMessage } from './engine/types';
+import type { DonorFeed } from './donors';
 
 // --- bridge MAIN → ISOLATED (capture du jeton) ---
 
@@ -72,7 +73,8 @@ export type VespryCommand =
     }
   | { cmd: 'resume'; runId: string }
   | { cmd: 'download'; runId: string }
-  | { cmd: 'preview'; channelId: string; before?: string };
+  | { cmd: 'preview'; channelId: string; before?: string }
+  | { cmd: 'get-donors' };
 
 /**
  * Paramètres d'un export passés à `enqueue`, hors guild/channels/media.
@@ -92,6 +94,8 @@ export interface CommandResponse {
   channels?: RawChannel[];
   /** Aperçu de messages récents (commande `preview`). */
   messages?: RawMessage[];
+  /** Flux du mur des soutiens (commande `get-donors`) — null si indisponible. */
+  donors?: DonorFeed | null;
 }
 
 // --- messages de routage ---

@@ -1,12 +1,14 @@
 /**
- * Soutiens & contributeurs — module de reconnaissance.
+ * Liens de soutien & contributeurs — module de configuration.
  *
- * Sans backend : la liste vit dans `credits.json` sur le dépôt GitHub.
- * L'extension la lit en direct (Sam peut l'actualiser sans publier de
- * nouvelle version) ; à défaut, elle utilise la copie embarquée au build.
+ * Les URLs et la liste des contributeurs vivent dans `credits.json` sur le
+ * dépôt GitHub. L'extension les lit en direct (Sam peut les actualiser sans
+ * publier de nouvelle version) ; à défaut, elle utilise la copie embarquée.
  *
- * `koFiUrl` est vide tant que la page Ko-Fi n'est pas créée — le bouton de
- * don est alors désactivé.
+ * Les soutiens eux-mêmes ne sont PAS ici : ils viennent en direct du service
+ * `vespry-donors` via `donorApiUrl` (cf. `src/donors.ts`).
+ *
+ * Champs vides = fonctionnalité non encore configurée (bouton désactivé).
  */
 import bundled from './credits.json';
 import { GITHUB_REPO } from './version';
@@ -19,8 +21,10 @@ export interface Contributor {
 export interface Credits {
   /** URL de la page Ko-Fi (vide = pas encore configurée). */
   koFiUrl: string;
-  /** Donateurs ayant consenti à être nommés. */
-  supporters: string[];
+  /** URL GitHub Sponsors (vide = pas encore configurée). */
+  gitHubSponsorsUrl: string;
+  /** URL du service du mur des soutiens (Worker `vespry-donors`). */
+  donorApiUrl: string;
   /** Personnes qui ont fait avancer le projet (code, traductions, bugs…). */
   contributors: Contributor[];
 }
@@ -40,7 +44,8 @@ export async function loadCredits(): Promise<Credits> {
         const data = (await res.json()) as Partial<Credits>;
         return {
           koFiUrl: data.koFiUrl ?? '',
-          supporters: data.supporters ?? [],
+          gitHubSponsorsUrl: data.gitHubSponsorsUrl ?? '',
+          donorApiUrl: data.donorApiUrl ?? '',
           contributors: data.contributors ?? [],
         };
       }

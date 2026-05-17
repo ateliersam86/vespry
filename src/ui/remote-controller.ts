@@ -15,6 +15,7 @@ import {
 } from '../messaging';
 import type { MediaSelection } from '../engine/checkpoint-types';
 import type { RawChannel, RawGuild, RawMessage } from '../engine/types';
+import type { DonorFeed } from '../donors';
 
 const EMPTY: VespryState = {
   ready: false,
@@ -106,6 +107,12 @@ export class RemoteController {
     extras: EnqueueExtras,
   ): Promise<void> {
     await this.send({ cmd: 'enqueue', guild, channels, media, ...extras });
+  }
+
+  /** Flux du mur des soutiens. Renvoie null si le service est indisponible. */
+  async getDonors(): Promise<DonorFeed | null> {
+    const r = await this.send({ cmd: 'get-donors' });
+    return r.donors ?? null;
   }
 
   resume(runId: string): void {
