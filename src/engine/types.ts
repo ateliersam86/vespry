@@ -59,6 +59,12 @@ export interface RawAttachment {
   content_type?: string;
   width?: number;
   height?: number;
+  /** Texte alternatif (accessibilité). */
+  description?: string;
+  /** Messages vocaux : durée en secondes. */
+  duration_secs?: number;
+  /** Messages vocaux : forme d'onde encodée (base64). */
+  waveform?: string;
 }
 
 export interface RawEmbedMedia {
@@ -68,15 +74,44 @@ export interface RawEmbedMedia {
   height?: number;
 }
 
+export interface RawEmbedAuthor {
+  name?: string;
+  url?: string;
+  icon_url?: string;
+  proxy_icon_url?: string;
+}
+
+export interface RawEmbedFooter {
+  text?: string;
+  icon_url?: string;
+  proxy_icon_url?: string;
+}
+
+export interface RawEmbedField {
+  name: string;
+  value: string;
+  inline?: boolean;
+}
+
+export interface RawEmbedProvider {
+  name?: string;
+  url?: string;
+}
+
 export interface RawEmbed {
   type?: string;
   title?: string;
   description?: string;
   url?: string;
   timestamp?: string;
+  color?: number;
   thumbnail?: RawEmbedMedia;
   image?: RawEmbedMedia;
   video?: RawEmbedMedia;
+  author?: RawEmbedAuthor;
+  footer?: RawEmbedFooter;
+  fields?: RawEmbedField[];
+  provider?: RawEmbedProvider;
 }
 
 export interface RawMessageReference {
@@ -85,9 +120,23 @@ export interface RawMessageReference {
   guild_id?: Snowflake;
 }
 
+export interface RawEmoji {
+  id: Snowflake | null;
+  name: string | null;
+  animated?: boolean;
+}
+
 export interface RawReaction {
   count: number;
-  emoji: { id: Snowflake | null; name: string | null };
+  /** Détail normal vs « super-réactions » (burst). */
+  count_details?: { normal: number; burst: number };
+  emoji: RawEmoji;
+  /**
+   * Utilisateurs ayant réagi avec cet emoji. Vide par défaut — rempli
+   * seulement si `ExportOptions.includeReactionUsers` est activé (coûteux :
+   * un appel API par emoji).
+   */
+  users?: RawUser[];
 }
 
 export interface RawMessage {
@@ -99,13 +148,26 @@ export interface RawMessage {
   timestamp: string;
   edited_timestamp?: string | null;
   pinned?: boolean;
+  tts?: boolean;
+  flags?: number;
+  webhook_id?: Snowflake;
   attachments: RawAttachment[];
   embeds: RawEmbed[];
   reactions?: RawReaction[];
   mentions?: RawUser[];
+  mention_roles?: Snowflake[];
+  mention_everyone?: boolean;
   message_reference?: RawMessageReference;
   referenced_message?: RawMessage | null;
   sticker_items?: { id: Snowflake; name: string; format_type: number }[];
+  /** Thread démarré depuis ce message — sert à découvrir les fils. */
+  thread?: RawChannel;
+  /** Composants interactifs (boutons, menus). Forme libre, conservée telle quelle. */
+  components?: unknown[];
+  /** Sondage attaché. Forme libre, conservée telle quelle. */
+  poll?: unknown;
+  /** Données d'appel (DM vocaux). */
+  call?: { participants: Snowflake[]; ended_timestamp?: string | null };
 }
 
 /** Réponse de GET /guilds/{id}/threads/active. */

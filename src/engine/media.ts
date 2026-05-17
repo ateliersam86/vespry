@@ -39,7 +39,12 @@ export function classifyExt(ext: string): AssetKind {
   return 'file';
 }
 
-const SELECTION_KEY: Record<AssetKind, keyof MediaSelection> = {
+/**
+ * Médias filtrables par la sélection. `emoji` et `avatar` n'y figurent pas :
+ * ils sont toujours récupérés (identité du message, indépendante du choix
+ * de médias).
+ */
+const SELECTION_KEY: Partial<Record<AssetKind, keyof MediaSelection>> = {
   image: 'images',
   video: 'videos',
   audio: 'audio',
@@ -55,9 +60,10 @@ export function hashUrl(url: string): string {
   return (h >>> 0).toString(36);
 }
 
-/** Vrai si ce type de média est demandé par la sélection. */
+/** Vrai si ce type de média est demandé. `emoji`/`avatar` : toujours pris. */
 function wanted(kind: AssetKind, sel: MediaSelection): boolean {
-  return sel[SELECTION_KEY[kind]];
+  const key = SELECTION_KEY[kind];
+  return key ? sel[key] : true;
 }
 
 /**

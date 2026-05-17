@@ -23,7 +23,9 @@ import type { RawChannel, RawGuild, RawUser } from '../../engine/types';
 import type { VespryState } from '../../messaging';
 
 const MAX_LOG = 250;
-const ZERO_KINDS: Record<AssetKind, number> = { image: 0, video: 0, audio: 0, file: 0 };
+const ZERO_KINDS: Record<AssetKind, number> = {
+  image: 0, video: 0, audio: 0, file: 0, emoji: 0, avatar: 0,
+};
 
 /** Une tâche d'export dans la file. */
 export interface QueueItem {
@@ -46,6 +48,8 @@ const KIND_LABEL: Record<AssetKind, string> = {
   video: 'vidéo(s)',
   audio: 'audio',
   file: 'fichier(s)',
+  emoji: 'emoji',
+  avatar: 'avatar(s)',
 };
 
 function clock(): string {

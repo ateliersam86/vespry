@@ -21,7 +21,7 @@ export type ChannelStatus =
   | 'skipped';
 
 export type AssetStatus = 'pending' | 'done' | 'failed';
-export type AssetKind = 'image' | 'video' | 'audio' | 'file';
+export type AssetKind = 'image' | 'video' | 'audio' | 'file' | 'emoji' | 'avatar';
 
 /**
  * Sélection des médias à télécharger — personnalisable.
@@ -48,6 +48,11 @@ export interface ExportOptions {
   includeThreads: boolean;
   /** Quels types de médias télécharger. Défaut : `ALL_MEDIA`. */
   media: MediaSelection;
+  /**
+   * Récupérer la liste des utilisateurs ayant réagi à chaque message.
+   * Coûteux (un appel API par emoji distinct) — désactivé par défaut.
+   */
+  includeReactionUsers?: boolean;
   /** Bornes de date optionnelles (timestamp ms). */
   afterMs?: number;
   beforeMs?: number;

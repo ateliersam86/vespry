@@ -99,6 +99,8 @@ export class ExportRunner {
     video: 0,
     audio: 0,
     file: 0,
+    emoji: 0,
+    avatar: 0,
   };
 
   constructor(

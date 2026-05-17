@@ -24,6 +24,8 @@ const KIND_DIR: Record<AssetKind, string> = {
   video: 'video',
   audio: 'audio',
   file: 'files',
+  emoji: 'emojis',
+  avatar: 'avatars',
 };
 
 function safeName(s: string): string {
