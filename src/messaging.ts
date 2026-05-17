@@ -13,6 +13,7 @@ import type {
   ExportFormat,
   MediaSelection,
   SelectionZone,
+  ZoneMode,
 } from './engine/checkpoint-types';
 import type { RawChannel, RawGuild, RawMessage } from './engine/types';
 import type { DonorFeed } from './donors';
@@ -74,6 +75,7 @@ export type VespryCommand =
       includeThreads: boolean;
       includeReactionUsers?: boolean;
       zones: SelectionZone[];
+      zoneMode: ZoneMode;
       formats: ExportFormat[];
     }
   | { cmd: 'resume'; runId: string }
@@ -97,6 +99,7 @@ export interface EnqueueExtras {
   includeThreads: boolean;
   includeReactionUsers?: boolean;
   zones: SelectionZone[];
+  zoneMode: ZoneMode;
   formats: ExportFormat[];
 }
 

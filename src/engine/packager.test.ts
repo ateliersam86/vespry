@@ -15,6 +15,7 @@ function run(id: string): ExportRun {
       includeThreads: false,
       media: ALL_MEDIA,
       zones: [],
+      zoneMode: 'any',
       formats: ['json', 'html', 'csv', 'txt'],
     },
     createdAt: Date.now(),

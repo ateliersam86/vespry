@@ -22,7 +22,23 @@ import {
   type ExportFormat,
   type MediaSelection,
   type SelectionZone,
+  type ZoneMode,
 } from '../../engine/checkpoint-types';
+
+/** Zones-drapeaux : un critère booléen, sans champ de saisie. */
+type FlagKind =
+  | 'pinned' | 'attachment' | 'image' | 'video'
+  | 'audio' | 'sticker' | 'link' | 'embed';
+
+/** Drapeaux proposés, dans l'ordre d'affichage. */
+const FLAG_KINDS: FlagKind[] = [
+  'pinned', 'attachment', 'image', 'video', 'audio', 'sticker', 'link', 'embed',
+];
+
+/** Signature stable d'une zone — clé du jeu des zones inversées. */
+function zoneSig(z: SelectionZone): string {
+  return z.kind === 'manual' ? `manual:${z.channelId}` : z.kind;
+}
 import {
   ChannelType,
   type RawAttachment,
@@ -67,8 +83,8 @@ function guildIconUrl(g: RawGuild): string | null {
   return `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.${ext}?size=64`;
 }
 
-/** Libellé court d'une zone de sélection (récapitulatif du panneau). */
-function zoneLabel(z: SelectionZone, channels: RawChannel[]): string {
+/** Libellé brut d'une zone (sans le préfixe de négation). */
+function zoneCoreLabel(z: SelectionZone, channels: RawChannel[]): string {
   const fmt = (ms?: number): string =>
     ms === undefined ? '…' : new Date(ms).toLocaleDateString('fr-FR');
   switch (z.kind) {
@@ -78,12 +94,23 @@ function zoneLabel(z: SelectionZone, channels: RawChannel[]): string {
     case 'mention': return `${t('zone.mention')} : ${z.query}`;
     case 'pinned': return t('zone.pinned');
     case 'attachment': return t('zone.attachment');
+    case 'image': return t('zone.image');
+    case 'video': return t('zone.video');
+    case 'audio': return t('zone.audio');
+    case 'sticker': return t('zone.sticker');
+    case 'embed': return t('zone.embed');
     case 'link': return t('zone.link');
     case 'manual': {
       const name = channels.find((c) => c.id === z.channelId)?.name ?? '?';
       return t('zone.manual', { n: z.ids.length, channel: name });
     }
   }
+}
+
+/** Libellé d'une zone pour le récapitulatif, préfixé « NON » si inversée. */
+function zoneLabel(z: SelectionZone, channels: RawChannel[]): string {
+  const core = zoneCoreLabel(z, channels);
+  return z.negate ? `${t('zone.not')} ${core}` : core;
 }
 
 /** Ligne case à cocher + libellé (options, filtres booléens). */
@@ -187,13 +214,16 @@ export function Overlay({
   const [search, setSearch] = useState('');
   const [minimized, setMinimized] = useState(false);
   const [includeThreads, setIncludeThreads] = useState(true);
-  // Filtres de contenu (au moins la parité Discrub).
+  // Filtres de contenu.
   const [fContent, setFContent] = useState('');
   const [fAuthor, setFAuthor] = useState('');
   const [fMention, setFMention] = useState('');
-  const [fPinned, setFPinned] = useState(false);
-  const [fAttachment, setFAttachment] = useState(false);
-  const [fLink, setFLink] = useState(false);
+  /** Zones-drapeaux actives (pinned, image, sticker…) — un critère sans saisie. */
+  const [flags, setFlags] = useState<Set<FlagKind>>(new Set());
+  /** Combinaison des zones de critères : OU (`any`) ou ET (`all`). */
+  const [zoneMode, setZoneMode] = useState<ZoneMode>('any');
+  /** Signatures de zones inversées (NON logique). */
+  const [negated, setNegated] = useState<Set<string>>(new Set());
   const [reactionUsers, setReactionUsers] = useState(false);
   const [view, setView] = useState<'export' | 'credits'>('export');
   const [theme, setTheme] = useState<ThemePref>('dark');
@@ -277,14 +307,14 @@ export function Overlay({
     if (fAuthor.trim()) z.push({ kind: 'author', query: fAuthor.trim() });
     if (fContent.trim()) z.push({ kind: 'content', query: fContent.trim() });
     if (fMention.trim()) z.push({ kind: 'mention', query: fMention.trim() });
-    if (fPinned) z.push({ kind: 'pinned' });
-    if (fAttachment) z.push({ kind: 'attachment' });
-    if (fLink) z.push({ kind: 'link' });
+    for (const f of FLAG_KINDS) if (flags.has(f)) z.push({ kind: f } as SelectionZone);
     for (const [chId, ids] of manualSel) {
       if (ids.size > 0) z.push({ kind: 'manual', channelId: chId, ids: [...ids] });
     }
-    return z;
-  }, [afterDate, beforeDate, fAuthor, fContent, fMention, fPinned, fAttachment, fLink, manualSel]);
+    // Applique le NON logique aux zones marquées inversées.
+    return z.map((zone) =>
+      negated.has(zoneSig(zone)) ? { ...zone, negate: true } : zone);
+  }, [afterDate, beforeDate, fAuthor, fContent, fMention, flags, manualSel, negated]);
 
   function selectGuild(guild: RawGuild): void {
     setActiveGuild(guild);
@@ -351,6 +381,7 @@ export function Overlay({
     const extras: EnqueueExtras = {
       includeThreads,
       zones,
+      zoneMode,
       // Garde-fou : au moins un format, sinon le paquet serait vide.
       formats: formats.length > 0 ? formats : [...DEFAULT_FORMATS],
     };
@@ -361,19 +392,38 @@ export function Overlay({
     setFocus(null);
   }
 
+  /** Bascule un drapeau de critère (pinned, image, sticker…). */
+  function toggleFlag(f: FlagKind): void {
+    const next = new Set(flags);
+    if (next.has(f)) next.delete(f);
+    else next.add(f);
+    setFlags(next);
+  }
+
+  /** Inverse une zone (NON logique) — basé sur sa signature. */
+  function toggleNegate(z: SelectionZone): void {
+    const sig = zoneSig(z);
+    const next = new Set(negated);
+    if (next.has(sig)) next.delete(sig);
+    else next.add(sig);
+    setNegated(next);
+  }
+
   /** Retire une zone : remet à zéro l'entrée correspondante. */
   function clearZone(z: SelectionZone): void {
     if (z.kind === 'period') { setAfterDate(''); setBeforeDate(''); }
     else if (z.kind === 'author') setFAuthor('');
     else if (z.kind === 'content') setFContent('');
     else if (z.kind === 'mention') setFMention('');
-    else if (z.kind === 'pinned') setFPinned(false);
-    else if (z.kind === 'attachment') setFAttachment(false);
-    else if (z.kind === 'link') setFLink(false);
     else if (z.kind === 'manual') {
       const next = new Map(manualSel);
       next.delete(z.channelId);
       setManualSel(next);
+    } else {
+      // zone-drapeau
+      const next = new Set(flags);
+      next.delete(z.kind as FlagKind);
+      setFlags(next);
     }
   }
 
@@ -576,6 +626,7 @@ export function Overlay({
             controller={controller}
             channel={focus}
             zones={zones}
+            zoneMode={zoneMode}
             manualIds={(focus && manualSel.get(focus.id)) || undefined}
             onToggleMessage={(id) => focus && toggleMessage(focus.id, id)}
           />
@@ -590,20 +641,47 @@ export function Overlay({
               {zones.length === 0 ? (
                 <div class="v-hint">{t('zones.empty')}</div>
               ) : (
-                <div class="v-zones">
-                  {zones.map((z, i) => (
-                    <span class="v-zone" key={i}>
-                      <span class="v-zone-lbl">{zoneLabel(z, channels)}</span>
+                <>
+                  {zones.filter((z) => z.kind !== 'manual').length >= 2 && (
+                    <div class="v-zonemode">
                       <span
-                        class="v-zone-x"
-                        title={t('zones.remove')}
-                        onClick={() => clearZone(z)}
+                        class={zoneMode === 'any' ? 'on' : ''}
+                        onClick={() => setZoneMode('any')}
                       >
-                        <IconClose />
+                        {t('zones.mode_any')}
                       </span>
-                    </span>
-                  ))}
-                </div>
+                      <span
+                        class={zoneMode === 'all' ? 'on' : ''}
+                        onClick={() => setZoneMode('all')}
+                      >
+                        {t('zones.mode_all')}
+                      </span>
+                    </div>
+                  )}
+                  <div class="v-zones">
+                    {zones.map((z, i) => (
+                      <span class={`v-zone ${z.negate ? 'v-zone--neg' : ''}`} key={i}>
+                        <span class="v-zone-lbl">{zoneLabel(z, channels)}</span>
+                        {z.kind !== 'manual' && (
+                          <span
+                            class={`v-zone-neg ${z.negate ? 'on' : ''}`}
+                            title={t('zones.negate')}
+                            onClick={() => toggleNegate(z)}
+                          >
+                            ≠
+                          </span>
+                        )}
+                        <span
+                          class="v-zone-x"
+                          title={t('zones.remove')}
+                          onClick={() => clearZone(z)}
+                        >
+                          <IconClose />
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
             <div class="v-field">
@@ -685,21 +763,17 @@ export function Overlay({
                   onInput={(e) => setFMention((e.target as HTMLInputElement).value)}
                 />
               </div>
-              <CheckRow
-                on={fPinned}
-                onToggle={() => setFPinned(!fPinned)}
-                label={t('filter.pinned')}
-              />
-              <CheckRow
-                on={fAttachment}
-                onToggle={() => setFAttachment(!fAttachment)}
-                label={t('filter.has_attachment')}
-              />
-              <CheckRow
-                on={fLink}
-                onToggle={() => setFLink(!fLink)}
-                label={t('filter.has_link')}
-              />
+              <div class="v-mchips">
+                {FLAG_KINDS.map((f) => (
+                  <span
+                    key={f}
+                    class={`v-mchip ${flags.has(f) ? 'on' : ''}`}
+                    onClick={() => toggleFlag(f)}
+                  >
+                    {t(`zone.${f}`)}
+                  </span>
+                ))}
+              </div>
             </div>
             <div class="v-field">
               <label>{t('filter.options')}</label>
@@ -981,12 +1055,14 @@ function MessagePreview({
   controller,
   channel,
   zones,
+  zoneMode,
   manualIds,
   onToggleMessage,
 }: {
   controller: RemoteController;
   channel: RawChannel | null;
   zones: SelectionZone[];
+  zoneMode: ZoneMode;
   manualIds: Set<string> | undefined;
   onToggleMessage: (id: string) => void;
 }): JSX.Element {
@@ -1080,7 +1156,10 @@ function MessagePreview({
             message={m}
             grouped={grouped}
             index={i}
-            highlighted={zones.length > 0 && messageMatchesZones(m, zones, channel.id)}
+            highlighted={
+              zones.length > 0
+              && messageMatchesZones(m, zones, channel.id, zoneMode)
+            }
             checked={picked.has(m.id)}
             onToggle={() => onToggleMessage(m.id)}
           />

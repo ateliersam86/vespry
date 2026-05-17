@@ -16,7 +16,8 @@ import {
 } from './checkpoint-types';
 
 const OPTS: ExportOptions = {
-  includeThreads: false, media: ALL_MEDIA, zones: [], formats: ['json'],
+  includeThreads: false, media: ALL_MEDIA, zones: [],
+  zoneMode: 'any', formats: ['json'],
 };
 
 function fakeMessage(id: string, withImage = false): RawMessage {
@@ -291,5 +292,53 @@ describe('messageMatchesZones', () => {
     expect(messageMatchesZones(
       m, [{ kind: 'content', query: 'absent' }, { kind: 'link' }], CH,
     )).toBe(false);
+  });
+
+  it('zones has: granulaires (image / sticker / embed)', () => {
+    const withImg = fakeMessage('2', true); // pièce jointe .png
+    expect(messageMatchesZones(withImg, [{ kind: 'image' }], CH)).toBe(true);
+    expect(messageMatchesZones(withImg, [{ kind: 'video' }], CH)).toBe(false);
+    const withSticker: RawMessage = {
+      ...base, sticker_items: [{ id: 's', name: 'x', format_type: 1 }],
+    };
+    expect(messageMatchesZones(withSticker, [{ kind: 'sticker' }], CH)).toBe(true);
+    const withEmbed: RawMessage = { ...base, embeds: [{ title: 'e' }] };
+    expect(messageMatchesZones(withEmbed, [{ kind: 'embed' }], CH)).toBe(true);
+  });
+
+  it('négation d une zone (NON logique)', () => {
+    const pinned: RawMessage = { ...base, pinned: true };
+    expect(messageMatchesZones(pinned, [{ kind: 'pinned', negate: true }], CH))
+      .toBe(false);
+    expect(messageMatchesZones(base, [{ kind: 'pinned', negate: true }], CH))
+      .toBe(true);
+  });
+
+  it('mode ET — toutes les zones doivent matcher', () => {
+    const m: RawMessage = {
+      ...base, content: 'salut', author: { id: 'u', username: 'sam' },
+    };
+    const zones: SelectionZone[] = [
+      { kind: 'author', query: 'sam' },
+      { kind: 'content', query: 'salut' },
+    ];
+    expect(messageMatchesZones(m, zones, CH, 'all')).toBe(true);
+    // une seule échoue → faux en mode ET, vrai en mode OU
+    const zones2: SelectionZone[] = [
+      { kind: 'author', query: 'sam' },
+      { kind: 'content', query: 'absent' },
+    ];
+    expect(messageMatchesZones(m, zones2, CH, 'all')).toBe(false);
+    expect(messageMatchesZones(m, zones2, CH, 'any')).toBe(true);
+  });
+
+  it('une zone manuelle s ajoute toujours, même en mode ET', () => {
+    const m: RawMessage = { ...base, content: 'rien' };
+    const zones: SelectionZone[] = [
+      { kind: 'content', query: 'absent' },
+      { kind: 'manual', channelId: CH, ids: ['1'] },
+    ];
+    // le critère échoue, mais le message est coché → passe quand même
+    expect(messageMatchesZones(m, zones, CH, 'all')).toBe(true);
   });
 });

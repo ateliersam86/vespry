@@ -20,6 +20,7 @@ import type {
   SelectionZone,
   StoredAsset,
   StoredMessage,
+  ZoneMode,
 } from './checkpoint-types';
 import {
   ChannelType,
@@ -64,18 +65,34 @@ export interface RunnerEvents {
 }
 
 /**
- * Borne de pagination : si toutes les zones sont des périodes datées, on peut
- * arrêter de paginer un salon en dessous de la plus ancienne. Sinon (zone
- * auteur, manuelle…), pas de borne — il faut parcourir tout l'historique.
+ * Borne basse de pagination : id-timestamp en dessous duquel aucun message ne
+ * peut plus être retenu — on peut alors arrêter de paginer ce salon.
+ *
+ * - Une zone `manual` peut viser n'importe quel message ancien → aucune borne.
+ * - Mode `all` (ET) : le message doit satisfaire CHAQUE zone, donc rester au-
+ *   dessus de la plus tardive des périodes non-niées → borne = max(afterMs).
+ * - Mode `any` (OU) : on ne peut borner que si TOUTES les zones sont des
+ *   périodes datées non-niées → borne = min(afterMs).
  */
-function paginationLowerBound(zones: SelectionZone[]): number | undefined {
+function paginationLowerBound(
+  zones: SelectionZone[],
+  mode: ZoneMode,
+): number | undefined {
   if (zones.length === 0) return undefined;
-  let min = Infinity;
-  for (const z of zones) {
-    if (z.kind !== 'period' || z.afterMs === undefined) return undefined;
-    min = Math.min(min, z.afterMs);
+  if (zones.some((z) => z.kind === 'manual')) return undefined;
+
+  const datedPeriods = zones.filter(
+    (z): z is SelectionZone & { kind: 'period'; afterMs: number } =>
+      z.kind === 'period' && !z.negate && z.afterMs !== undefined,
+  );
+  if (datedPeriods.length === 0) return undefined;
+
+  if (mode === 'all') {
+    return Math.max(...datedPeriods.map((z) => z.afterMs));
   }
-  return Number.isFinite(min) ? min : undefined;
+  // mode `any` : toute zone non-période interdit de borner.
+  if (datedPeriods.length !== zones.length) return undefined;
+  return Math.min(...datedPeriods.map((z) => z.afterMs));
 }
 
 /** Crée le run + les enregistrements de salon. Renvoie l'id du run. */
@@ -349,19 +366,21 @@ export class ExportRunner {
     return false;
   }
 
-  /** Garde les messages couverts par l'union des zones de sélection. */
+  /** Garde les messages couverts par les zones de sélection (mode + négation). */
   private filterMessages(
     batch: RawMessage[],
     opts: ExportOptions,
     channelId: string,
   ): RawMessage[] {
     if (opts.zones.length === 0) return batch;
-    return batch.filter((m) => messageMatchesZones(m, opts.zones, channelId));
+    return batch.filter(
+      (m) => messageMatchesZones(m, opts.zones, channelId, opts.zoneMode),
+    );
   }
 
   /** Vrai si le lot dépasse la borne basse de pagination (zones périodes). */
   private reachedLowerBound(batch: RawMessage[], opts: ExportOptions): boolean {
-    const bound = paginationLowerBound(opts.zones);
+    const bound = paginationLowerBound(opts.zones, opts.zoneMode);
     if (bound === undefined) return false;
     return batch.some((m) => Date.parse(m.timestamp) < bound);
   }

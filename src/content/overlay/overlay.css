@@ -319,6 +319,29 @@
 }
 .v-zone-x:hover { background: var(--hover); color: var(--red); }
 .v-zone-x .v-ico { width: 13px; height: 13px; }
+.v-zone--neg { border-color: var(--amber); }
+.v-zone--neg .v-zone-lbl { color: var(--amber); }
+.v-zone-neg {
+  cursor: pointer; color: var(--muted); flex: none;
+  font-weight: 800; font-size: 13px; line-height: 1;
+  padding: 2px 5px; border-radius: 5px;
+  transition: background .1s ease, color .1s ease;
+}
+.v-zone-neg:hover { background: var(--hover); color: var(--text); }
+.v-zone-neg.on { background: var(--amber); color: #221d2e; }
+
+/* sélecteur ET / OU des zones */
+.v-zonemode {
+  display: flex; gap: 4px; margin-bottom: 8px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 7px; padding: 3px;
+}
+.v-zonemode span {
+  flex: 1; text-align: center; cursor: pointer;
+  font: 600 11px var(--font); padding: 5px 4px; border-radius: 5px;
+  color: var(--muted); transition: background .12s ease, color .12s ease;
+}
+.v-zonemode span.on { background: var(--accent); color: #fff; }
 
 /* ---- droite : panneau d'export ---- */
 .v-side {

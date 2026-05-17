@@ -44,17 +44,30 @@ export const ALL_MEDIA: MediaSelection = {
 };
 
 /**
- * Une zone de sélection — un critère qui désigne un ensemble de messages.
- * L'export d'un salon = l'UNION de toutes ses zones (aucune zone = tout).
- *
- * - `period`   : messages dans une plage de dates.
- * - `author`   : messages dont le nom d'auteur contient `query`.
- * - `content`  : messages dont le texte contient `query`.
- * - `mention`  : messages mentionnant un utilisateur dont le nom contient `query`.
- * - `pinned`/`attachment`/`link` : messages épinglés / avec pièce jointe / avec lien.
- * - `manual`   : messages choisis un par un dans un salon donné.
+ * Comment combiner les zones de critères :
+ * - `any` : un message passe s'il satisfait AU MOINS UNE zone (OU).
+ * - `all` : un message passe s'il satisfait TOUTES les zones (ET).
+ * Les zones manuelles, elles, s'ajoutent toujours en plus (cf. plus bas).
  */
-export type SelectionZone =
+export type ZoneMode = 'any' | 'all';
+
+/** Type d'une attachment, déduit du content-type ou de l'extension. */
+function attachmentKind(content_type: string | undefined, url: string): AssetKind {
+  const ct = content_type ?? '';
+  if (ct.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(url)) {
+    return 'image';
+  }
+  if (ct.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)(\?|$)/i.test(url)) {
+    return 'video';
+  }
+  if (ct.startsWith('audio/') || /\.(mp3|ogg|oga|wav|m4a|flac|opus)(\?|$)/i.test(url)) {
+    return 'audio';
+  }
+  return 'file';
+}
+
+/** Cœur d'une zone — le critère, sans le drapeau de négation. */
+type ZoneCore =
   | { kind: 'period'; afterMs?: number; beforeMs?: number }
   | { kind: 'author'; query: string }
   | { kind: 'content'; query: string }
@@ -62,10 +75,33 @@ export type SelectionZone =
   | { kind: 'pinned' }
   | { kind: 'attachment' }
   | { kind: 'link' }
+  | { kind: 'image' }
+  | { kind: 'video' }
+  | { kind: 'audio' }
+  | { kind: 'sticker' }
+  | { kind: 'embed' }
   | { kind: 'manual'; channelId: Snowflake; ids: Snowflake[] };
 
-/** Vrai si le message satisfait UNE zone de sélection donnée. */
-export function zoneMatches(
+/**
+ * Une zone de sélection — un critère qui désigne un ensemble de messages.
+ *
+ * - `period`   : messages dans une plage de dates.
+ * - `author`   : messages dont le nom d'auteur contient `query`.
+ * - `content`  : messages dont le texte contient `query`.
+ * - `mention`  : messages mentionnant un utilisateur dont le nom contient `query`.
+ * - `pinned`   : messages épinglés.
+ * - `attachment` : avec une pièce jointe (de n'importe quel type).
+ * - `image`/`video`/`audio` : avec une pièce jointe de ce type précis.
+ * - `sticker`  : avec un sticker. `embed` : avec un embed.
+ * - `link`     : dont le texte contient un lien.
+ * - `manual`   : messages choisis un par un dans un salon donné.
+ *
+ * `negate` inverse le critère (NON logique).
+ */
+export type SelectionZone = ZoneCore & { negate?: boolean };
+
+/** Vrai si le message satisfait le CRITÈRE d'une zone (négation non appliquée). */
+function zoneCriterion(
   zone: SelectionZone,
   m: RawMessage,
   channelId: string,
@@ -97,6 +133,16 @@ export function zoneMatches(
       return m.pinned === true;
     case 'attachment':
       return m.attachments.length > 0;
+    case 'image':
+    case 'video':
+    case 'audio':
+      return m.attachments.some(
+        (a) => attachmentKind(a.content_type, a.url) === zone.kind,
+      );
+    case 'sticker':
+      return (m.sticker_items ?? []).length > 0;
+    case 'embed':
+      return m.embeds.length > 0;
     case 'link':
       return /https?:\/\//i.test(m.content);
     case 'manual':
@@ -104,17 +150,40 @@ export function zoneMatches(
   }
 }
 
+/** Vrai si le message satisfait UNE zone, négation comprise. */
+export function zoneMatches(
+  zone: SelectionZone,
+  m: RawMessage,
+  channelId: string,
+): boolean {
+  const hit = zoneCriterion(zone, m, channelId);
+  return zone.negate ? !hit : hit;
+}
+
 /**
- * Vrai si le message appartient à l'UNION des zones de sélection.
- * Aucune zone → tout passe.
+ * Vrai si le message doit être exporté, selon les zones et le mode.
+ *
+ * Règle : les zones `manual` (messages cochés à la main) s'ajoutent TOUJOURS
+ * en plus — un message coché passe quoi qu'il arrive. Les autres zones (les
+ * critères) sont combinées selon `mode` : `any` = OU, `all` = ET.
+ *
+ * Aucune zone du tout → tout passe.
  */
 export function messageMatchesZones(
   m: RawMessage,
   zones: SelectionZone[],
   channelId: string,
+  mode: ZoneMode = 'any',
 ): boolean {
   if (zones.length === 0) return true;
-  return zones.some((z) => zoneMatches(z, m, channelId));
+  const manual = zones.filter((z) => z.kind === 'manual');
+  const criteria = zones.filter((z) => z.kind !== 'manual');
+  // Un message coché à la main passe toujours.
+  if (manual.some((z) => zoneMatches(z, m, channelId))) return true;
+  if (criteria.length === 0) return false; // que des zones manuelles
+  return mode === 'all'
+    ? criteria.every((z) => zoneMatches(z, m, channelId))
+    : criteria.some((z) => zoneMatches(z, m, channelId));
 }
 
 /**
@@ -142,8 +211,10 @@ export interface ExportOptions {
    * Coûteux (un appel API par emoji distinct) — désactivé par défaut.
    */
   includeReactionUsers?: boolean;
-  /** Zones de sélection. Vide = tout le salon ; sinon = union des zones. */
+  /** Zones de sélection. Vide = tout le salon. */
   zones: SelectionZone[];
+  /** Combinaison des zones de critères : `any` = OU, `all` = ET. */
+  zoneMode: ZoneMode;
   /** Formats de fichier à générer. Défaut : `DEFAULT_FORMATS`. */
   formats: ExportFormat[];
 }

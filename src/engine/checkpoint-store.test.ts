@@ -15,7 +15,10 @@ function makeRun(id: string, status: ExportRun['status'] = 'in_progress'): Expor
     guildId: 'g1',
     guildName: 'Test',
     status,
-    options: { includeThreads: false, media: ALL_MEDIA, zones: [], formats: ['json'] },
+    options: {
+      includeThreads: false, media: ALL_MEDIA, zones: [],
+      zoneMode: 'any', formats: ['json'],
+    },
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };

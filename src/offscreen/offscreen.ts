@@ -42,6 +42,7 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
       const extras: EnqueueExtras = {
         includeThreads: command.includeThreads,
         zones: command.zones,
+        zoneMode: command.zoneMode,
         formats: command.formats,
       };
       if (command.includeReactionUsers) extras.includeReactionUsers = true;
