@@ -315,13 +315,28 @@ export function Overlay({
           })}
         </div>
 
-        {/* liste des salons */}
+        {/* liste des salons — l'en-tête est la case maître « tout le serveur » */}
         <div class="v-clist">
-          <div class="v-clist-hd">
-            <span>{activeGuild?.name ?? '—'}</span>
-            <span class="v-link" onClick={() => selectAll(selected.size === 0)}>
-              {selected.size === 0 ? t('overlay.select_all') : t('overlay.select_none')}
+          <div
+            class="v-clist-hd v-clist-master"
+            onClick={() => selectAll(selected.size < totalChannels)}
+            title={t('overlay.select_all')}
+          >
+            <span
+              class={`v-cbx ${
+                totalChannels > 0 && selected.size === totalChannels
+                  ? 'on'
+                  : selected.size > 0 ? 'part' : ''
+              }`}
+            >
+              {totalChannels > 0 && selected.size === totalChannels
+                ? <IconCheck />
+                : selected.size > 0 ? <IconMinus /> : null}
             </span>
+            <span class="v-clist-name">{activeGuild?.name ?? '—'}</span>
+            {totalChannels > 0 && (
+              <span class="v-clist-count">{selected.size}/{totalChannels}</span>
+            )}
           </div>
           <input
             class="v-search"
@@ -376,7 +391,7 @@ export function Overlay({
         {/* personnalisation */}
         <div class="v-main">
           <div class="v-chat-hd">
-            <span class="v-hash" style="font-size:20px">#</span>
+            {focus && <span class="v-hash" style="font-size:20px">#</span>}
             <span class="v-name">{focus?.name ?? t('overlay.settings')}</span>
           </div>
           <div class="v-main-body">

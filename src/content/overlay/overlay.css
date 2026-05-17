@@ -116,9 +116,14 @@
 .v-clist { width: 240px; background: var(--bg2); display: flex; flex-direction: column; }
 .v-clist-hd {
   height: 48px; border-bottom: 1px solid var(--border); display: flex;
-  align-items: center; justify-content: space-between; padding: 0 14px;
+  align-items: center; gap: 9px; padding: 0 14px;
   font-weight: 700; font-size: 14px; flex: none;
 }
+/* en-tête = case maître « sélectionner tout le serveur » */
+.v-clist-master { cursor: pointer; }
+.v-clist-master:hover { background: var(--hover); }
+.v-clist-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v-clist-count { font-size: 12px; font-weight: 600; color: var(--muted); }
 .v-search {
   margin: 8px 10px; padding: 7px 10px; border-radius: 6px;
   background: var(--bg3); border: 1px solid var(--border); color: var(--text);
