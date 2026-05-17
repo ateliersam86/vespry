@@ -83,6 +83,27 @@ describe('packageRun', () => {
     expect(m.totals.assetsDownloaded).toBe(1);
   });
 
+  it('découpe un gros salon en partitions', async () => {
+    const r = run('r3');
+    r.options.partitionSize = 2;
+    r.options.formats = ['json'];
+    await store.putRun(r);
+    await store.putChannel(channel('r3', 'c1', 'general'));
+    await store.appendMessages([
+      message('r3', 'c1', '1'), message('r3', 'c1', '2'),
+      message('r3', 'c1', '3'), message('r3', 'c1', '4'),
+      message('r3', 'c1', '5'),
+    ]);
+
+    const { manifest } = await packageRun(store, 'r3');
+    const m = manifest as { channels: { files: string[]; messages: number }[] };
+    // 5 messages / 2 → 3 partitions, un fichier JSON chacune.
+    expect(m.channels[0]?.files).toHaveLength(3);
+    expect(m.channels[0]?.files.some((f) => /\.part1\.json$/.test(f))).toBe(true);
+    expect(m.channels[0]?.files.some((f) => /\.part3\.json$/.test(f))).toBe(true);
+    expect(m.channels[0]?.messages).toBe(5);
+  });
+
   it('lève une erreur si le run est introuvable', async () => {
     await expect(packageRun(store, 'inexistant')).rejects.toThrow();
   });

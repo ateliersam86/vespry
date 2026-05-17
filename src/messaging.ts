@@ -79,6 +79,8 @@ export type VespryCommand =
       /** Export incrémental — ne reprendre que les messages postés depuis
        *  le dernier export du même serveur. */
       incremental?: boolean;
+      /** Messages/fichier (0 = pas de découpage). */
+      partitionSize: number;
       formats: ExportFormat[];
     }
   | { cmd: 'resume'; runId: string }
@@ -105,6 +107,8 @@ export interface EnqueueExtras {
   zoneMode: ZoneMode;
   /** Export incrémental — résolu en `sinceMs` par le contrôleur. */
   incremental?: boolean;
+  /** Messages/fichier (0 = pas de découpage). */
+  partitionSize: number;
   formats: ExportFormat[];
 }
 

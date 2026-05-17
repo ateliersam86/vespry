@@ -38,6 +38,19 @@ const KIND_DIR: Record<AssetKind, string> = {
   avatar: 'avatars',
 };
 
+/**
+ * Découpe une liste de messages en partitions de `size` au plus.
+ * `size` ≤ 0 → une seule partition (pas de découpage).
+ */
+function partitionMessages(messages: RawMessage[], size: number): RawMessage[][] {
+  if (size <= 0 || messages.length <= size) return [messages];
+  const parts: RawMessage[][] = [];
+  for (let i = 0; i < messages.length; i += size) {
+    parts.push(messages.slice(i, i + size));
+  }
+  return parts;
+}
+
 function safeName(s: string): string {
   const cleaned = s.replace(/[^\w\-. ]/gu, '_').trim().replace(/\s+/g, ' ');
   return cleaned.slice(0, 100) || 'x';
@@ -129,6 +142,9 @@ export async function packageRun(
 
   const stats: ChannelStat[] = [];
 
+  // Découpe en partitions de `partitionSize` messages (0 = pas de découpage).
+  const partSize = run.options.partitionSize ?? 0;
+
   for (const ch of channels) {
     const slug = channelSlug.get(ch.channelId) ?? 'unknown';
     // Messages bruts collectés une fois, réutilisés par tous les formats.
@@ -136,33 +152,44 @@ export async function packageRun(
     await store.forEachMessage(runId, ch.channelId, (sm) => {
       raw.push(sm.message);
     });
-    const ctx: ExportContext = {
-      guildName: run.guildName,
-      channelName: ch.name,
-      urlToPath,
-    };
+    const parts = partitionMessages(raw, partSize);
     const files: string[] = [];
 
-    for (const format of formats) {
-      const file = `${FORMAT_DIR[format]}/${slug}.${format}`;
-      if (format === 'json') {
-        await writeText(file, JSON.stringify(
-          {
-            channel: { id: ch.channelId, name: ch.name, type: ch.type },
-            messageCount: raw.length,
-            messages: raw.map((m) => enrichMessage(m, urlToPath)),
-          },
-          null,
-          2,
-        ));
-      } else if (format === 'html') {
-        await writeText(file, toHtml(ctx, raw));
-      } else if (format === 'csv') {
-        await writeText(file, toCsv(ctx, raw));
-      } else {
-        await writeText(file, toTxt(ctx, raw));
+    for (let p = 0; p < parts.length; p += 1) {
+      const chunk = parts[p] ?? [];
+      // Suffixe `.partN` seulement s'il y a plus d'une partition.
+      const suffix = parts.length > 1 ? `.part${p + 1}` : '';
+      const ctx: ExportContext = {
+        guildName: run.guildName,
+        channelName: parts.length > 1
+          ? `${ch.name} (partie ${p + 1}/${parts.length})`
+          : ch.name,
+        urlToPath,
+      };
+      for (const format of formats) {
+        const file = `${FORMAT_DIR[format]}/${slug}${suffix}.${format}`;
+        if (format === 'json') {
+          await writeText(file, JSON.stringify(
+            {
+              channel: { id: ch.channelId, name: ch.name, type: ch.type },
+              part: parts.length > 1
+                ? { index: p + 1, total: parts.length }
+                : undefined,
+              messageCount: chunk.length,
+              messages: chunk.map((m) => enrichMessage(m, urlToPath)),
+            },
+            null,
+            2,
+          ));
+        } else if (format === 'html') {
+          await writeText(file, toHtml(ctx, chunk));
+        } else if (format === 'csv') {
+          await writeText(file, toCsv(ctx, chunk));
+        } else {
+          await writeText(file, toTxt(ctx, chunk));
+        }
+        files.push(file);
       }
-      files.push(file);
     }
 
     stats.push({

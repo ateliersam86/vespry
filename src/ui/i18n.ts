@@ -98,6 +98,9 @@ const EN: Dict = {
   'format.html': 'HTML',
   'format.csv': 'CSV',
   'format.txt': 'Text',
+  'overlay.partition_label': 'Split large channels',
+  'partition.none': 'No split',
+  'partition.size': '{n} msg/file',
 
   'queue.title': 'Export queue — {n} task(s), {a} active',
   'queue.empty': 'No task.',
@@ -280,6 +283,9 @@ const FR: Dict = {
   'format.html': 'HTML',
   'format.csv': 'CSV',
   'format.txt': 'Texte',
+  'overlay.partition_label': 'Découper les gros salons',
+  'partition.none': 'Ne pas découper',
+  'partition.size': '{n} msg/fichier',
 
   'queue.title': 'File d’export — {n} tâche(s), {a} active(s)',
   'queue.empty': 'Aucune tâche.',

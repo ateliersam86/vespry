@@ -221,9 +221,17 @@ export interface ExportOptions {
    * Calculé depuis le dernier export du même serveur.
    */
   sinceMs?: number;
+  /**
+   * Découpe l'export d'un salon en fichiers de `partitionSize` messages au
+   * plus. `undefined` ou 0 = un seul fichier par salon (pas de découpage).
+   */
+  partitionSize?: number;
   /** Formats de fichier à générer. Défaut : `DEFAULT_FORMATS`. */
   formats: ExportFormat[];
 }
+
+/** Tailles de partition proposées (messages/fichier). 0 = pas de découpage. */
+export const PARTITION_SIZES = [0, 5000, 10000, 25000] as const;
 
 /** Un export. */
 export interface ExportRun {

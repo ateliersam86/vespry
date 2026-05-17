@@ -18,6 +18,7 @@ import {
   ALL_FORMATS,
   ALL_MEDIA,
   DEFAULT_FORMATS,
+  PARTITION_SIZES,
   messageMatchesZones,
   type ExportFormat,
   type MediaSelection,
@@ -227,6 +228,8 @@ export function Overlay({
   const [reactionUsers, setReactionUsers] = useState(false);
   /** Export incrémental — seulement les messages depuis le dernier export. */
   const [incremental, setIncremental] = useState(false);
+  /** Découpage des gros salons : messages/fichier (0 = pas de découpage). */
+  const [partitionSize, setPartitionSize] = useState(0);
   const [view, setView] = useState<'export' | 'credits'>('export');
   const [theme, setTheme] = useState<ThemePref>('dark');
   const [credits, setCredits] = useState<Credits | null>(null);
@@ -384,6 +387,7 @@ export function Overlay({
       includeThreads,
       zones,
       zoneMode,
+      partitionSize,
       // Garde-fou : au moins un format, sinon le paquet serait vide.
       formats: formats.length > 0 ? formats : [...DEFAULT_FORMATS],
     };
@@ -739,6 +743,22 @@ export function Overlay({
                     </span>
                   );
                 })}
+              </div>
+            </div>
+            <div class="v-field">
+              <label>{t('overlay.partition_label')}</label>
+              <div class="v-mchips">
+                {PARTITION_SIZES.map((size) => (
+                  <span
+                    key={size}
+                    class={`v-mchip ${partitionSize === size ? 'on' : ''}`}
+                    onClick={() => setPartitionSize(size)}
+                  >
+                    {size === 0
+                      ? t('partition.none')
+                      : t('partition.size', { n: size.toLocaleString() })}
+                  </span>
+                ))}
               </div>
             </div>
             <div class="v-field">

@@ -43,6 +43,7 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
         includeThreads: command.includeThreads,
         zones: command.zones,
         zoneMode: command.zoneMode,
+        partitionSize: command.partitionSize,
         formats: command.formats,
       };
       if (command.includeReactionUsers) extras.includeReactionUsers = true;
