@@ -56,3 +56,38 @@ export async function fetchDonorFeed(apiUrl: string): Promise<DonorFeed | null> 
     return null;
   }
 }
+
+/** Paramètres d'un don à régler par Stripe Checkout. */
+export interface CheckoutRequest {
+  /** Montant du don, en centimes. */
+  amountCents: number;
+  /** Nom à afficher sur le mur, ou null (anonyme). */
+  donorName: string | null;
+  /** Petit mot, ou null. */
+  message: string | null;
+  /** Le donateur accepte d'apparaître publiquement. */
+  isPublic: boolean;
+}
+
+/**
+ * Demande au Worker une session Stripe Checkout et renvoie son URL de
+ * paiement. Ne lève jamais — null si le service est indisponible.
+ */
+export async function createCheckout(
+  apiUrl: string,
+  req: CheckoutRequest,
+): Promise<string | null> {
+  if (!apiUrl) return null;
+  try {
+    const res = await fetch(`${apiUrl.replace(/\/+$/, '')}/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { url?: unknown };
+    return typeof data.url === 'string' ? data.url : null;
+  } catch {
+    return null;
+  }
+}

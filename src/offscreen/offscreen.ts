@@ -8,7 +8,7 @@
 import { VespryController } from '../content/overlay/controller';
 import { installGlobalHandlers } from '../diagnostics';
 import { loadCredits } from '../credits';
-import { fetchDonorFeed } from '../donors';
+import { createCheckout, fetchDonorFeed } from '../donors';
 import {
   isExecEnvelope,
   type CommandResponse,
@@ -63,6 +63,17 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
       // discord.com bloquerait un fetch tiers depuis l'overlay.
       const credits = await loadCredits();
       return { ok: true, donors: await fetchDonorFeed(credits.donorApiUrl) };
+    }
+    case 'checkout': {
+      // Création de la session Stripe Checkout — fetch tiers, donc ICI.
+      const credits = await loadCredits();
+      const url = await createCheckout(credits.donorApiUrl, {
+        amountCents: command.amountCents,
+        donorName: command.donorName ?? null,
+        message: command.message ?? null,
+        isPublic: command.isPublic,
+      });
+      return url ? { ok: true, checkoutUrl: url } : { ok: true };
     }
   }
 }

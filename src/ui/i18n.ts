@@ -151,6 +151,23 @@ const EN: Dict = {
   'm.twofifty': 'Midnight Circle',
   'm.fivehundred': 'Starwatcher',
   'm.thousand': 'Vespry Legend',
+
+  'support.title': 'Support Vespry',
+  'support.intro':
+    'Donations cover hosting and development time. Vespry will always stay free.',
+  'support.tier_s': 'A coffee',
+  'support.tier_m': 'An owl',
+  'support.tier_l': 'Patron',
+  'support.custom': 'Custom amount',
+  'support.show_name': 'Show my name on the wall',
+  'support.name_ph': 'Your name (optional)',
+  'support.msg_ph': 'A short message (optional)',
+  'support.pay': 'Donate {amount}',
+  'support.processing': 'Opening payment…',
+  'support.error': 'Payment could not start. Please try again.',
+  'support.secured': 'Payment secured by Stripe',
+  'support.or': 'or',
+  'support.wall_link': 'See the wall of supporters',
 };
 
 const FR: Dict = {
@@ -292,6 +309,23 @@ const FR: Dict = {
   'm.twofifty': 'Cercle de Minuit',
   'm.fivehundred': 'Veilleur des Étoiles',
   'm.thousand': 'Légende de Vespry',
+
+  'support.title': 'Soutenir Vespry',
+  'support.intro':
+    'Les dons couvrent l’hébergement et le temps de développement. Vespry restera toujours gratuit.',
+  'support.tier_s': 'Un café',
+  'support.tier_m': 'Une chouette',
+  'support.tier_l': 'Mécène',
+  'support.custom': 'Montant libre',
+  'support.show_name': 'Afficher mon nom sur le mur',
+  'support.name_ph': 'Votre nom (optionnel)',
+  'support.msg_ph': 'Un petit mot (optionnel)',
+  'support.pay': 'Faire un don de {amount}',
+  'support.processing': 'Ouverture du paiement…',
+  'support.error': 'Le paiement n’a pas pu démarrer. Réessaie.',
+  'support.secured': 'Paiement sécurisé par Stripe',
+  'support.or': 'ou',
+  'support.wall_link': 'Voir le mur des soutiens',
 };
 
 const IT: Dict = {

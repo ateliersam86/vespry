@@ -195,6 +195,7 @@ export function Overlay({
   const [theme, setTheme] = useState<ThemePref>('dark');
   const [credits, setCredits] = useState<Credits | null>(null);
   const [donorFeed, setDonorFeed] = useState<DonorFeed | null>(null);
+  const [showSupport, setShowSupport] = useState(false);
 
   useEffect(() => {
     void getThemePref().then(setTheme);
@@ -210,6 +211,21 @@ export function Overlay({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [controller.ready]);
+
+  // La page de retour Stripe (popup) prévient l'overlay par postMessage : on
+  // ferme la modale et on rafraîchit le mur pour voir le nouveau soutien.
+  useEffect(() => {
+    function onMsg(e: MessageEvent): void {
+      if (e.data === 'vespry-donation-ok') {
+        setShowSupport(false);
+        void controller.getDonors().then((f) => {
+          if (f) setDonorFeed(f);
+        });
+      }
+    }
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [controller]);
 
   function cycleTheme(): void {
     const next = nextThemePref(theme);
@@ -395,6 +411,7 @@ export function Overlay({
   }
 
   return (
+    <>
     <Shell onClose={onClose} theme={resolvedTheme}>
       {/* header de confirmation */}
       <div class="v-top">
@@ -671,15 +688,28 @@ export function Overlay({
         </div>
       </div>
 
-      <ExportQueue controller={controller} onSupport={() => setView('credits')} />
+      <ExportQueue controller={controller} onSupport={() => setShowSupport(true)} />
       <DonorWall
         feed={donorFeed}
         credits={credits}
-        onSupport={() => setView('credits')}
+        onSupport={() => setShowSupport(true)}
       />
       </>
       )}
     </Shell>
+    {showSupport && credits && (
+      <SupportModal
+        controller={controller}
+        credits={credits}
+        theme={resolvedTheme}
+        onClose={() => setShowSupport(false)}
+        onWall={() => {
+          setShowSupport(false);
+          setView('credits');
+        }}
+      />
+    )}
+    </>
   );
 }
 
@@ -1168,6 +1198,203 @@ function DonorWall({
         >
           <IconHeart /> {t('wall.cta')}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** Montants prédéfinis du don — étiquettes thématiques crépuscule/hibou. */
+const SUPPORT_PRESETS: { cents: number; key: string }[] = [
+  { cents: 300, key: 'support.tier_s' },
+  { cents: 500, key: 'support.tier_m' },
+  { cents: 1000, key: 'support.tier_l' },
+];
+
+const MIN_DON_CENTS = 100;
+const MAX_DON_CENTS = 100_000;
+
+/** Formate un montant en centimes vers un libellé euros court. */
+function euros(cents: number): string {
+  return (cents / 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+}
+
+/**
+ * Modale de soutien — montant, identité optionnelle, puis ouverture de la
+ * popup Stripe Checkout. Rendue dans son propre `.v-root` (au-dessus de
+ * l'overlay) pour échapper au `overflow:hidden` de la fenêtre.
+ */
+function SupportModal({
+  controller,
+  credits,
+  theme,
+  onClose,
+  onWall,
+}: {
+  controller: RemoteController;
+  credits: Credits;
+  theme: 'dark' | 'light';
+  onClose: () => void;
+  onWall: () => void;
+}): JSX.Element {
+  const [amountCents, setAmountCents] = useState(500);
+  const [customEur, setCustomEur] = useState('');
+  const [isPublic, setIsPublic] = useState(true);
+  const [name, setName] = useState('');
+  const [msg, setMsg] = useState('');
+  const [status, setStatus] = useState<'' | 'pending' | 'error'>('');
+
+  const configured = Boolean(credits.donorApiUrl);
+  const validAmount = amountCents >= MIN_DON_CENTS && amountCents <= MAX_DON_CENTS;
+
+  function onCustom(value: string): void {
+    setCustomEur(value);
+    const eur = Number(value.replace(',', '.'));
+    if (Number.isFinite(eur) && eur > 0) setAmountCents(Math.round(eur * 100));
+  }
+
+  function donate(): void {
+    if (!configured || !validAmount || status === 'pending') return;
+    // La popup s'ouvre TOUT DE SUITE, sur le geste utilisateur : après le
+    // round-trip de messaging, le navigateur la bloquerait.
+    const popup = window.open(
+      'about:blank',
+      'vespry-pay',
+      'width=460,height=720,menubar=no,toolbar=no,location=yes',
+    );
+    setStatus('pending');
+    void controller
+      .startCheckout({
+        amountCents,
+        donorName: isPublic ? name.trim() || null : null,
+        message: isPublic ? msg.trim() || null : null,
+        isPublic,
+      })
+      .then((url) => {
+        if (url) {
+          if (popup) popup.location.href = url;
+          else window.open(url, 'vespry-pay');
+          setStatus('');
+        } else {
+          popup?.close();
+          setStatus('error');
+        }
+      });
+  }
+
+  return (
+    <div class="v-root" data-theme={theme}>
+      <div
+        class="v-modal-bd"
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+      >
+        <div class="v-modal">
+          <div class="v-modal-hd">
+            <span class="v-logo"><OwlMark class="v-mark" />{t('support.title')}</span>
+            <span class="v-close" onClick={onClose} title={t('overlay.close')}>
+              <IconClose />
+            </span>
+          </div>
+          <p class="v-modal-intro">{t('support.intro')}</p>
+
+          <div class="v-amts">
+            {SUPPORT_PRESETS.map((p) => (
+              <button
+                key={p.cents}
+                class={`v-amt ${amountCents === p.cents && !customEur ? 'on' : ''}`}
+                onClick={() => {
+                  setAmountCents(p.cents);
+                  setCustomEur('');
+                }}
+              >
+                <b>{euros(p.cents)} €</b>
+                <span>{t(p.key)}</span>
+              </button>
+            ))}
+          </div>
+          <div class="v-amt-custom">
+            <input
+              class="v-input"
+              type="number"
+              min="1"
+              max="1000"
+              placeholder={t('support.custom')}
+              value={customEur}
+              onInput={(e) => onCustom((e.target as HTMLInputElement).value)}
+            />
+            <span class="v-muted">€</span>
+          </div>
+
+          <CheckRow
+            on={isPublic}
+            onToggle={() => setIsPublic(!isPublic)}
+            label={t('support.show_name')}
+          />
+          {isPublic && (
+            <div class="v-filter-inputs">
+              <input
+                class="v-input"
+                type="text"
+                maxLength={48}
+                placeholder={t('support.name_ph')}
+                value={name}
+                onInput={(e) => setName((e.target as HTMLInputElement).value)}
+              />
+              <input
+                class="v-input"
+                type="text"
+                maxLength={280}
+                placeholder={t('support.msg_ph')}
+                value={msg}
+                onInput={(e) => setMsg((e.target as HTMLInputElement).value)}
+              />
+            </div>
+          )}
+
+          <button
+            class="v-btn v-modal-pay"
+            disabled={!configured || !validAmount || status === 'pending'}
+            onClick={donate}
+          >
+            {status === 'pending'
+              ? t('support.processing')
+              : configured
+                ? t('support.pay', { amount: `${euros(amountCents)} €` })
+                : t('credits.donate_soon')}
+          </button>
+          {status === 'error' && (
+            <div class="v-modal-err">{t('support.error')}</div>
+          )}
+          <div class="v-modal-secured">
+            <IconHeart /> {t('support.secured')}
+          </div>
+
+          {(credits.koFiUrl || credits.gitHubSponsorsUrl) && (
+            <div class="v-modal-alt">
+              <span class="v-muted">{t('support.or')}</span>
+              {credits.koFiUrl && (
+                <span
+                  class="v-link"
+                  onClick={() => window.open(credits.koFiUrl, '_blank', 'noopener')}
+                >
+                  Ko-fi
+                </span>
+              )}
+              {credits.gitHubSponsorsUrl && (
+                <span
+                  class="v-link"
+                  onClick={() =>
+                    window.open(credits.gitHubSponsorsUrl, '_blank', 'noopener')
+                  }
+                >
+                  <IconGitHub /> GitHub Sponsors
+                </span>
+              )}
+            </div>
+          )}
+          <span class="v-link v-modal-wall" onClick={onWall}>
+            {t('support.wall_link')}
+          </span>
+        </div>
       </div>
     </div>
   );

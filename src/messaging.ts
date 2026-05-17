@@ -74,7 +74,15 @@ export type VespryCommand =
   | { cmd: 'resume'; runId: string }
   | { cmd: 'download'; runId: string }
   | { cmd: 'preview'; channelId: string; before?: string }
-  | { cmd: 'get-donors' };
+  | { cmd: 'get-donors' }
+  | {
+      cmd: 'checkout';
+      /** Montant du don, en centimes. */
+      amountCents: number;
+      donorName?: string;
+      message?: string;
+      isPublic: boolean;
+    };
 
 /**
  * Paramètres d'un export passés à `enqueue`, hors guild/channels/media.
@@ -96,6 +104,8 @@ export interface CommandResponse {
   messages?: RawMessage[];
   /** Flux du mur des soutiens (commande `get-donors`) — null si indisponible. */
   donors?: DonorFeed | null;
+  /** URL de la session Stripe Checkout (commande `checkout`). */
+  checkoutUrl?: string;
 }
 
 // --- messages de routage ---

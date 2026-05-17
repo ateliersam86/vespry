@@ -115,6 +115,27 @@ export class RemoteController {
     return r.donors ?? null;
   }
 
+  /**
+   * Demande une session Stripe Checkout pour un don.
+   * Renvoie l'URL de paiement, ou null si le service est indisponible.
+   */
+  async startCheckout(req: {
+    amountCents: number;
+    donorName: string | null;
+    message: string | null;
+    isPublic: boolean;
+  }): Promise<string | null> {
+    const command: VespryCommand = {
+      cmd: 'checkout',
+      amountCents: req.amountCents,
+      isPublic: req.isPublic,
+      ...(req.donorName ? { donorName: req.donorName } : {}),
+      ...(req.message ? { message: req.message } : {}),
+    };
+    const r = await this.send(command);
+    return r.checkoutUrl ?? null;
+  }
+
   resume(runId: string): void {
     void this.send({ cmd: 'resume', runId });
   }
