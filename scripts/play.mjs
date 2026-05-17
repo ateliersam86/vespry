@@ -1,24 +1,40 @@
 #!/usr/bin/env node
 /**
- * Ouvre un Chromium pour tester Vespry à la main, avec un profil PERSISTANT
- * (`.test-profile-manual/`). Conséquence : tu te connectes à Discord une
- * seule fois — la session est conservée à chaque `npm run play` suivant.
+ * Ouvre Chromium pour tester Vespry à la main.
  *
- * Pas d'injection de jeton ici : c'est le vrai parcours (tu es connecté à
- * Discord, le bridge capte ta session naturellement).
- *
- * Astuce : après un rebuild de l'extension, recharge-la depuis
- * `chrome://extensions` (icône ↻) pour être sûr d'avoir le dernier code.
+ *  - Profil PERSISTANT (`.test-profile-manual/`) : tu te connectes à Discord
+ *    une seule fois, la session est conservée d'un lancement à l'autre.
+ *  - Chaque lancement RECONSTRUIT l'extension avec une version UNIQUE. Sans
+ *    ça, Chrome — sur un profil réutilisé et une version figée — sert une
+ *    extension en cache périmée : ses content scripts pointent vers des
+ *    fichiers disparus → plus rien ne s'injecte sur Discord (« non
+ *    connecté » alors que la page l'est). La version unique force Chrome à
+ *    ré-enregistrer l'extension à neuf à chaque fois.
  *
  * Usage : npm run play
  */
 import { chromium } from 'playwright';
+import { execSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const extDir = join(root, 'dist');
 const profile = join(root, '.test-profile-manual');
+const counterFile = join(root, '.dev-build-n');
+
+// Compteur de build → 4e composant de version, unique et croissant.
+const n = (existsSync(counterFile) ? Number(readFileSync(counterFile, 'utf8')) || 0 : 0) + 1;
+writeFileSync(counterFile, String(n));
+const devVersion = `0.1.0.${n % 60000}`;
+
+console.log(`Build de dev — version ${devVersion} …`);
+execSync('npm run build', {
+  cwd: root,
+  env: { ...process.env, VESPRY_BUILD_VERSION: devVersion },
+  stdio: 'inherit',
+});
 
 const ctx = await chromium.launchPersistentContext(profile, {
   headless: false,
@@ -36,10 +52,9 @@ await page
   .catch(() => { /* hors-ligne — sans gravité */ });
 
 console.log('────────────────────────────────────────────────────────');
-console.log('  Navigateur Vespry ouvert (profil persistant).');
+console.log(`  Navigateur Vespry ouvert — v${devVersion}, profil persistant.`);
 console.log('  1. Connecte-toi à Discord (une seule fois — ça reste).');
 console.log('  2. Clique le bouton « Vespry » en haut à droite.');
-console.log('  Les prochains `npm run play` te garderont connecté.');
 console.log('  Ferme la fenêtre pour quitter.');
 console.log('────────────────────────────────────────────────────────');
 

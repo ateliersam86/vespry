@@ -9,6 +9,7 @@ coverage/
 vespry-*.zip
 debug-*.mjs
 debug-*.png
+.dev-build-n
 
 # Données privées et scratch de session — JAMAIS dans le repo
 # (ces dossiers vivent au niveau parent "Dicord scraping/")

@@ -1,6 +1,10 @@
 import { defineManifest } from '@crxjs/vite-plugin';
 import pkg from '../package.json';
 
+// `process` est fourni par Node au moment du build (vite). Déclaré localement
+// pour ne pas dépendre de @types/node dans le tsconfig de l'extension.
+declare const process: { env: Record<string, string | undefined> };
+
 /**
  * Manifest V3 — Vespry.
  *
@@ -22,7 +26,11 @@ import pkg from '../package.json';
 export default defineManifest({
   manifest_version: 3,
   name: 'Vespry — Discord Export',
-  version: pkg.version,
+  // `VESPRY_BUILD_VERSION` donne aux builds de dev (cf. scripts/play.mjs) une
+  // version unique : Chrome voit alors une « mise à jour » et ré-enregistre
+  // l'extension. Sans ça, sur un profil réutilisé, Chrome sert une version
+  // en cache et les content scripts cassent. Vide en CI / release.
+  version: process.env.VESPRY_BUILD_VERSION || pkg.version,
   description:
     'Crash-proof, AI-ready Discord chat exporter. Resumes after a crash, '
     + 'outputs a package an AI agent can analyze.',
