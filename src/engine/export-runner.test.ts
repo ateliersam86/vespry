@@ -47,6 +47,24 @@ function fakeApi(batches: RawMessage[][]): DiscordApi {
   } as unknown as DiscordApi;
 }
 
+/** Faux DiscordApi : lots prédéfinis par salon + trace des salons appelés. */
+function perChannelApi(
+  byChannel: Record<string, RawMessage[][]>,
+): { api: DiscordApi; calls: string[] } {
+  const idx: Record<string, number> = {};
+  const calls: string[] = [];
+  const api = {
+    getMessages: async (channelId: string): Promise<RawMessage[]> => {
+      calls.push(channelId);
+      const i = idx[channelId] ?? 0;
+      idx[channelId] = i + 1;
+      return byChannel[channelId]?.[i] ?? [];
+    },
+    downloadAsset: async (): Promise<Blob | null> => null,
+  } as unknown as DiscordApi;
+  return { api, calls };
+}
+
 let store: CheckpointStore;
 let counter = 0;
 
@@ -80,6 +98,48 @@ describe('ExportRunner', () => {
 
     expect(await store.countMessages(runId, 'c1')).toBe(20);
     expect((await store.getChannel(runId, 'c1'))?.messageCount).toBe(120);
+  });
+
+  it('reprend un run multi-salons interrompu et le termine', async () => {
+    // Scénario réel : le navigateur a été tué en plein export. À la
+    // relance, une instance NEUVE du runner repart du même IndexedDB.
+    const c1: RawChannel = { id: 'c1', type: 0, name: 'fini' };
+    const c2: RawChannel = { id: 'c2', type: 0, name: 'interrompu' };
+    const c3: RawChannel = { id: 'c3', type: 0, name: 'pas-commence' };
+    const runId = await planGuildExport(
+      store,
+      { id: 'g1', name: 'G' },
+      [c1, c2, c3],
+      OPTS,
+    );
+
+    // État laissé par l'interruption : c1 terminé, c2 à moitié (curseur
+    // posé), c3 jamais touché.
+    await store.patchChannel(runId, 'c1', {
+      status: 'done', cursor: '50', messageCount: 50,
+    });
+    await store.patchChannel(runId, 'c2', {
+      status: 'in_progress', cursor: '200', messageCount: 100,
+    });
+
+    // Instance neuve (= après redémarrage), même store.
+    const { api, calls } = perChannelApi({
+      c2: [batch(201, 15), []],
+      c3: [batch(1, 30), []],
+    });
+    const status = await new ExportRunner(api, store).run(runId);
+
+    expect(status).toBe('completed');
+    // le salon déjà terminé n'est jamais re-téléchargé
+    expect(calls).not.toContain('c1');
+    // le salon interrompu reprend à son curseur : 100 déjà là + 15 restants
+    expect((await store.getChannel(runId, 'c2'))?.messageCount).toBe(115);
+    expect((await store.getChannel(runId, 'c2'))?.status).toBe('done');
+    // le salon jamais commencé est traité entièrement
+    expect(await store.countMessages(runId, 'c3')).toBe(30);
+    expect((await store.getChannel(runId, 'c3'))?.status).toBe('done');
+    // le run entier finit terminé
+    expect((await store.getRun(runId))?.status).toBe('completed');
   });
 
   it('met le run en pause sur une erreur d\'authentification', async () => {
