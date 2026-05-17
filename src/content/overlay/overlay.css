@@ -40,12 +40,13 @@
 .v-backdrop {
   position: fixed; inset: 0; z-index: 2147483000;
   display: flex; align-items: center; justify-content: center;
-  /* fond crépuscule : couvre tout l'écran (les taches bokeh dérivent dessus) */
+  /* fond crépuscule OPAQUE : masque entièrement Discord. Dégradés + les
+     taches bokeh floues (.v-bokeh) dérivent par-dessus. */
   background:
-    radial-gradient(58% 50% at 22% 16%, rgba(108,92,224,.30), transparent 72%),
-    radial-gradient(55% 48% at 82% 84%, rgba(236,106,147,.22), transparent 72%),
-    radial-gradient(50% 50% at 88% 14%, rgba(139,123,232,.20), transparent 72%),
-    rgba(16,13,24,.86);
+    radial-gradient(58% 50% at 22% 16%, rgba(108,92,224,.45), transparent 72%),
+    radial-gradient(55% 48% at 82% 84%, rgba(236,106,147,.34), transparent 72%),
+    radial-gradient(50% 50% at 88% 14%, rgba(139,123,232,.32), transparent 72%),
+    #130f1f;
   animation: v-fade-in .25s ease both;
 }
 .v-win {
@@ -70,18 +71,18 @@
   filter: blur(55px); will-change: transform;
   animation: v-bokeh-drift 20s ease-in-out infinite alternate;
 }
-.v-bokeh i:nth-child(1)  { width: 320px; height: 320px; left: 4%;  top: 6%;  background: #6c5ce0; opacity: .46; animation-duration: 21s; }
-.v-bokeh i:nth-child(2)  { width: 280px; height: 280px; left: 40%; top: -4%; background: #ec6a93; opacity: .38; animation-duration: 17s; }
-.v-bokeh i:nth-child(3)  { width: 300px; height: 300px; left: 74%; top: 4%;  background: #8b7be8; opacity: .42; animation-duration: 25s; }
-.v-bokeh i:nth-child(4)  { width: 260px; height: 260px; left: -3%; top: 42%; background: #5d4eae; opacity: .44; animation-duration: 19s; }
-.v-bokeh i:nth-child(5)  { width: 230px; height: 230px; left: 30%; top: 36%; background: #b3a6e6; opacity: .28; animation-duration: 23s; }
-.v-bokeh i:nth-child(6)  { width: 280px; height: 280px; left: 62%; top: 40%; background: #6c5ce0; opacity: .34; animation-duration: 15s; }
-.v-bokeh i:nth-child(7)  { width: 300px; height: 300px; left: 84%; top: 48%; background: #ec6a93; opacity: .30; animation-duration: 27s; }
-.v-bokeh i:nth-child(8)  { width: 250px; height: 250px; left: 6%;  top: 74%; background: #8b7be8; opacity: .40; animation-duration: 20s; }
-.v-bokeh i:nth-child(9)  { width: 240px; height: 240px; left: 38%; top: 80%; background: #f0b54a; opacity: .26; animation-duration: 24s; }
-.v-bokeh i:nth-child(10) { width: 280px; height: 280px; left: 66%; top: 78%; background: #5d4eae; opacity: .38; animation-duration: 18s; }
-.v-bokeh i:nth-child(11) { width: 220px; height: 220px; left: 90%; top: 84%; background: #b3a6e6; opacity: .30; animation-duration: 22s; }
-.v-bokeh i:nth-child(12) { width: 200px; height: 200px; left: 50%; top: 14%; background: #ec6a93; opacity: .24; animation-duration: 16s; }
+.v-bokeh i:nth-child(1)  { width: 380px; height: 380px; left: 4%;  top: 6%;  background: #6c5ce0; opacity: .60; animation-duration: 21s; }
+.v-bokeh i:nth-child(2)  { width: 320px; height: 320px; left: 40%; top: -4%; background: #ec6a93; opacity: .52; animation-duration: 17s; }
+.v-bokeh i:nth-child(3)  { width: 360px; height: 360px; left: 74%; top: 4%;  background: #8b7be8; opacity: .56; animation-duration: 25s; }
+.v-bokeh i:nth-child(4)  { width: 320px; height: 320px; left: -3%; top: 42%; background: #5d4eae; opacity: .58; animation-duration: 19s; }
+.v-bokeh i:nth-child(5)  { width: 280px; height: 280px; left: 30%; top: 36%; background: #b3a6e6; opacity: .42; animation-duration: 23s; }
+.v-bokeh i:nth-child(6)  { width: 340px; height: 340px; left: 62%; top: 40%; background: #6c5ce0; opacity: .48; animation-duration: 15s; }
+.v-bokeh i:nth-child(7)  { width: 360px; height: 360px; left: 84%; top: 48%; background: #ec6a93; opacity: .44; animation-duration: 27s; }
+.v-bokeh i:nth-child(8)  { width: 300px; height: 300px; left: 6%;  top: 74%; background: #8b7be8; opacity: .54; animation-duration: 20s; }
+.v-bokeh i:nth-child(9)  { width: 300px; height: 300px; left: 38%; top: 80%; background: #f0b54a; opacity: .40; animation-duration: 24s; }
+.v-bokeh i:nth-child(10) { width: 340px; height: 340px; left: 66%; top: 78%; background: #5d4eae; opacity: .50; animation-duration: 18s; }
+.v-bokeh i:nth-child(11) { width: 280px; height: 280px; left: 90%; top: 84%; background: #b3a6e6; opacity: .44; animation-duration: 22s; }
+.v-bokeh i:nth-child(12) { width: 260px; height: 260px; left: 50%; top: 14%; background: #ec6a93; opacity: .38; animation-duration: 16s; }
 @keyframes v-bokeh-drift {
   from { transform: translate(0, 0) scale(1); }
   to   { transform: translate(34px, -26px) scale(1.18); }
