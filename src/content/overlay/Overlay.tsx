@@ -243,8 +243,9 @@ export function Overlay({
   if (controller.error) {
     const noToken = controller.error === 'no-token';
     return (
-      <Shell onClose={onClose} theme={resolvedTheme}>
+      <Shell onClose={onClose} theme={resolvedTheme} compact>
         <div class="v-empty" style="flex:1">
+          <OwlMark class="v-mark" />
           <strong>{noToken ? t('overlay.no_token_title') : t('overlay.engine_error')}</strong>
           <span>{noToken ? t('overlay.no_token_body') : controller.error}</span>
           <div style="display:flex;gap:10px;margin-top:8px">
@@ -273,8 +274,11 @@ export function Overlay({
   }
   if (!controller.ready) {
     return (
-      <Shell onClose={onClose} theme={resolvedTheme}>
-        <div class="v-empty" style="flex:1">{t('overlay.loading')}</div>
+      <Shell onClose={onClose} theme={resolvedTheme} compact>
+        <div class="v-empty" style="flex:1">
+          <OwlMark class="v-mark" />
+          <span>{t('overlay.loading')}</span>
+        </div>
       </Shell>
     );
   }
@@ -527,15 +531,18 @@ function Shell({
   children,
   onClose,
   theme,
+  compact = false,
 }: {
   children: ComponentChildren;
   onClose: () => void;
   theme: 'dark' | 'light';
+  /** Fenêtre réduite (carte « connecte-toi ») — grandit à la connexion. */
+  compact?: boolean;
 }): JSX.Element {
   return (
     <div class="v-root" data-theme={theme}>
       <div class="v-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-        <div class="v-win">{children}</div>
+        <div class={`v-win ${compact ? 'v-win--compact' : ''}`}>{children}</div>
       </div>
     </div>
   );
