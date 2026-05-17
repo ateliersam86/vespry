@@ -239,6 +239,37 @@
   font-size: 12px; color: var(--link); background: var(--bg2);
   border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
 }
+.v-msg-pin {
+  font: 700 9px var(--font); text-transform: uppercase; letter-spacing: .04em;
+  color: var(--amber); background: rgba(240,181,74,.16);
+  padding: 1px 6px; border-radius: 999px;
+}
+.v-msg-audio { display: flex; flex-direction: column; gap: 4px; }
+.v-msg-audio .v-msg-fname { font-size: 12px; color: var(--muted); }
+.v-msg-audio audio { width: 320px; max-width: 100%; height: 36px; }
+.v-msg-video { max-width: 360px; max-height: 240px; border-radius: 6px; background: #000; }
+.v-msg-sticker { width: 120px; height: 120px; object-fit: contain; }
+.v-msg-embed {
+  margin-top: 6px; background: var(--bg3); border-left: 3px solid var(--accent);
+  border-radius: 5px; padding: 9px 12px; max-width: 440px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.v-embed-author { font-size: 12px; color: var(--muted); font-weight: 600; }
+.v-embed-title { font-size: 14px; font-weight: 700; color: var(--link); }
+.v-embed-desc {
+  font-size: 13px; color: var(--text); line-height: 1.45;
+  white-space: pre-wrap; word-break: break-word;
+}
+.v-embed-img { max-width: 100%; max-height: 240px; border-radius: 5px; margin-top: 3px; }
+.v-msg-reactions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.v-react {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 999px;
+  padding: 2px 8px; font-size: 12px; color: var(--text);
+}
+.v-react-emoji { width: 16px; height: 16px; }
+.v-react-uni { font-size: 13px; line-height: 1; }
+.v-react-count { color: var(--muted); font-weight: 600; }
 
 /* ---- droite : panneau d'export ---- */
 .v-side {

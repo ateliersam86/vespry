@@ -17,8 +17,10 @@ import {
   ChannelType,
   type RawAttachment,
   type RawChannel,
+  type RawEmbed,
   type RawGuild,
   type RawMessage,
+  type RawReaction,
   type RawUser,
 } from '../../engine/types';
 import type { EnqueueExtras, QueueItemView } from '../../messaging';
@@ -640,10 +642,100 @@ function cleanContent(text: string): string {
     .replace(/<#\d+>/g, '#salon');
 }
 
-/** Vrai si la pièce jointe est une image (affichable en vignette). */
-function isImageAtt(a: RawAttachment): boolean {
-  return (a.content_type ?? '').startsWith('image/')
-    || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(a.url);
+/** Classe une pièce jointe par type, d'après son content-type ou extension. */
+function attKind(a: RawAttachment): 'image' | 'audio' | 'video' | 'file' {
+  const ct = a.content_type ?? '';
+  if (ct.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(a.url)) {
+    return 'image';
+  }
+  if (ct.startsWith('audio/') || /\.(mp3|ogg|oga|wav|m4a|flac|opus)(\?|$)/i.test(a.url)) {
+    return 'audio';
+  }
+  if (ct.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)(\?|$)/i.test(a.url)) {
+    return 'video';
+  }
+  return 'file';
+}
+
+/** Une pièce jointe : image, lecteur audio, lecteur vidéo, ou puce fichier. */
+function Attachment({ att }: { att: RawAttachment }): JSX.Element {
+  const url = att.proxy_url || att.url;
+  switch (attKind(att)) {
+    case 'image':
+      return <img class="v-msg-img" src={url} alt={att.filename} loading="lazy" />;
+    case 'audio':
+      return (
+        <div class="v-msg-audio">
+          <span class="v-msg-fname">{att.filename}</span>
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <audio controls preload="none" src={url} />
+        </div>
+      );
+    case 'video':
+      // eslint-disable-next-line jsx-a11y/media-has-caption
+      return <video class="v-msg-video" controls preload="metadata" src={url} />;
+    default:
+      return <span class="v-msg-file">{att.filename}</span>;
+  }
+}
+
+/** Stickers affichables d'un message (PNG/APNG/GIF — Lottie ignoré). */
+function stickerImages(m: RawMessage): { id: string; name: string; url: string }[] {
+  return (m.sticker_items ?? [])
+    .filter((s) => s.format_type !== 3)
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      url: `https://media.discordapp.net/stickers/${s.id}.${s.format_type === 4 ? 'gif' : 'png'}`,
+    }));
+}
+
+/** Embeds porteurs de contenu (on ignore les embeds vides / techniques). */
+function cardEmbeds(m: RawMessage): RawEmbed[] {
+  return m.embeds.filter(
+    (e) => e.title || e.description || e.image?.url || e.thumbnail?.url,
+  );
+}
+
+/** Carte d'embed simplifiée — barre de couleur, titre, description, image. */
+function EmbedCard({ embed }: { embed: RawEmbed }): JSX.Element {
+  const img = embed.image?.url ?? embed.thumbnail?.url;
+  const accent = typeof embed.color === 'number'
+    ? `#${embed.color.toString(16).padStart(6, '0')}`
+    : 'var(--accent)';
+  return (
+    <div class="v-msg-embed" style={`border-left-color:${accent}`}>
+      {embed.author?.name && <div class="v-embed-author">{embed.author.name}</div>}
+      {embed.title && <div class="v-embed-title">{embed.title}</div>}
+      {embed.description && (
+        <div class="v-embed-desc">{cleanContent(embed.description)}</div>
+      )}
+      {img && <img class="v-embed-img" src={img} alt="" loading="lazy" />}
+    </div>
+  );
+}
+
+/** Bandeau des réactions d'un message (emoji + compteur). */
+function Reactions({ reactions }: { reactions: RawReaction[] }): JSX.Element {
+  return (
+    <div class="v-msg-reactions">
+      {reactions.map((r, i) => (
+        <span class="v-react" key={i}>
+          {r.emoji.id
+            ? (
+              <img
+                class="v-react-emoji"
+                src={`https://cdn.discordapp.com/emojis/${r.emoji.id}.${r.emoji.animated ? 'gif' : 'png'}`}
+                alt={r.emoji.name ?? ''}
+                loading="lazy"
+              />
+            )
+            : <span class="v-react-uni">{r.emoji.name}</span>}
+          <span class="v-react-count">{r.count}</span>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 /** Une ligne de message dans l'aperçu (groupée = même auteur enchaîné). */
@@ -658,6 +750,8 @@ function MessageRow({
 }): JSX.Element {
   const m = message;
   const name = m.author.global_name ?? m.author.username;
+  const stickers = stickerImages(m);
+  const embeds = cardEmbeds(m);
   return (
     <div
       class={`v-msg ${grouped ? 'v-msg--grouped' : ''}`}
@@ -670,27 +764,25 @@ function MessageRow({
         {!grouped && (
           <div class="v-msg-head">
             <span class="v-msg-author">{name}</span>
+            {m.pinned && <span class="v-msg-pin">épinglé</span>}
             <span class="v-msg-time">{formatTime(m.timestamp)}</span>
           </div>
         )}
         {m.content && <div class="v-msg-content">{cleanContent(m.content)}</div>}
         {m.attachments.length > 0 && (
           <div class="v-msg-atts">
-            {m.attachments.map((a) => (
-              isImageAtt(a)
-                ? (
-                  <img
-                    key={a.id}
-                    class="v-msg-img"
-                    src={a.proxy_url || a.url}
-                    alt={a.filename}
-                    loading="lazy"
-                  />
-                )
-                : <span key={a.id} class="v-msg-file">{a.filename}</span>
+            {m.attachments.map((a) => <Attachment key={a.id} att={a} />)}
+          </div>
+        )}
+        {stickers.length > 0 && (
+          <div class="v-msg-atts">
+            {stickers.map((s) => (
+              <img key={s.id} class="v-msg-sticker" src={s.url} alt={s.name} loading="lazy" />
             ))}
           </div>
         )}
+        {embeds.map((e, i) => <EmbedCard key={i} embed={e} />)}
+        {m.reactions && m.reactions.length > 0 && <Reactions reactions={m.reactions} />}
       </div>
     </div>
   );
