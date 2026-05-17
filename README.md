@@ -26,18 +26,24 @@ Discord : tu peux fermer l'onglet, il continue.
 | | Vespry | DiscordChatExporter | Discrub | Extensions freemium |
 |---|:--:|:--:|:--:|:--:|
 | Type | extension | appli desktop | extension | extension |
-| Reprise après interruption | ✅ | ❌ | ❌ | ❌ |
+| **Reprise après interruption** | ✅ | ❌ | ❌ | ❌ |
+| **Export incrémental** | ✅ | ❌ | ❌ | ❌ |
 | Formats : JSON / HTML / CSV / TXT | ✅ | ✅ | JSON/HTML/CSV | variable |
-| Langues de l'interface | 15 | anglais | anglais | anglais |
-| Gratuit, sans quota | ✅ | ✅ | ✅ | ❌ quotas |
-| Open source | ✅ | ✅ | ✅ | ❌ |
+| Plusieurs formats en un export | ✅ | ❌ | ❌ | ❌ |
+| Découpage des gros salons | ✅ | ✅ | ❌ | ❌ |
+| Filtres booléens (ET / OU / NON) | ✅ | ✅ | partiel | ❌ |
+| Filtres `has:` (image, vidéo, sticker…) | ✅ | ✅ | ✅ | ❌ |
 | Serveurs, forums, threads, DMs, groupes | ✅ | ✅ | ✅ | partiel |
+| Capture : réactions, embeds, stickers, réponses | ✅ | ✅ | ✅ | partiel |
 | Téléchargement des médias | ✅ | ✅ | ✅ | ✅ |
 | Aperçu avant export | ✅ | ❌ | ✅ | partiel |
+| **Langues de l'interface** | 15 | anglais | anglais | anglais |
+| Gratuit, sans quota | ✅ | ✅ | ✅ | ❌ quotas |
+| Open source | ✅ | ✅ | ✅ | ❌ |
 
-Vespry est le seul à reprendre un export interrompu sans tout recommencer, et le
-seul traduit (15 langues). Il ne supprime pas de messages : c'est un outil
-d'export, pas de modération — et c'est volontaire.
+Vespry est le seul à reprendre un export interrompu et à faire de l'incrémental
+sans installer d'application, et le seul traduit en 15 langues. Il ne supprime
+pas de messages : c'est un outil d'export, pas de modération — volontairement.
 
 ## Fonctionnalités
 
@@ -48,16 +54,19 @@ conversations privées ; au centre, l'aperçu des messages ; à droite, les
 réglages de l'export. Rien à apprendre — c'est la disposition que tu connais
 déjà. Thème sombre ou clair, au choix.
 
+Le panneau de réglages a deux modes : **Simple** (l'essentiel — période,
+médias, format) et **Avancé** (filtres, découpage, options). Pas de fouillis
+par défaut.
+
 ### Zones de sélection
 
 Tu n'es pas obligé de tout exporter. Une zone de sélection cible une partie
 précise de l'historique : une période, un auteur, un mot-clé, une mention, les
-messages épinglés, ceux avec une pièce jointe ou un lien. Tu peux aussi cocher
-des messages un par un dans l'aperçu.
+messages épinglés, ceux avec une image, une vidéo, un son, un sticker, un
+embed ou un lien. Tu peux aussi cocher des messages un par un dans l'aperçu.
 
-Les zones se combinent : l'export est l'union de toutes les zones actives,
-listées sous forme d'étiquettes que tu peux retirer d'un clic. Sans aucune
-zone, le salon entier est exporté.
+Les zones se combinent en **ET** ou en **OU**, et chacune peut être **inversée**
+(NON). Sans aucune zone, le salon entier est exporté.
 
 ![Zones de sélection — filtre par auteur](docs/screenshots/zones.png)
 
@@ -67,11 +76,23 @@ Tu choisis dans quels formats générer l'export — un seul, ou plusieurs à la
 fois :
 
 - **JSON** — structuré et fidèle, idéal pour archiver ou analyser.
-- **HTML** — une page lisible façon Discord, ouvrable dans un navigateur.
+- **HTML** — une page lisible façon Discord : messages groupés, réactions,
+  stickers, embeds, réponses citées, médias en local.
 - **CSV** — pour tableur (Excel, LibreOffice).
 - **TXT** — texte brut, le plus léger.
 
 ![Le rendu de l'export HTML](docs/screenshots/html-export.png)
+
+### Export incrémental
+
+Une fois un serveur exporté, un nouvel export en mode incrémental ne récupère
+que les messages postés depuis la dernière fois — pas besoin de tout
+re-télécharger.
+
+### Découpage des gros salons
+
+Un salon de centaines de milliers de messages peut être découpé en fichiers
+de taille bornée, plutôt qu'un seul fichier ingérable.
 
 ### Aperçu des messages
 
@@ -79,21 +100,13 @@ Avant d'exporter, tu vois le contenu réel du salon : messages, réactions,
 images, audio, vidéo, stickers, embeds. L'aperçu défile à l'infini — remonte
 aussi loin que tu veux dans l'historique.
 
-### Médias
-
-Images, vidéos, audio, fichiers : tu choisis quels types télécharger. Les
-liens Discord expirent vite ; Vespry récupère les fichiers pendant l'export et
-les range dans le paquet final.
-
 ### File d'export increvable
 
 Les exports s'enchaînent dans une file. Chaque tâche affiche son avancement,
 une console en temps réel, le détail par type de média. Pendant un export, un
 badge de pourcentage s'affiche sur l'icône de l'extension — visible quel que
-soit l'onglet où tu es.
-
-Un export interrompu peut être repris. C'est le cœur de Vespry, et c'est
-couvert par les tests automatiques.
+soit l'onglet où tu es. Un export interrompu peut être repris ; c'est le cœur
+de Vespry, et c'est couvert par les tests automatiques.
 
 ### Popup
 
