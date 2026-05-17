@@ -226,13 +226,13 @@ export class VespryController {
   }
 
   /**
-   * Aperçu des messages récents d'un salon (lecture seule, une page ~100).
-   * Sert à montrer le contenu du salon dans l'overlay avant export.
+   * Aperçu des messages d'un salon (lecture seule, une page ~100).
+   * `before` = id de message → page plus ancienne (défilement de l'historique).
    */
-  async previewChannel(channelId: string): Promise<RawMessage[]> {
+  async previewChannel(channelId: string, before?: string): Promise<RawMessage[]> {
     if (!this.api) return [];
     try {
-      return await this.api.getMessages(channelId);
+      return await this.api.getMessages(channelId, before);
     } catch {
       return [];
     }

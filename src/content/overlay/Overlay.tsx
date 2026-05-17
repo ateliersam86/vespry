@@ -6,12 +6,19 @@
  * Toutes les chaînes passent par i18n (`t`).
  */
 import { type ComponentChildren, type JSX } from 'preact';
-import { useEffect, useMemo, useReducer, useState } from 'preact/hooks';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'preact/hooks';
 import {
   ALL_MEDIA,
-  hasActiveFilter,
+  messageMatchesZones,
   type MediaSelection,
-  type MessageFilters,
+  type SelectionZone,
 } from '../../engine/checkpoint-types';
 import {
   ChannelType,
@@ -54,6 +61,25 @@ function guildIconUrl(g: RawGuild): string | null {
   if (!g.icon) return null;
   const ext = g.icon.startsWith('a_') ? 'gif' : 'png';
   return `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.${ext}?size=64`;
+}
+
+/** Libellé court d'une zone de sélection (récapitulatif du panneau). */
+function zoneLabel(z: SelectionZone, channels: RawChannel[]): string {
+  const fmt = (ms?: number): string =>
+    ms === undefined ? '…' : new Date(ms).toLocaleDateString('fr-FR');
+  switch (z.kind) {
+    case 'period': return `${t('zone.period')} ${fmt(z.afterMs)} → ${fmt(z.beforeMs)}`;
+    case 'author': return `${t('zone.author')} : ${z.query}`;
+    case 'content': return `${t('zone.keyword')} : ${z.query}`;
+    case 'mention': return `${t('zone.mention')} : ${z.query}`;
+    case 'pinned': return t('zone.pinned');
+    case 'attachment': return t('zone.attachment');
+    case 'link': return t('zone.link');
+    case 'manual': {
+      const name = channels.find((c) => c.id === z.channelId)?.name ?? '?';
+      return t('zone.manual', { n: z.ids.length, channel: name });
+    }
+  }
 }
 
 /** Ligne case à cocher + libellé (options, filtres booléens). */
@@ -149,8 +175,8 @@ export function Overlay({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [media, setMedia] = useState<MediaSelection>({ ...ALL_MEDIA });
   const [focus, setFocus] = useState<RawChannel | null>(null);
-  const [preview, setPreview] = useState<RawMessage[]>([]);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  /** Sélection manuelle de messages, par salon (salonId → ids de messages). */
+  const [manualSel, setManualSel] = useState<Map<string, Set<string>>>(new Map());
   const [afterDate, setAfterDate] = useState('');
   const [beforeDate, setBeforeDate] = useState('');
   const [search, setSearch] = useState('');
@@ -185,29 +211,44 @@ export function Overlay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [controller.guilds.length]);
 
-  // Aperçu : charge les messages récents du salon cliqué (façon Discord).
-  useEffect(() => {
-    if (!focus) {
-      setPreview([]);
-      setPreviewLoading(false);
-      return undefined;
+  /** Bascule la sélection manuelle d'un message dans un salon. */
+  function toggleMessage(channelId: string, msgId: string): void {
+    const next = new Map(manualSel);
+    const set = new Set(next.get(channelId) ?? []);
+    if (set.has(msgId)) set.delete(msgId);
+    else set.add(msgId);
+    if (set.size > 0) next.set(channelId, set);
+    else next.delete(channelId);
+    setManualSel(next);
+  }
+
+  /** Zones de sélection actives — dérivées des filtres + sélection manuelle. */
+  const zones = useMemo<SelectionZone[]>(() => {
+    const z: SelectionZone[] = [];
+    if (afterDate || beforeDate) {
+      z.push({
+        kind: 'period',
+        ...(afterDate ? { afterMs: Date.parse(afterDate) } : {}),
+        ...(beforeDate ? { beforeMs: Date.parse(beforeDate) + 86_399_999 } : {}),
+      });
     }
-    let cancelled = false;
-    setPreview([]);
-    setPreviewLoading(true);
-    void controller.preview(focus.id).then((msgs) => {
-      if (cancelled) return;
-      setPreview(msgs);
-      setPreviewLoading(false);
-    });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focus?.id]);
+    if (fAuthor.trim()) z.push({ kind: 'author', query: fAuthor.trim() });
+    if (fContent.trim()) z.push({ kind: 'content', query: fContent.trim() });
+    if (fMention.trim()) z.push({ kind: 'mention', query: fMention.trim() });
+    if (fPinned) z.push({ kind: 'pinned' });
+    if (fAttachment) z.push({ kind: 'attachment' });
+    if (fLink) z.push({ kind: 'link' });
+    for (const [chId, ids] of manualSel) {
+      if (ids.size > 0) z.push({ kind: 'manual', channelId: chId, ids: [...ids] });
+    }
+    return z;
+  }, [afterDate, beforeDate, fAuthor, fContent, fMention, fPinned, fAttachment, fLink, manualSel]);
 
   function selectGuild(guild: RawGuild): void {
     setActiveGuild(guild);
     setChannels([]);
     setSelected(new Set());
+    setManualSel(new Map());
     setFocus(null);
     setLoadingChannels(true);
     void controller.loadChannels(guild.id).then((ch) => {
@@ -260,23 +301,33 @@ export function Overlay({
   }
 
   function enqueue(): void {
-    if (!activeGuild || selected.size === 0) return;
-    const picked = channels.filter((c) => selected.has(c.id));
-    const extras: EnqueueExtras = { includeThreads };
-    if (afterDate) extras.afterMs = Date.parse(afterDate);
-    if (beforeDate) extras.beforeMs = Date.parse(beforeDate) + 86_399_999;
+    // Salons exportés : cochés OU porteurs d'une sélection manuelle.
+    const picked = channels.filter(
+      (c) => selected.has(c.id) || (manualSel.get(c.id)?.size ?? 0) > 0,
+    );
+    if (!activeGuild || picked.length === 0) return;
+    const extras: EnqueueExtras = { includeThreads, zones };
     if (reactionUsers) extras.includeReactionUsers = true;
-    const filters: MessageFilters = {};
-    if (fContent.trim()) filters.content = fContent.trim();
-    if (fAuthor.trim()) filters.author = fAuthor.trim();
-    if (fMention.trim()) filters.mention = fMention.trim();
-    if (fPinned) filters.pinnedOnly = true;
-    if (fAttachment) filters.hasAttachment = true;
-    if (fLink) filters.hasLink = true;
-    if (hasActiveFilter(filters)) extras.filters = filters;
     void controller.enqueue(activeGuild, picked, media, extras);
     setSelected(new Set());
+    setManualSel(new Map());
     setFocus(null);
+  }
+
+  /** Retire une zone : remet à zéro l'entrée correspondante. */
+  function clearZone(z: SelectionZone): void {
+    if (z.kind === 'period') { setAfterDate(''); setBeforeDate(''); }
+    else if (z.kind === 'author') setFAuthor('');
+    else if (z.kind === 'content') setFContent('');
+    else if (z.kind === 'mention') setFMention('');
+    else if (z.kind === 'pinned') setFPinned(false);
+    else if (z.kind === 'attachment') setFAttachment(false);
+    else if (z.kind === 'link') setFLink(false);
+    else if (z.kind === 'manual') {
+      const next = new Map(manualSel);
+      next.delete(z.channelId);
+      setManualSel(next);
+    }
   }
 
   if (minimized) {
@@ -472,13 +523,40 @@ export function Overlay({
             )}
             <span class="v-name">{focus?.name ?? t('overlay.preview')}</span>
           </div>
-          <MessagePreview channel={focus} messages={preview} loading={previewLoading} />
+          <MessagePreview
+            controller={controller}
+            channel={focus}
+            zones={zones}
+            manualIds={(focus && manualSel.get(focus.id)) || undefined}
+            onToggleMessage={(id) => focus && toggleMessage(focus.id, id)}
+          />
         </div>
 
         {/* panneau d'export — à droite */}
         <div class="v-side">
           <div class="v-side-hd">{t('overlay.settings')}</div>
           <div class="v-side-body">
+            <div class="v-field v-field--zones">
+              <label>{t('zones.active')}</label>
+              {zones.length === 0 ? (
+                <div class="v-hint">{t('zones.empty')}</div>
+              ) : (
+                <div class="v-zones">
+                  {zones.map((z, i) => (
+                    <span class="v-zone" key={i}>
+                      <span class="v-zone-lbl">{zoneLabel(z, channels)}</span>
+                      <span
+                        class="v-zone-x"
+                        title={t('zones.remove')}
+                        onClick={() => clearZone(z)}
+                      >
+                        <IconClose />
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
             <div class="v-field">
               <label>{t('overlay.period_label')}</label>
               <div class="v-daterow">
@@ -565,14 +643,13 @@ export function Overlay({
                 label={t('filter.reaction_users')}
               />
             </div>
-            <div class="v-hint">
-              {selected.size === 0
-                ? t('overlay.hint_empty')
-                : t('overlay.hint_selected', { n: selected.size })}
-            </div>
           </div>
           <div class="v-side-foot">
-            <button class="v-btn" disabled={selected.size === 0} onClick={enqueue}>
+            <button
+              class="v-btn"
+              disabled={selected.size === 0 && manualSel.size === 0}
+              onClick={enqueue}
+            >
               {t('overlay.add_to_queue')}
             </button>
           </div>
@@ -743,10 +820,18 @@ function MessageRow({
   message,
   grouped,
   index,
+  highlighted,
+  checked,
+  onToggle,
 }: {
   message: RawMessage;
   grouped: boolean;
   index: number;
+  /** Couvert par une zone de sélection → surligné. */
+  highlighted: boolean;
+  /** Coché manuellement. */
+  checked: boolean;
+  onToggle: () => void;
 }): JSX.Element {
   const m = message;
   const name = m.author.global_name ?? m.author.username;
@@ -754,9 +839,13 @@ function MessageRow({
   const embeds = cardEmbeds(m);
   return (
     <div
-      class={`v-msg ${grouped ? 'v-msg--grouped' : ''}`}
+      class={`v-msg ${grouped ? 'v-msg--grouped' : ''} ${highlighted ? 'v-msg--on' : ''}`}
       style={`animation-delay:${Math.min(index, 18) * 22}ms`}
+      onClick={onToggle}
     >
+      <span class={`v-cbx v-msg-cbx ${checked ? 'on' : ''}`}>
+        {checked ? <IconCheck /> : null}
+      </span>
       {grouped
         ? <div class="v-msg-gutter" />
         : <img class="v-msg-avatar" src={avatarUrl(m.author)} alt="" loading="lazy" />}
@@ -788,16 +877,76 @@ function MessageRow({
   );
 }
 
-/** Aperçu des messages récents d'un salon — affichage façon Discord. */
+/**
+ * Aperçu des messages d'un salon — affichage façon Discord, défilement
+ * infini de l'historique, surlignage des messages couverts par une zone,
+ * cases à cocher pour la sélection manuelle.
+ */
 function MessagePreview({
+  controller,
   channel,
-  messages,
-  loading,
+  zones,
+  manualIds,
+  onToggleMessage,
 }: {
+  controller: RemoteController;
   channel: RawChannel | null;
-  messages: RawMessage[];
-  loading: boolean;
+  zones: SelectionZone[];
+  manualIds: Set<string> | undefined;
+  onToggleMessage: (id: string) => void;
 }): JSX.Element {
+  const [messages, setMessages] = useState<RawMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [done, setDone] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const prependFrom = useRef<number | null>(null);
+  const toBottom = useRef(false);
+
+  // (re)charge l'aperçu au changement de salon.
+  useEffect(() => {
+    if (!channel) { setMessages([]); setDone(false); return undefined; }
+    let cancelled = false;
+    setMessages([]); setDone(false); setLoading(true);
+    void controller.preview(channel.id).then((raw) => {
+      if (cancelled) return;
+      // API : récent → ancien ; affichage : ancien → récent.
+      setMessages(raw.slice().reverse());
+      setDone(raw.length < 100);
+      setLoading(false);
+      toBottom.current = true;
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel?.id]);
+
+  // Après chargement initial → défile en bas ; après un prepend → conserve
+  // la position visuelle (sinon la vue sauterait).
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    if (toBottom.current) {
+      el.scrollTop = el.scrollHeight;
+      toBottom.current = false;
+    } else if (prependFrom.current !== null) {
+      el.scrollTop += el.scrollHeight - prependFrom.current;
+      prependFrom.current = null;
+    }
+  });
+
+  function loadOlder(): void {
+    const el = listRef.current;
+    const oldest = messages[0];
+    if (!channel || loadingMore || done || !oldest) return;
+    setLoadingMore(true);
+    void controller.preview(channel.id, oldest.id).then((raw) => {
+      if (el) prependFrom.current = el.scrollHeight;
+      setMessages((cur) => [...raw.slice().reverse(), ...cur]);
+      setDone(raw.length < 100);
+      setLoadingMore(false);
+    });
+  }
+
   if (!channel) {
     return (
       <div class="v-empty" style="flex:1">
@@ -812,18 +961,35 @@ function MessagePreview({
   if (messages.length === 0) {
     return <div class="v-empty" style="flex:1"><span>{t('preview.empty')}</span></div>;
   }
-  // L'API renvoie du plus récent au plus ancien — on rétablit l'ordre.
-  const ordered = [...messages].reverse();
+  const picked = manualIds ?? new Set<string>();
   return (
-    <div class="v-msglist">
-      {ordered.map((m, i) => {
-        const prev = ordered[i - 1];
+    <div
+      class="v-msglist"
+      ref={listRef}
+      onScroll={(e) => {
+        if ((e.target as HTMLElement).scrollTop < 120) loadOlder();
+      }}
+    >
+      {loadingMore && <div class="v-msg-more">{t('overlay.loading')}</div>}
+      {done && <div class="v-msg-more">{t('preview.start')}</div>}
+      {messages.map((m, i) => {
+        const prev = messages[i - 1];
         const grouped = Boolean(
           prev
           && prev.author.id === m.author.id
           && Date.parse(m.timestamp) - Date.parse(prev.timestamp) < 7 * 60_000,
         );
-        return <MessageRow key={m.id} message={m} grouped={grouped} index={i} />;
+        return (
+          <MessageRow
+            key={m.id}
+            message={m}
+            grouped={grouped}
+            index={i}
+            highlighted={zones.length > 0 && messageMatchesZones(m, zones, channel.id)}
+            checked={picked.has(m.id)}
+            onToggle={() => onToggleMessage(m.id)}
+          />
+        );
       })}
     </div>
   );

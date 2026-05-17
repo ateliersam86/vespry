@@ -271,6 +271,40 @@
 .v-react-uni { font-size: 13px; line-height: 1; }
 .v-react-count { color: var(--muted); font-weight: 600; }
 
+/* sélection de messages dans l'aperçu */
+.v-msg { padding-left: 8px; }
+.v-msg-cbx {
+  margin-top: 2px; opacity: .35; transition: opacity .12s ease;
+}
+.v-msg:hover .v-msg-cbx, .v-msg-cbx.on { opacity: 1; }
+.v-msg--on {
+  background: rgba(108, 92, 224, .14);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.v-msg--on:hover { background: rgba(108, 92, 224, .2); }
+.v-msg-more {
+  text-align: center; color: var(--muted); font-size: 12px; padding: 8px 0;
+}
+
+/* récapitulatif des zones de sélection (panneau de droite) */
+.v-field--zones { border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+.v-zones { display: flex; flex-direction: column; gap: 6px; }
+.v-zone {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 7px;
+  padding: 5px 6px 5px 10px; font-size: 12px;
+}
+.v-zone-lbl {
+  flex: 1; min-width: 0; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.v-zone-x {
+  cursor: pointer; color: var(--muted); display: flex; flex: none;
+  padding: 2px; border-radius: 5px; transition: background .1s ease, color .1s ease;
+}
+.v-zone-x:hover { background: var(--hover); color: var(--red); }
+.v-zone-x .v-ico { width: 13px; height: 13px; }
+
 /* ---- droite : panneau d'export ---- */
 .v-side {
   width: 312px; flex: none; background: var(--bg2);

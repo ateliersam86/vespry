@@ -11,7 +11,7 @@ function run(id: string): ExportRun {
     guildId: 'g1',
     guildName: 'Groupe Test',
     status: 'completed',
-    options: { includeThreads: false, media: ALL_MEDIA },
+    options: { includeThreads: false, media: ALL_MEDIA, zones: [] },
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };

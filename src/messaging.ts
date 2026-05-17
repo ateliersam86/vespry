@@ -9,7 +9,7 @@
  *
  * Le moteur d'export vit dans l'offscreen document (tab-indépendant).
  */
-import type { MediaSelection, MessageFilters } from './engine/checkpoint-types';
+import type { MediaSelection, SelectionZone } from './engine/checkpoint-types';
 import type { RawChannel, RawGuild, RawMessage } from './engine/types';
 
 // --- bridge MAIN → ISOLATED (capture du jeton) ---
@@ -68,13 +68,11 @@ export type VespryCommand =
       media: MediaSelection;
       includeThreads: boolean;
       includeReactionUsers?: boolean;
-      afterMs?: number;
-      beforeMs?: number;
-      filters?: MessageFilters;
+      zones: SelectionZone[];
     }
   | { cmd: 'resume'; runId: string }
   | { cmd: 'download'; runId: string }
-  | { cmd: 'preview'; channelId: string };
+  | { cmd: 'preview'; channelId: string; before?: string };
 
 /**
  * Paramètres d'un export passés à `enqueue`, hors guild/channels/media.
@@ -83,9 +81,7 @@ export type VespryCommand =
 export interface EnqueueExtras {
   includeThreads: boolean;
   includeReactionUsers?: boolean;
-  afterMs?: number;
-  beforeMs?: number;
-  filters?: MessageFilters;
+  zones: SelectionZone[];
 }
 
 /** Réponse à une commande. `data` selon la commande. */

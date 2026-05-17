@@ -88,9 +88,14 @@ export class RemoteController {
     return r.channels ?? [];
   }
 
-  /** Aperçu des messages récents d'un salon (pour l'affichage type Discord). */
-  async preview(channelId: string): Promise<RawMessage[]> {
-    const r = await this.send({ cmd: 'preview', channelId });
+  /**
+   * Aperçu des messages d'un salon. `before` = id du plus ancien message déjà
+   * affiché → renvoie la page précédente (défilement infini de l'historique).
+   */
+  async preview(channelId: string, before?: string): Promise<RawMessage[]> {
+    const r = await this.send(
+      before ? { cmd: 'preview', channelId, before } : { cmd: 'preview', channelId },
+    );
     return r.messages ?? [];
   }
 

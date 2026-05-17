@@ -10,14 +10,14 @@
  */
 import type { DiscordApi } from './discord-api';
 import type { CheckpointStore } from './checkpoint-store';
-import { hasActiveFilter } from './checkpoint-types';
+import { messageMatchesZones } from './checkpoint-types';
 import type {
   AssetKind,
   ChannelProgress,
   ExportOptions,
   ExportRun,
-  MessageFilters,
   RunStatus,
+  SelectionZone,
   StoredAsset,
   StoredMessage,
 } from './checkpoint-types';
@@ -64,33 +64,18 @@ export interface RunnerEvents {
 }
 
 /**
- * Vrai si le message satisfait TOUS les filtres de contenu actifs.
- * Filtrage côté client — exporté pour les tests.
+ * Borne de pagination : si toutes les zones sont des périodes datées, on peut
+ * arrêter de paginer un salon en dessous de la plus ancienne. Sinon (zone
+ * auteur, manuelle…), pas de borne — il faut parcourir tout l'historique.
  */
-export function matchesFilters(m: RawMessage, f?: MessageFilters): boolean {
-  if (!f) return true;
-
-  const content = f.content?.trim().toLowerCase();
-  if (content && !m.content.toLowerCase().includes(content)) return false;
-
-  const author = f.author?.trim().toLowerCase();
-  if (author) {
-    const name = `${m.author.username} ${m.author.global_name ?? ''}`.toLowerCase();
-    if (!name.includes(author)) return false;
+function paginationLowerBound(zones: SelectionZone[]): number | undefined {
+  if (zones.length === 0) return undefined;
+  let min = Infinity;
+  for (const z of zones) {
+    if (z.kind !== 'period' || z.afterMs === undefined) return undefined;
+    min = Math.min(min, z.afterMs);
   }
-
-  const mention = f.mention?.trim().toLowerCase();
-  if (mention) {
-    const hit = (m.mentions ?? []).some((u) =>
-      `${u.username} ${u.global_name ?? ''}`.toLowerCase().includes(mention));
-    if (!hit) return false;
-  }
-
-  if (f.pinnedOnly && !m.pinned) return false;
-  if (f.hasAttachment && m.attachments.length === 0) return false;
-  if (f.hasLink && !/https?:\/\//i.test(m.content)) return false;
-
-  return true;
+  return Number.isFinite(min) ? min : undefined;
 }
 
 /** Crée le run + les enregistrements de salon. Renvoie l'id du run. */
@@ -239,7 +224,7 @@ export class ExportRunner {
 
       if (batch.length === 0) break;
 
-      const kept = this.filterMessages(batch, run.options);
+      const kept = this.filterMessages(batch, run.options, channel.channelId);
       await this.persistBatch(run, channel, kept);
       count += kept.length;
 
@@ -364,22 +349,21 @@ export class ExportRunner {
     return false;
   }
 
-  /** Applique les bornes de date ET les filtres de contenu à un lot. */
-  private filterMessages(batch: RawMessage[], opts: ExportOptions): RawMessage[] {
-    const hasDate = opts.afterMs !== undefined || opts.beforeMs !== undefined;
-    if (!hasDate && !hasActiveFilter(opts.filters)) return batch;
-    return batch.filter((m) => {
-      const t = Date.parse(m.timestamp);
-      if (opts.afterMs !== undefined && t < opts.afterMs) return false;
-      if (opts.beforeMs !== undefined && t > opts.beforeMs) return false;
-      return matchesFilters(m, opts.filters);
-    });
+  /** Garde les messages couverts par l'union des zones de sélection. */
+  private filterMessages(
+    batch: RawMessage[],
+    opts: ExportOptions,
+    channelId: string,
+  ): RawMessage[] {
+    if (opts.zones.length === 0) return batch;
+    return batch.filter((m) => messageMatchesZones(m, opts.zones, channelId));
   }
 
-  /** Vrai si le lot contient un message plus vieux que la borne `afterMs`. */
+  /** Vrai si le lot dépasse la borne basse de pagination (zones périodes). */
   private reachedLowerBound(batch: RawMessage[], opts: ExportOptions): boolean {
-    if (opts.afterMs === undefined) return false;
-    return batch.some((m) => Date.parse(m.timestamp) < opts.afterMs!);
+    const bound = paginationLowerBound(opts.zones);
+    if (bound === undefined) return false;
+    return batch.some((m) => Date.parse(m.timestamp) < bound);
   }
 
   private emitProgress(

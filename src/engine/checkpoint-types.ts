@@ -44,31 +44,77 @@ export const ALL_MEDIA: MediaSelection = {
 };
 
 /**
- * Filtres de contenu — appliqués côté client à chaque message récupéré.
- * Tout champ vide/absent = filtre inactif. Plusieurs filtres se cumulent (ET).
+ * Une zone de sélection — un critère qui désigne un ensemble de messages.
+ * L'export d'un salon = l'UNION de toutes ses zones (aucune zone = tout).
+ *
+ * - `period`   : messages dans une plage de dates.
+ * - `author`   : messages dont le nom d'auteur contient `query`.
+ * - `content`  : messages dont le texte contient `query`.
+ * - `mention`  : messages mentionnant un utilisateur dont le nom contient `query`.
+ * - `pinned`/`attachment`/`link` : messages épinglés / avec pièce jointe / avec lien.
+ * - `manual`   : messages choisis un par un dans un salon donné.
  */
-export interface MessageFilters {
-  /** Sous-chaîne recherchée dans le contenu (insensible à la casse). */
-  content?: string;
-  /** Sous-chaîne du nom d'auteur (username ou nom affiché). */
-  author?: string;
-  /** Sous-chaîne d'un nom d'utilisateur mentionné. */
-  mention?: string;
-  /** Ne garder que les messages épinglés. */
-  pinnedOnly?: boolean;
-  /** Ne garder que les messages ayant au moins une pièce jointe. */
-  hasAttachment?: boolean;
-  /** Ne garder que les messages contenant un lien (http/https). */
-  hasLink?: boolean;
+export type SelectionZone =
+  | { kind: 'period'; afterMs?: number; beforeMs?: number }
+  | { kind: 'author'; query: string }
+  | { kind: 'content'; query: string }
+  | { kind: 'mention'; query: string }
+  | { kind: 'pinned' }
+  | { kind: 'attachment' }
+  | { kind: 'link' }
+  | { kind: 'manual'; channelId: Snowflake; ids: Snowflake[] };
+
+/** Vrai si le message satisfait UNE zone de sélection donnée. */
+export function zoneMatches(
+  zone: SelectionZone,
+  m: RawMessage,
+  channelId: string,
+): boolean {
+  switch (zone.kind) {
+    case 'period': {
+      const t = Date.parse(m.timestamp);
+      if (zone.afterMs !== undefined && t < zone.afterMs) return false;
+      if (zone.beforeMs !== undefined && t > zone.beforeMs) return false;
+      return true;
+    }
+    case 'author': {
+      const q = zone.query.trim().toLowerCase();
+      if (!q) return false;
+      return `${m.author.username} ${m.author.global_name ?? ''}`
+        .toLowerCase().includes(q);
+    }
+    case 'content': {
+      const q = zone.query.trim().toLowerCase();
+      return q ? m.content.toLowerCase().includes(q) : false;
+    }
+    case 'mention': {
+      const q = zone.query.trim().toLowerCase();
+      if (!q) return false;
+      return (m.mentions ?? []).some((u) =>
+        `${u.username} ${u.global_name ?? ''}`.toLowerCase().includes(q));
+    }
+    case 'pinned':
+      return m.pinned === true;
+    case 'attachment':
+      return m.attachments.length > 0;
+    case 'link':
+      return /https?:\/\//i.test(m.content);
+    case 'manual':
+      return zone.channelId === channelId && zone.ids.includes(m.id);
+  }
 }
 
-/** Vrai si au moins un filtre de `f` est actif. */
-export function hasActiveFilter(f?: MessageFilters): boolean {
-  if (!f) return false;
-  return Boolean(
-    f.content?.trim() || f.author?.trim() || f.mention?.trim()
-    || f.pinnedOnly || f.hasAttachment || f.hasLink,
-  );
+/**
+ * Vrai si le message appartient à l'UNION des zones de sélection.
+ * Aucune zone → tout passe.
+ */
+export function messageMatchesZones(
+  m: RawMessage,
+  zones: SelectionZone[],
+  channelId: string,
+): boolean {
+  if (zones.length === 0) return true;
+  return zones.some((z) => zoneMatches(z, m, channelId));
 }
 
 /** Ce que l'utilisateur a choisi d'exporter (modes simple/avancé). */
@@ -81,11 +127,8 @@ export interface ExportOptions {
    * Coûteux (un appel API par emoji distinct) — désactivé par défaut.
    */
   includeReactionUsers?: boolean;
-  /** Bornes de date optionnelles (timestamp ms). */
-  afterMs?: number;
-  beforeMs?: number;
-  /** Filtres de contenu optionnels (auteur, mot-clé, mentions, type…). */
-  filters?: MessageFilters;
+  /** Zones de sélection. Vide = tout le salon ; sinon = union des zones. */
+  zones: SelectionZone[];
 }
 
 /** Un export. */

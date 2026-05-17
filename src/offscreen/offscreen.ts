@@ -37,11 +37,11 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
     case 'load-channels':
       return { ok: true, channels: await controller.loadChannels(command.guildId) };
     case 'enqueue': {
-      const extras: EnqueueExtras = { includeThreads: command.includeThreads };
+      const extras: EnqueueExtras = {
+        includeThreads: command.includeThreads,
+        zones: command.zones,
+      };
       if (command.includeReactionUsers) extras.includeReactionUsers = true;
-      if (command.afterMs !== undefined) extras.afterMs = command.afterMs;
-      if (command.beforeMs !== undefined) extras.beforeMs = command.beforeMs;
-      if (command.filters) extras.filters = command.filters;
       await controller.enqueue(command.guild, command.channels, command.media, extras);
       return { ok: true, state: controller.toState() };
     }
@@ -52,7 +52,10 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
       controller.downloadZip(command.runId);
       return { ok: true };
     case 'preview':
-      return { ok: true, messages: await controller.previewChannel(command.channelId) };
+      return {
+        ok: true,
+        messages: await controller.previewChannel(command.channelId, command.before),
+      };
   }
 }
 

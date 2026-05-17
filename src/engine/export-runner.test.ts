@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CheckpointStore } from './checkpoint-store';
-import { ExportRunner, matchesFilters, planGuildExport } from './export-runner';
+import { ExportRunner, planGuildExport } from './export-runner';
 import type { DiscordApi } from './discord-api';
 import {
   ChannelType,
@@ -8,9 +8,14 @@ import {
   type RawChannel,
   type RawMessage,
 } from './types';
-import { ALL_MEDIA, type ExportOptions } from './checkpoint-types';
+import {
+  ALL_MEDIA,
+  messageMatchesZones,
+  type ExportOptions,
+  type SelectionZone,
+} from './checkpoint-types';
 
-const OPTS: ExportOptions = { includeThreads: false, media: ALL_MEDIA };
+const OPTS: ExportOptions = { includeThreads: false, media: ALL_MEDIA, zones: [] };
 
 function fakeMessage(id: string, withImage = false): RawMessage {
   return {
@@ -167,52 +172,62 @@ describe('ExportRunner', () => {
   });
 });
 
-describe('matchesFilters', () => {
+describe('messageMatchesZones', () => {
   const base = fakeMessage('1');
+  const CH = 'c1';
 
-  it('aucun filtre actif → tout passe', () => {
-    expect(matchesFilters(base)).toBe(true);
-    expect(matchesFilters(base, {})).toBe(true);
+  it('aucune zone → tout passe', () => {
+    expect(messageMatchesZones(base, [], CH)).toBe(true);
   });
 
-  it('filtre par mot-clé du contenu (insensible à la casse)', () => {
+  it('zone contenu (insensible à la casse)', () => {
     const m: RawMessage = { ...base, content: 'Hello World' };
-    expect(matchesFilters(m, { content: 'hello' })).toBe(true);
-    expect(matchesFilters(m, { content: 'absent' })).toBe(false);
+    expect(messageMatchesZones(m, [{ kind: 'content', query: 'hello' }], CH)).toBe(true);
+    expect(messageMatchesZones(m, [{ kind: 'content', query: 'absent' }], CH)).toBe(false);
   });
 
-  it('filtre par nom d\'auteur', () => {
+  it('zone auteur', () => {
     const m: RawMessage = { ...base, author: { id: 'u', username: 'SamMuselet' } };
-    expect(matchesFilters(m, { author: 'sam' })).toBe(true);
-    expect(matchesFilters(m, { author: 'bob' })).toBe(false);
+    expect(messageMatchesZones(m, [{ kind: 'author', query: 'sam' }], CH)).toBe(true);
+    expect(messageMatchesZones(m, [{ kind: 'author', query: 'bob' }], CH)).toBe(false);
   });
 
-  it('filtre par utilisateur mentionné', () => {
-    const m: RawMessage = { ...base, mentions: [{ id: 'u2', username: 'Alice' }] };
-    expect(matchesFilters(m, { mention: 'alice' })).toBe(true);
-    expect(matchesFilters(m, { mention: 'zoe' })).toBe(false);
+  it('zone période', () => {
+    const m: RawMessage = { ...base, timestamp: '2026-03-10T00:00:00.000Z' };
+    const inRange: SelectionZone = {
+      kind: 'period',
+      afterMs: Date.parse('2026-03-01'),
+      beforeMs: Date.parse('2026-03-20'),
+    };
+    const outRange: SelectionZone = { kind: 'period', afterMs: Date.parse('2026-04-01') };
+    expect(messageMatchesZones(m, [inRange], CH)).toBe(true);
+    expect(messageMatchesZones(m, [outRange], CH)).toBe(false);
   });
 
-  it('filtre épinglés uniquement', () => {
-    expect(matchesFilters({ ...base, pinned: true }, { pinnedOnly: true })).toBe(true);
-    expect(matchesFilters({ ...base, pinned: false }, { pinnedOnly: true })).toBe(false);
+  it('zone épinglés / pièce jointe / lien', () => {
+    expect(messageMatchesZones({ ...base, pinned: true }, [{ kind: 'pinned' }], CH)).toBe(true);
+    expect(messageMatchesZones(base, [{ kind: 'pinned' }], CH)).toBe(false);
+    expect(messageMatchesZones(fakeMessage('2', true), [{ kind: 'attachment' }], CH)).toBe(true);
+    expect(messageMatchesZones(
+      { ...base, content: 'voir https://x.com' }, [{ kind: 'link' }], CH,
+    )).toBe(true);
   });
 
-  it('filtre avec pièce jointe uniquement', () => {
-    expect(matchesFilters(fakeMessage('2', true), { hasAttachment: true })).toBe(true);
-    expect(matchesFilters(base, { hasAttachment: true })).toBe(false);
+  it('zone manuelle — limitée à son salon', () => {
+    const zone: SelectionZone = { kind: 'manual', channelId: CH, ids: ['1', '9'] };
+    expect(messageMatchesZones(base, [zone], CH)).toBe(true);
+    expect(messageMatchesZones(fakeMessage('2'), [zone], CH)).toBe(false);
+    expect(messageMatchesZones(base, [zone], 'autre-salon')).toBe(false);
   });
 
-  it('filtre avec lien uniquement', () => {
-    expect(matchesFilters({ ...base, content: 'voir https://x.com' }, { hasLink: true })).toBe(true);
-    expect(matchesFilters({ ...base, content: 'sans lien' }, { hasLink: true })).toBe(false);
-  });
-
-  it('cumule les filtres (ET logique)', () => {
-    const m: RawMessage = { ...base, content: 'hello', pinned: true };
-    expect(matchesFilters(m, { content: 'hello', pinnedOnly: true })).toBe(true);
-    expect(
-      matchesFilters({ ...m, pinned: false }, { content: 'hello', pinnedOnly: true }),
-    ).toBe(false);
+  it('union des zones (OU logique)', () => {
+    const m: RawMessage = { ...base, content: 'rien', pinned: true };
+    // ne matche pas « contenu » mais matche « épinglés » → union vraie
+    expect(messageMatchesZones(
+      m, [{ kind: 'content', query: 'absent' }, { kind: 'pinned' }], CH,
+    )).toBe(true);
+    expect(messageMatchesZones(
+      m, [{ kind: 'content', query: 'absent' }, { kind: 'link' }], CH,
+    )).toBe(false);
   });
 });
