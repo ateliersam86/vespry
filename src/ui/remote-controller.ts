@@ -8,6 +8,7 @@
 import {
   isStateBroadcast,
   type CommandResponse,
+  type EnqueueExtras,
   type QueueItemView,
   type VespryCommand,
   type VespryState,
@@ -91,18 +92,9 @@ export class RemoteController {
     guild: RawGuild,
     channels: RawChannel[],
     media: MediaSelection,
-    range: { afterMs?: number; beforeMs?: number },
-    includeThreads: boolean,
+    extras: EnqueueExtras,
   ): Promise<void> {
-    await this.send({
-      cmd: 'enqueue',
-      guild,
-      channels,
-      media,
-      includeThreads,
-      ...(range.afterMs !== undefined ? { afterMs: range.afterMs } : {}),
-      ...(range.beforeMs !== undefined ? { beforeMs: range.beforeMs } : {}),
-    });
+    await this.send({ cmd: 'enqueue', guild, channels, media, ...extras });
   }
 
   resume(runId: string): void {

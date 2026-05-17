@@ -20,7 +20,7 @@ import type {
   RunStatus,
 } from '../../engine/checkpoint-types';
 import type { RawChannel, RawGuild, RawUser } from '../../engine/types';
-import type { VespryState } from '../../messaging';
+import type { EnqueueExtras, VespryState } from '../../messaging';
 
 const MAX_LOG = 250;
 const ZERO_KINDS: Record<AssetKind, number> = {
@@ -237,16 +237,10 @@ export class VespryController {
     guild: RawGuild,
     channels: RawChannel[],
     media: MediaSelection,
-    range: { afterMs?: number; beforeMs?: number },
-    includeThreads: boolean,
+    extras: EnqueueExtras,
   ): Promise<void> {
-    const options: ExportOptions = {
-      includeThreads,
-      media,
-      ...(range.afterMs !== undefined ? { afterMs: range.afterMs } : {}),
-      ...(range.beforeMs !== undefined ? { beforeMs: range.beforeMs } : {}),
-    };
-    const expanded = includeThreads && guild.id !== '@me'
+    const options: ExportOptions = { media, ...extras };
+    const expanded = extras.includeThreads && guild.id !== '@me'
       ? await this.withThreads(guild.id, channels)
       : channels;
     const runId = await planGuildExport(this.store, guild, expanded, options);

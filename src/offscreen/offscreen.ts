@@ -10,6 +10,7 @@ import { installGlobalHandlers } from '../diagnostics';
 import {
   isExecEnvelope,
   type CommandResponse,
+  type EnqueueExtras,
   type StateBroadcast,
   type VespryCommand,
 } from '../messaging';
@@ -35,18 +36,15 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
       return { ok: true, state: controller.toState() };
     case 'load-channels':
       return { ok: true, channels: await controller.loadChannels(command.guildId) };
-    case 'enqueue':
-      await controller.enqueue(
-        command.guild,
-        command.channels,
-        command.media,
-        {
-          ...(command.afterMs !== undefined ? { afterMs: command.afterMs } : {}),
-          ...(command.beforeMs !== undefined ? { beforeMs: command.beforeMs } : {}),
-        },
-        command.includeThreads,
-      );
+    case 'enqueue': {
+      const extras: EnqueueExtras = { includeThreads: command.includeThreads };
+      if (command.includeReactionUsers) extras.includeReactionUsers = true;
+      if (command.afterMs !== undefined) extras.afterMs = command.afterMs;
+      if (command.beforeMs !== undefined) extras.beforeMs = command.beforeMs;
+      if (command.filters) extras.filters = command.filters;
+      await controller.enqueue(command.guild, command.channels, command.media, extras);
       return { ok: true, state: controller.toState() };
+    }
     case 'resume':
       controller.resume(command.runId);
       return { ok: true };

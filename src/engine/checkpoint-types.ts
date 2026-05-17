@@ -43,6 +43,34 @@ export const ALL_MEDIA: MediaSelection = {
   files: true,
 };
 
+/**
+ * Filtres de contenu — appliqués côté client à chaque message récupéré.
+ * Tout champ vide/absent = filtre inactif. Plusieurs filtres se cumulent (ET).
+ */
+export interface MessageFilters {
+  /** Sous-chaîne recherchée dans le contenu (insensible à la casse). */
+  content?: string;
+  /** Sous-chaîne du nom d'auteur (username ou nom affiché). */
+  author?: string;
+  /** Sous-chaîne d'un nom d'utilisateur mentionné. */
+  mention?: string;
+  /** Ne garder que les messages épinglés. */
+  pinnedOnly?: boolean;
+  /** Ne garder que les messages ayant au moins une pièce jointe. */
+  hasAttachment?: boolean;
+  /** Ne garder que les messages contenant un lien (http/https). */
+  hasLink?: boolean;
+}
+
+/** Vrai si au moins un filtre de `f` est actif. */
+export function hasActiveFilter(f?: MessageFilters): boolean {
+  if (!f) return false;
+  return Boolean(
+    f.content?.trim() || f.author?.trim() || f.mention?.trim()
+    || f.pinnedOnly || f.hasAttachment || f.hasLink,
+  );
+}
+
 /** Ce que l'utilisateur a choisi d'exporter (modes simple/avancé). */
 export interface ExportOptions {
   includeThreads: boolean;
@@ -56,6 +84,8 @@ export interface ExportOptions {
   /** Bornes de date optionnelles (timestamp ms). */
   afterMs?: number;
   beforeMs?: number;
+  /** Filtres de contenu optionnels (auteur, mot-clé, mentions, type…). */
+  filters?: MessageFilters;
 }
 
 /** Un export. */

@@ -7,9 +7,14 @@
  */
 import { type ComponentChildren, type JSX } from 'preact';
 import { useEffect, useMemo, useReducer, useState } from 'preact/hooks';
-import { ALL_MEDIA, type MediaSelection } from '../../engine/checkpoint-types';
+import {
+  ALL_MEDIA,
+  hasActiveFilter,
+  type MediaSelection,
+  type MessageFilters,
+} from '../../engine/checkpoint-types';
 import { ChannelType, type RawChannel, type RawGuild } from '../../engine/types';
-import type { QueueItemView } from '../../messaging';
+import type { EnqueueExtras, QueueItemView } from '../../messaging';
 import type { RemoteController } from '../../ui/remote-controller';
 import { t } from '../../ui/i18n';
 import { getVersion } from '../../version';
@@ -40,6 +45,24 @@ function guildIconUrl(g: RawGuild): string | null {
   if (!g.icon) return null;
   const ext = g.icon.startsWith('a_') ? 'gif' : 'png';
   return `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.${ext}?size=64`;
+}
+
+/** Ligne case à cocher + libellé (options, filtres booléens). */
+function CheckRow({
+  on,
+  onToggle,
+  label,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  label: string;
+}): JSX.Element {
+  return (
+    <div class="v-checkrow" onClick={onToggle}>
+      <span class={`v-cbx ${on ? 'on' : ''}`}>{on ? <IconCheck /> : null}</span>
+      {label}
+    </div>
+  );
 }
 
 const EXPORTABLE = new Set<number>([
@@ -109,6 +132,14 @@ export function Overlay({
   const [search, setSearch] = useState('');
   const [minimized, setMinimized] = useState(false);
   const [includeThreads, setIncludeThreads] = useState(true);
+  // Filtres de contenu (au moins la parité Discrub).
+  const [fContent, setFContent] = useState('');
+  const [fAuthor, setFAuthor] = useState('');
+  const [fMention, setFMention] = useState('');
+  const [fPinned, setFPinned] = useState(false);
+  const [fAttachment, setFAttachment] = useState(false);
+  const [fLink, setFLink] = useState(false);
+  const [reactionUsers, setReactionUsers] = useState(false);
   const [view, setView] = useState<'export' | 'credits'>('export');
   const [theme, setTheme] = useState<ThemePref>('dark');
 
@@ -185,10 +216,19 @@ export function Overlay({
   function enqueue(): void {
     if (!activeGuild || selected.size === 0) return;
     const picked = channels.filter((c) => selected.has(c.id));
-    const range: { afterMs?: number; beforeMs?: number } = {};
-    if (afterDate) range.afterMs = Date.parse(afterDate);
-    if (beforeDate) range.beforeMs = Date.parse(beforeDate) + 86_399_999;
-    void controller.enqueue(activeGuild, picked, media, range, includeThreads);
+    const extras: EnqueueExtras = { includeThreads };
+    if (afterDate) extras.afterMs = Date.parse(afterDate);
+    if (beforeDate) extras.beforeMs = Date.parse(beforeDate) + 86_399_999;
+    if (reactionUsers) extras.includeReactionUsers = true;
+    const filters: MessageFilters = {};
+    if (fContent.trim()) filters.content = fContent.trim();
+    if (fAuthor.trim()) filters.author = fAuthor.trim();
+    if (fMention.trim()) filters.mention = fMention.trim();
+    if (fPinned) filters.pinnedOnly = true;
+    if (fAttachment) filters.hasAttachment = true;
+    if (fLink) filters.hasLink = true;
+    if (hasActiveFilter(filters)) extras.filters = filters;
+    void controller.enqueue(activeGuild, picked, media, extras);
     setSelected(new Set());
     setFocus(null);
   }
@@ -414,16 +454,58 @@ export function Overlay({
               </div>
             </div>
             <div class="v-field">
-              <div
-                class="v-crow"
-                style="padding:6px 0;color:var(--text)"
-                onClick={() => setIncludeThreads(!includeThreads)}
-              >
-                <span class={`v-cbx ${includeThreads ? 'on' : ''}`}>
-                  {includeThreads ? <IconCheck /> : null}
-                </span>
-                {t('overlay.include_threads')}
+              <label>{t('filter.section')}</label>
+              <div class="v-filter-inputs">
+                <input
+                  class="v-input"
+                  type="text"
+                  placeholder={t('filter.author')}
+                  value={fAuthor}
+                  onInput={(e) => setFAuthor((e.target as HTMLInputElement).value)}
+                />
+                <input
+                  class="v-input"
+                  type="text"
+                  placeholder={t('filter.content')}
+                  value={fContent}
+                  onInput={(e) => setFContent((e.target as HTMLInputElement).value)}
+                />
+                <input
+                  class="v-input"
+                  type="text"
+                  placeholder={t('filter.mention')}
+                  value={fMention}
+                  onInput={(e) => setFMention((e.target as HTMLInputElement).value)}
+                />
               </div>
+              <CheckRow
+                on={fPinned}
+                onToggle={() => setFPinned(!fPinned)}
+                label={t('filter.pinned')}
+              />
+              <CheckRow
+                on={fAttachment}
+                onToggle={() => setFAttachment(!fAttachment)}
+                label={t('filter.has_attachment')}
+              />
+              <CheckRow
+                on={fLink}
+                onToggle={() => setFLink(!fLink)}
+                label={t('filter.has_link')}
+              />
+            </div>
+            <div class="v-field">
+              <label>{t('filter.options')}</label>
+              <CheckRow
+                on={includeThreads}
+                onToggle={() => setIncludeThreads(!includeThreads)}
+                label={t('overlay.include_threads')}
+              />
+              <CheckRow
+                on={reactionUsers}
+                onToggle={() => setReactionUsers(!reactionUsers)}
+                label={t('filter.reaction_users')}
+              />
             </div>
             <div class="v-hint">
               {selected.size === 0

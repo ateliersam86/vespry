@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CheckpointStore } from './checkpoint-store';
-import { ExportRunner, planGuildExport } from './export-runner';
+import { ExportRunner, matchesFilters, planGuildExport } from './export-runner';
 import type { DiscordApi } from './discord-api';
 import {
   ChannelType,
@@ -164,5 +164,55 @@ describe('ExportRunner', () => {
     const msgs: RawMessage[] = [];
     await store.forEachMessage(runId, 'c1', (sm) => msgs.push(sm.message));
     expect(msgs[0]?.reactions?.[0]?.users).toHaveLength(2);
+  });
+});
+
+describe('matchesFilters', () => {
+  const base = fakeMessage('1');
+
+  it('aucun filtre actif → tout passe', () => {
+    expect(matchesFilters(base)).toBe(true);
+    expect(matchesFilters(base, {})).toBe(true);
+  });
+
+  it('filtre par mot-clé du contenu (insensible à la casse)', () => {
+    const m: RawMessage = { ...base, content: 'Hello World' };
+    expect(matchesFilters(m, { content: 'hello' })).toBe(true);
+    expect(matchesFilters(m, { content: 'absent' })).toBe(false);
+  });
+
+  it('filtre par nom d\'auteur', () => {
+    const m: RawMessage = { ...base, author: { id: 'u', username: 'SamMuselet' } };
+    expect(matchesFilters(m, { author: 'sam' })).toBe(true);
+    expect(matchesFilters(m, { author: 'bob' })).toBe(false);
+  });
+
+  it('filtre par utilisateur mentionné', () => {
+    const m: RawMessage = { ...base, mentions: [{ id: 'u2', username: 'Alice' }] };
+    expect(matchesFilters(m, { mention: 'alice' })).toBe(true);
+    expect(matchesFilters(m, { mention: 'zoe' })).toBe(false);
+  });
+
+  it('filtre épinglés uniquement', () => {
+    expect(matchesFilters({ ...base, pinned: true }, { pinnedOnly: true })).toBe(true);
+    expect(matchesFilters({ ...base, pinned: false }, { pinnedOnly: true })).toBe(false);
+  });
+
+  it('filtre avec pièce jointe uniquement', () => {
+    expect(matchesFilters(fakeMessage('2', true), { hasAttachment: true })).toBe(true);
+    expect(matchesFilters(base, { hasAttachment: true })).toBe(false);
+  });
+
+  it('filtre avec lien uniquement', () => {
+    expect(matchesFilters({ ...base, content: 'voir https://x.com' }, { hasLink: true })).toBe(true);
+    expect(matchesFilters({ ...base, content: 'sans lien' }, { hasLink: true })).toBe(false);
+  });
+
+  it('cumule les filtres (ET logique)', () => {
+    const m: RawMessage = { ...base, content: 'hello', pinned: true };
+    expect(matchesFilters(m, { content: 'hello', pinnedOnly: true })).toBe(true);
+    expect(
+      matchesFilters({ ...m, pinned: false }, { content: 'hello', pinnedOnly: true }),
+    ).toBe(false);
   });
 });

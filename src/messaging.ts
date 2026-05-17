@@ -9,7 +9,7 @@
  *
  * Le moteur d'export vit dans l'offscreen document (tab-indépendant).
  */
-import type { MediaSelection } from './engine/checkpoint-types';
+import type { MediaSelection, MessageFilters } from './engine/checkpoint-types';
 import type { RawChannel, RawGuild } from './engine/types';
 
 // --- bridge MAIN → ISOLATED (capture du jeton) ---
@@ -67,11 +67,25 @@ export type VespryCommand =
       channels: RawChannel[];
       media: MediaSelection;
       includeThreads: boolean;
+      includeReactionUsers?: boolean;
       afterMs?: number;
       beforeMs?: number;
+      filters?: MessageFilters;
     }
   | { cmd: 'resume'; runId: string }
   | { cmd: 'download'; runId: string };
+
+/**
+ * Paramètres d'un export passés à `enqueue`, hors guild/channels/media.
+ * Bundle partagé par le RemoteController (vue) et le VespryController (moteur).
+ */
+export interface EnqueueExtras {
+  includeThreads: boolean;
+  includeReactionUsers?: boolean;
+  afterMs?: number;
+  beforeMs?: number;
+  filters?: MessageFilters;
+}
 
 /** Réponse à une commande. `data` selon la commande. */
 export interface CommandResponse {

@@ -10,11 +10,13 @@
  */
 import type { DiscordApi } from './discord-api';
 import type { CheckpointStore } from './checkpoint-store';
+import { hasActiveFilter } from './checkpoint-types';
 import type {
   AssetKind,
   ChannelProgress,
   ExportOptions,
   ExportRun,
+  MessageFilters,
   RunStatus,
   StoredAsset,
   StoredMessage,
@@ -59,6 +61,36 @@ export interface RunnerEvents {
   onLog?: (e: RunnerLogEvent) => void;
   onPaused?: (reason: string) => void;
   onDone?: (status: RunStatus) => void;
+}
+
+/**
+ * Vrai si le message satisfait TOUS les filtres de contenu actifs.
+ * Filtrage côté client — exporté pour les tests.
+ */
+export function matchesFilters(m: RawMessage, f?: MessageFilters): boolean {
+  if (!f) return true;
+
+  const content = f.content?.trim().toLowerCase();
+  if (content && !m.content.toLowerCase().includes(content)) return false;
+
+  const author = f.author?.trim().toLowerCase();
+  if (author) {
+    const name = `${m.author.username} ${m.author.global_name ?? ''}`.toLowerCase();
+    if (!name.includes(author)) return false;
+  }
+
+  const mention = f.mention?.trim().toLowerCase();
+  if (mention) {
+    const hit = (m.mentions ?? []).some((u) =>
+      `${u.username} ${u.global_name ?? ''}`.toLowerCase().includes(mention));
+    if (!hit) return false;
+  }
+
+  if (f.pinnedOnly && !m.pinned) return false;
+  if (f.hasAttachment && m.attachments.length === 0) return false;
+  if (f.hasLink && !/https?:\/\//i.test(m.content)) return false;
+
+  return true;
 }
 
 /** Crée le run + les enregistrements de salon. Renvoie l'id du run. */
@@ -207,7 +239,7 @@ export class ExportRunner {
 
       if (batch.length === 0) break;
 
-      const kept = this.filterByDate(batch, run.options);
+      const kept = this.filterMessages(batch, run.options);
       await this.persistBatch(run, channel, kept);
       count += kept.length;
 
@@ -332,14 +364,15 @@ export class ExportRunner {
     return false;
   }
 
-  /** Garde les messages plus récents que `afterMs` et plus vieux que `beforeMs`. */
-  private filterByDate(batch: RawMessage[], opts: ExportOptions): RawMessage[] {
-    if (opts.afterMs === undefined && opts.beforeMs === undefined) return batch;
+  /** Applique les bornes de date ET les filtres de contenu à un lot. */
+  private filterMessages(batch: RawMessage[], opts: ExportOptions): RawMessage[] {
+    const hasDate = opts.afterMs !== undefined || opts.beforeMs !== undefined;
+    if (!hasDate && !hasActiveFilter(opts.filters)) return batch;
     return batch.filter((m) => {
       const t = Date.parse(m.timestamp);
       if (opts.afterMs !== undefined && t < opts.afterMs) return false;
       if (opts.beforeMs !== undefined && t > opts.beforeMs) return false;
-      return true;
+      return matchesFilters(m, opts.filters);
     });
   }
 
