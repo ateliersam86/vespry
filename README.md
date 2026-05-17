@@ -21,6 +21,24 @@ fermé, plante, coupure — il reprend depuis le dernier point enregistré au li
 de tout recommencer. L'export tourne dans un contexte séparé de l'onglet
 Discord : tu peux fermer l'onglet, il continue.
 
+## Vespry face aux autres outils
+
+| | Vespry | DiscordChatExporter | Discrub | Extensions freemium |
+|---|:--:|:--:|:--:|:--:|
+| Type | extension | appli desktop | extension | extension |
+| Reprise après interruption | ✅ | ❌ | ❌ | ❌ |
+| Formats : JSON / HTML / CSV / TXT | ✅ | ✅ | JSON/HTML/CSV | variable |
+| Langues de l'interface | 15 | anglais | anglais | anglais |
+| Gratuit, sans quota | ✅ | ✅ | ✅ | ❌ quotas |
+| Open source | ✅ | ✅ | ✅ | ❌ |
+| Serveurs, forums, threads, DMs, groupes | ✅ | ✅ | ✅ | partiel |
+| Téléchargement des médias | ✅ | ✅ | ✅ | ✅ |
+| Aperçu avant export | ✅ | ❌ | ✅ | partiel |
+
+Vespry est le seul à reprendre un export interrompu sans tout recommencer, et le
+seul traduit (15 langues). Il ne supprime pas de messages : c'est un outil
+d'export, pas de modération — et c'est volontaire.
+
 ## Fonctionnalités
 
 ### Interface façon Discord
@@ -28,7 +46,7 @@ Discord : tu peux fermer l'onglet, il continue.
 L'extension s'ouvre par-dessus Discord. À gauche, tes serveurs et tes
 conversations privées ; au centre, l'aperçu des messages ; à droite, les
 réglages de l'export. Rien à apprendre — c'est la disposition que tu connais
-déjà.
+déjà. Thème sombre ou clair, au choix.
 
 ### Zones de sélection
 
@@ -42,6 +60,18 @@ listées sous forme d'étiquettes que tu peux retirer d'un clic. Sans aucune
 zone, le salon entier est exporté.
 
 ![Zones de sélection — filtre par auteur](docs/screenshots/zones.png)
+
+### Quatre formats d'export
+
+Tu choisis dans quels formats générer l'export — un seul, ou plusieurs à la
+fois :
+
+- **JSON** — structuré et fidèle, idéal pour archiver ou analyser.
+- **HTML** — une page lisible façon Discord, ouvrable dans un navigateur.
+- **CSV** — pour tableur (Excel, LibreOffice).
+- **TXT** — texte brut, le plus léger.
+
+![Le rendu de l'export HTML](docs/screenshots/html-export.png)
 
 ### Aperçu des messages
 
@@ -70,6 +100,8 @@ couvert par les tests automatiques.
 Un clic sur l'icône de l'extension : l'état de la session, les exports en
 cours, l'accès rapide à Discord.
 
+![Le popup de l'extension](docs/screenshots/popup.png)
+
 ## Installation
 
 En attendant la publication sur le Chrome Web Store :
@@ -83,12 +115,9 @@ En attendant la publication sur le Chrome Web Store :
 
 L'export est une archive `.zip` autonome :
 
-- les messages en JSON structuré, un fichier par salon ;
+- les messages, dans les formats choisis, un fichier par salon ;
 - les médias téléchargés, rangés dans des dossiers ;
 - un `INDEX.md` qui récapitule le contenu.
-
-Le format est lisible tel quel, et propre à archiver, relire, ou donner à
-analyser à un outil tiers.
 
 ## Soutenir le projet
 

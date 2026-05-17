@@ -30,6 +30,11 @@ function mediaHref(url: string, urlToPath: Map<string, string>): string | null {
   return p ? `../${p}` : null;
 }
 
+/** Chemin local si le média a été téléchargé, sinon l'URL d'origine (CDN). */
+function mediaOrCdn(url: string, urlToPath: Map<string, string>): string {
+  return mediaHref(url, urlToPath) ?? url;
+}
+
 /** Horodatage lisible, stable quelle que soit la locale du lecteur. */
 function fmtDate(iso: string): string {
   const d = new Date(iso);
@@ -44,6 +49,19 @@ function fmtDate(iso: string): string {
 /** Nom affichable d'un auteur. */
 function authorName(m: RawMessage): string {
   return m.author.global_name ?? m.author.username;
+}
+
+/** Vrai si `edited_timestamp` indique un message modifié. */
+function isEdited(m: RawMessage): boolean {
+  return Boolean(m.edited_timestamp);
+}
+
+/**
+ * Type Discord de message « normal » : 0 = standard, 19 = réponse.
+ * Tout le reste (arrivée de membre, boost, épinglage…) est un message système.
+ */
+function isSystem(m: RawMessage): boolean {
+  return m.type !== 0 && m.type !== 19;
 }
 
 /**
@@ -63,6 +81,12 @@ function reactionText(r: RawReaction): string {
   return `${r.emoji.name ?? '?'} ×${r.count}`;
 }
 
+/** URL CDN d'un sticker selon son format (3 = Lottie, non affichable). */
+function stickerUrl(id: string, formatType: number): string | null {
+  if (formatType === 3) return null;
+  return `https://media.discordapp.net/stickers/${id}.${formatType === 4 ? 'gif' : 'png'}`;
+}
+
 // ─────────────────────────── TEXTE BRUT ───────────────────────────
 
 /** Exporte un salon en texte brut. */
@@ -74,13 +98,27 @@ export function toTxt(ctx: ExportContext, messages: RawMessage[]): string {
     '',
   ];
   for (const m of messages) {
-    out.push(`[${fmtDate(m.timestamp)}] ${authorName(m)}`);
+    if (isSystem(m)) {
+      out.push(`--- [système] ${humanize(m.content) || `type ${m.type}`} ---`, '');
+      continue;
+    }
+    const edited = isEdited(m) ? ' (modifié)' : '';
+    out.push(`[${fmtDate(m.timestamp)}] ${authorName(m)}${edited}`);
+    // Message cité en réponse.
+    const ref = m.referenced_message;
+    if (ref) {
+      const snippet = humanize(ref.content).split('\n')[0] ?? '';
+      out.push(`  ↪ en réponse à ${authorName(ref)} : ${snippet.slice(0, 80)}`);
+    }
     if (m.content.trim()) {
       for (const line of humanize(m.content).split('\n')) out.push(line);
     }
     for (const a of m.attachments) {
       const local = mediaHref(a.url, ctx.urlToPath);
       out.push(`  [pièce jointe : ${a.filename}${local ? ` → ${local}` : ''}]`);
+    }
+    for (const s of m.sticker_items ?? []) {
+      out.push(`  [sticker : ${s.name}]`);
     }
     for (const e of m.embeds) {
       if (e.title || e.description) {
@@ -113,18 +151,21 @@ function attachmentsCell(m: RawMessage, urlToPath: Map<string, string>): string 
 /**
  * Exporte un salon en CSV. Colonnes proches de DiscordChatExporter pour la
  * compatibilité : id auteur, auteur, date ISO, contenu, pièces jointes,
- * réactions.
+ * réactions, et un indicateur « édité ».
  */
-export function toCsv(_ctx: ExportContext, messages: RawMessage[]): string {
-  const header = ['AuthorID', 'Author', 'Date', 'Content', 'Attachments', 'Reactions'];
+export function toCsv(ctx: ExportContext, messages: RawMessage[]): string {
+  const header = [
+    'AuthorID', 'Author', 'Date', 'Edited', 'Content', 'Attachments', 'Reactions',
+  ];
   const rows = [header.join(',')];
   for (const m of messages) {
     rows.push([
       csvCell(m.author.id),
       csvCell(authorName(m)),
       csvCell(m.timestamp),
+      csvCell(isEdited(m) ? 'yes' : ''),
       csvCell(humanize(m.content)),
-      csvCell(attachmentsCell(m, _ctx.urlToPath)),
+      csvCell(attachmentsCell(m, ctx.urlToPath)),
       csvCell((m.reactions ?? []).map(reactionText).join(' ')),
     ].join(','));
   }
@@ -144,8 +185,8 @@ function esc(text: string): string {
 
 /**
  * Rend le contenu d'un message en HTML : échappement d'abord, puis markdown
- * Discord minimal (gras, italique, barré, code, citations, liens), enfin les
- * sauts de ligne. L'ordre échappement → markdown évite toute injection.
+ * Discord minimal (gras, italique, barré, code, liens), enfin les sauts de
+ * ligne. L'ordre échappement → markdown évite toute injection.
  */
 function renderContent(raw: string): string {
   let s = esc(humanize(raw));
@@ -170,7 +211,7 @@ function avatarChip(m: RawMessage): string {
 
 /** Une pièce jointe en HTML : image inline, sinon lien. */
 function renderAttachment(a: RawAttachment, urlToPath: Map<string, string>): string {
-  const href = mediaHref(a.url, urlToPath) ?? a.url;
+  const href = mediaOrCdn(a.url, urlToPath);
   const isImage = (a.content_type ?? '').startsWith('image/')
     || /\.(png|jpe?g|gif|webp|avif)(\?|$)/i.test(a.url);
   if (isImage) {
@@ -179,14 +220,63 @@ function renderAttachment(a: RawAttachment, urlToPath: Map<string, string>): str
   return `<a class="att-file" href="${esc(href)}">📎 ${esc(a.filename)}</a>`;
 }
 
-/** Une carte d'embed simplifiée. */
-function renderEmbed(e: RawEmbed): string {
-  const parts: string[] = ['<div class="embed">'];
-  if (e.author?.name) parts.push(`<div class="embed-author">${esc(e.author.name)}</div>`);
-  if (e.title) parts.push(`<div class="embed-title">${esc(e.title)}</div>`);
-  if (e.description) parts.push(`<div class="embed-desc">${renderContent(e.description)}</div>`);
+/** Un sticker en HTML (Lottie ignoré, faute d'image statique). */
+function renderSticker(
+  s: { id: string; name: string; format_type: number },
+  urlToPath: Map<string, string>,
+): string {
+  const cdn = stickerUrl(s.id, s.format_type);
+  if (!cdn) return `<span class="sticker-name">[sticker : ${esc(s.name)}]</span>`;
+  return `<img class="sticker" src="${esc(mediaOrCdn(cdn, urlToPath))}" alt="${esc(s.name)}" title="${esc(s.name)}" loading="lazy">`;
+}
+
+/** Carte d'embed complète : couleur, auteur, titre, description, champs, image, footer. */
+function renderEmbed(e: RawEmbed, urlToPath: Map<string, string>): string {
+  const color = typeof e.color === 'number'
+    ? `#${e.color.toString(16).padStart(6, '0')}`
+    : '#6c5ce0';
+  const parts: string[] = [`<div class="embed" style="border-color:${color}">`];
+  if (e.author?.name) {
+    parts.push(`<div class="embed-author">${esc(e.author.name)}</div>`);
+  }
+  if (e.title) {
+    parts.push(
+      e.url
+        ? `<div class="embed-title"><a href="${esc(e.url)}" rel="noopener">${esc(e.title)}</a></div>`
+        : `<div class="embed-title">${esc(e.title)}</div>`,
+    );
+  }
+  if (e.description) {
+    parts.push(`<div class="embed-desc">${renderContent(e.description)}</div>`);
+  }
+  if (e.fields && e.fields.length > 0) {
+    parts.push('<div class="embed-fields">');
+    for (const f of e.fields) {
+      parts.push(
+        `<div class="embed-field"><div class="embed-fn">${esc(f.name)}</div>`
+        + `<div class="embed-fv">${renderContent(f.value)}</div></div>`,
+      );
+    }
+    parts.push('</div>');
+  }
+  const img = e.image?.url ?? e.thumbnail?.url;
+  if (img) {
+    parts.push(`<img class="embed-img" src="${esc(mediaOrCdn(img, urlToPath))}" alt="" loading="lazy">`);
+  }
+  if (e.footer?.text) {
+    parts.push(`<div class="embed-footer">${esc(e.footer.text)}</div>`);
+  }
   parts.push('</div>');
   return parts.join('');
+}
+
+/** Aperçu du message cité par une réponse. */
+function renderReply(ref: RawMessage): string {
+  const snippet = humanize(ref.content).replace(/\n/g, ' ').slice(0, 120);
+  return (
+    `<div class="reply"><span class="reply-author">${esc(authorName(ref))}</span>`
+    + `<span class="reply-text">${esc(snippet)}</span></div>`
+  );
 }
 
 /** Bandeau des réactions d'un message. */
@@ -206,6 +296,7 @@ const HTML_STYLE = `
   .wrap { max-width: 860px; margin: 0 auto; padding: 24px 18px 80px; }
   h1 { font-size: 20px; margin: 0 0 4px; }
   .sub { color: #9991b3; font-size: 13px; margin-bottom: 24px; }
+  .sys { text-align: center; color: #9991b3; font-size: 13px; padding: 6px 0; }
   .msg { display: flex; gap: 14px; padding: 6px 0; }
   .msg.grouped { padding-top: 0; }
   .av { width: 40px; height: 40px; border-radius: 50%; flex: none;
@@ -216,62 +307,99 @@ const HTML_STYLE = `
   .head { display: flex; align-items: baseline; gap: 8px; }
   .author { font-weight: 600; color: #fff; }
   .time { font-size: 12px; color: #9991b3; }
+  .edited { font-size: 11px; color: #9991b3; font-style: italic; }
   .content { white-space: normal; word-wrap: break-word; }
   .content a { color: #ab9ff0; }
   pre { background: #0f0c16; padding: 8px 10px; border-radius: 6px;
     overflow-x: auto; margin: 4px 0; }
   code { background: #0f0c16; padding: 1px 5px; border-radius: 4px; }
+  .reply { display: flex; gap: 6px; font-size: 13px; color: #9991b3;
+    margin-bottom: 2px; padding-left: 8px; border-left: 2px solid #4a4458; }
+  .reply-author { font-weight: 600; color: #ab9ff0; }
+  .reply-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .att-img { max-width: 380px; max-height: 300px; border-radius: 8px;
     margin-top: 6px; display: block; }
   .att-file { display: inline-block; margin-top: 4px; padding: 6px 10px;
     background: #2a2536; border-radius: 6px; color: #ab9ff0;
     text-decoration: none; }
-  .embed { border-left: 3px solid #6c5ce0; background: #221d2e;
-    padding: 8px 12px; border-radius: 4px; margin-top: 6px; }
+  .sticker { max-width: 160px; max-height: 160px; margin-top: 6px; display: block; }
+  .sticker-name { color: #9991b3; font-size: 13px; }
+  .embed { border-left: 4px solid #6c5ce0; background: #221d2e;
+    padding: 8px 12px; border-radius: 4px; margin-top: 6px; max-width: 520px; }
   .embed-author { font-size: 12px; color: #9991b3; }
   .embed-title { font-weight: 600; margin: 2px 0; }
+  .embed-title a { color: #ab9ff0; text-decoration: none; }
   .embed-desc { font-size: 14px; }
+  .embed-fields { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .embed-field { min-width: 140px; }
+  .embed-fn { font-weight: 600; font-size: 13px; }
+  .embed-fv { font-size: 13px; color: #c8c2da; }
+  .embed-img { max-width: 100%; border-radius: 6px; margin-top: 6px; }
+  .embed-footer { font-size: 12px; color: #9991b3; margin-top: 6px; }
   .reactions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .react { background: #2a2536; border-radius: 999px; padding: 2px 9px;
     font-size: 13px; }
 `;
 
+/** Rend un message système : ligne centrée et discrète. */
+function renderSystemMessage(m: RawMessage): string {
+  const label = humanize(m.content).trim() || `message système (type ${m.type})`;
+  return `<div class="sys">— ${esc(label)} · ${esc(fmtDate(m.timestamp))} —</div>`;
+}
+
+/** Rend un message normal (par défaut ou réponse). */
+function renderMessage(m: RawMessage, grouped: boolean, ctx: ExportContext): string {
+  const parts: string[] = [`<div class="msg${grouped ? ' grouped' : ''}">`];
+  parts.push(grouped ? '<div class="av spacer"></div>' : avatarChip(m));
+  parts.push('<div class="body">');
+  if (m.referenced_message) parts.push(renderReply(m.referenced_message));
+  if (!grouped) {
+    const edited = isEdited(m) ? ' <span class="edited">(modifié)</span>' : '';
+    parts.push(
+      `<div class="head"><span class="author">${esc(authorName(m))}</span>`
+      + `<span class="time">${esc(fmtDate(m.timestamp))}</span>${edited}</div>`,
+    );
+  }
+  if (m.content.trim()) {
+    parts.push(`<div class="content">${renderContent(m.content)}</div>`);
+  }
+  for (const a of m.attachments) parts.push(renderAttachment(a, ctx.urlToPath));
+  for (const s of m.sticker_items ?? []) parts.push(renderSticker(s, ctx.urlToPath));
+  for (const e of m.embeds) {
+    if (e.title || e.description || e.author?.name || e.image?.url) {
+      parts.push(renderEmbed(e, ctx.urlToPath));
+    }
+  }
+  if (m.reactions && m.reactions.length > 0) {
+    parts.push(renderReactions(m.reactions));
+  }
+  parts.push('</div></div>');
+  return parts.join('');
+}
+
 /**
  * Exporte un salon en page HTML autonome, façon Discord. Les messages
- * consécutifs d'un même auteur (sous 7 minutes) sont groupés visuellement.
+ * consécutifs d'un même auteur (sous 7 minutes) sont groupés visuellement ;
+ * les messages système coupent le groupement.
  */
 export function toHtml(ctx: ExportContext, messages: RawMessage[]): string {
   const blocks: string[] = [];
   for (let i = 0; i < messages.length; i += 1) {
     const m = messages[i];
     if (!m) continue;
+    if (isSystem(m)) {
+      blocks.push(renderSystemMessage(m));
+      continue;
+    }
     const prev = messages[i - 1];
     const grouped = Boolean(
       prev
+      && !isSystem(prev)
       && prev.author.id === m.author.id
+      && !m.referenced_message
       && Date.parse(m.timestamp) - Date.parse(prev.timestamp) < 7 * 60_000,
     );
-    const parts: string[] = [`<div class="msg${grouped ? ' grouped' : ''}">`];
-    parts.push(grouped ? '<div class="av spacer"></div>' : avatarChip(m));
-    parts.push('<div class="body">');
-    if (!grouped) {
-      parts.push(
-        `<div class="head"><span class="author">${esc(authorName(m))}</span>`
-        + `<span class="time">${esc(fmtDate(m.timestamp))}</span></div>`,
-      );
-    }
-    if (m.content.trim()) {
-      parts.push(`<div class="content">${renderContent(m.content)}</div>`);
-    }
-    for (const a of m.attachments) parts.push(renderAttachment(a, ctx.urlToPath));
-    for (const e of m.embeds) {
-      if (e.title || e.description || e.author?.name) parts.push(renderEmbed(e));
-    }
-    if (m.reactions && m.reactions.length > 0) {
-      parts.push(renderReactions(m.reactions));
-    }
-    parts.push('</div></div>');
-    blocks.push(parts.join(''));
+    blocks.push(renderMessage(m, grouped, ctx));
   }
   return `<!doctype html>
 <html lang="fr">
