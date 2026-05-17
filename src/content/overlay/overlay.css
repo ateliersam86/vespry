@@ -350,10 +350,22 @@
 }
 .v-side-hd {
   height: 48px; border-bottom: 1px solid var(--border); flex: none;
-  display: flex; align-items: center; padding: 0 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 0 16px;
   font: 800 12px var(--font); text-transform: uppercase; letter-spacing: .4px;
   color: var(--muted);
 }
+/* sélecteur Simple / Avancé */
+.v-modeswitch {
+  display: flex; gap: 2px; background: var(--bg3);
+  border: 1px solid var(--border); border-radius: 7px; padding: 2px;
+}
+.v-modeswitch span {
+  cursor: pointer; font: 700 10px var(--font); letter-spacing: .3px;
+  padding: 4px 9px; border-radius: 5px; color: var(--muted);
+  transition: background .12s ease, color .12s ease;
+}
+.v-modeswitch span.on { background: var(--accent); color: #fff; }
 .v-side-body { flex: 1; overflow-y: auto; padding: 16px; }
 .v-side-foot { flex: none; padding: 12px 16px; border-top: 1px solid var(--border); }
 .v-side-foot .v-btn { width: 100%; }

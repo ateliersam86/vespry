@@ -34,6 +34,8 @@ const EN: Dict = {
   'overlay.search_channels': 'Search a channel…',
   'overlay.loading': 'Loading…',
   'overlay.settings': 'Export settings',
+  'overlay.mode_simple': 'Simple',
+  'overlay.mode_advanced': 'Advanced',
   'overlay.period_label': 'Date range — leave empty = full history',
   'overlay.hint_empty':
     'Tick channels on the left, adjust media and date range, then “Add to queue”.',
@@ -219,6 +221,8 @@ const FR: Dict = {
   'overlay.search_channels': 'Rechercher un salon…',
   'overlay.loading': 'Chargement…',
   'overlay.settings': 'Réglages de l’export',
+  'overlay.mode_simple': 'Simple',
+  'overlay.mode_advanced': 'Avancé',
   'overlay.period_label': 'Période — laisser vide = tout l’historique',
   'overlay.hint_empty':
     'Coche des salons à gauche, ajuste les médias et la période, puis « Ajouter à la file ».',

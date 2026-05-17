@@ -230,6 +230,8 @@ export function Overlay({
   const [incremental, setIncremental] = useState(false);
   /** Découpage des gros salons : messages/fichier (0 = pas de découpage). */
   const [partitionSize, setPartitionSize] = useState(0);
+  /** Panneau d'export : mode avancé (options pointues visibles) ou simple. */
+  const [advanced, setAdvanced] = useState(false);
   const [view, setView] = useState<'export' | 'credits'>('export');
   const [theme, setTheme] = useState<ThemePref>('dark');
   const [credits, setCredits] = useState<Credits | null>(null);
@@ -641,7 +643,23 @@ export function Overlay({
 
         {/* panneau d'export — à droite */}
         <div class="v-side">
-          <div class="v-side-hd">{t('overlay.settings')}</div>
+          <div class="v-side-hd">
+            <span>{t('overlay.settings')}</span>
+            <div class="v-modeswitch">
+              <span
+                class={advanced ? '' : 'on'}
+                onClick={() => setAdvanced(false)}
+              >
+                {t('overlay.mode_simple')}
+              </span>
+              <span
+                class={advanced ? 'on' : ''}
+                onClick={() => setAdvanced(true)}
+              >
+                {t('overlay.mode_advanced')}
+              </span>
+            </div>
+          </div>
           <div class="v-side-body">
             <div class="v-field v-field--zones">
               <label>{t('zones.active')}</label>
@@ -745,6 +763,8 @@ export function Overlay({
                 })}
               </div>
             </div>
+            {advanced && (
+            <>
             <div class="v-field">
               <label>{t('overlay.partition_label')}</label>
               <div class="v-mchips">
@@ -816,6 +836,8 @@ export function Overlay({
                 label={t('filter.incremental')}
               />
             </div>
+            </>
+            )}
           </div>
           <div class="v-side-foot">
             <button
