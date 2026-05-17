@@ -46,6 +46,12 @@ function enrichMessage(msg: RawMessage, urlToPath: Map<string, string>): unknown
       const localPath = node?.url ? urlToPath.get(node.url) : undefined;
       if (node && localPath) patch[key] = { ...node, localPath };
     }
+    // Icônes auteur / pied de page (champ `icon_url`).
+    for (const key of ['author', 'footer'] as const) {
+      const node = e[key];
+      const localPath = node?.icon_url ? urlToPath.get(node.icon_url) : undefined;
+      if (node && localPath) patch[key] = { ...node, localPath };
+    }
     return patch;
   });
   return { ...msg, attachments, embeds };

@@ -5,8 +5,8 @@
  * dans IndexedDB (messages + curseur), médias téléchargés au fil de l'eau.
  * Tout est resumable : `run()` reprend chaque salon à son curseur.
  *
- * Tourne dans `export.html` (contexte persistant), jamais dans le service
- * worker.
+ * Tourne dans le document offscreen (contexte persistant), jamais dans le
+ * service worker.
  */
 import type { DiscordApi } from './discord-api';
 import type { CheckpointStore } from './checkpoint-store';
@@ -19,7 +19,13 @@ import type {
   StoredAsset,
   StoredMessage,
 } from './checkpoint-types';
-import { DiscordApiError, type RawChannel, type RawMessage, type Snowflake } from './types';
+import {
+  ChannelType,
+  DiscordApiError,
+  type RawChannel,
+  type RawMessage,
+  type Snowflake,
+} from './types';
 import { collectAssets } from './media';
 
 /** Au-delà de ce ratio d'occupation IndexedDB, on met le run en pause. */
@@ -148,6 +154,19 @@ export class ExportRunner {
       status: 'in_progress',
     });
     this.events.onLog?.({ type: 'channel-start', channel: channel.name });
+
+    // Un forum n'a pas de messages propres : c'est un conteneur de posts.
+    // Chaque post est un thread, exporté comme un salon à part entière
+    // (ajouté à la liste par le contrôleur quand « inclure les threads »).
+    if (channel.type === ChannelType.GUILD_FORUM) {
+      await this.store.patchChannel(run.id, channel.channelId, {
+        status: 'done',
+        messageCount: 0,
+      });
+      this.events.onLog?.({ type: 'channel-done', channel: channel.name, total: 0 });
+      return 'done';
+    }
+
     let cursor = channel.cursor;
     let count = channel.messageCount;
 
@@ -219,6 +238,12 @@ export class ExportRunner {
     channel: ChannelProgress,
     messages: RawMessage[],
   ): Promise<void> {
+    // Enrichit chaque réaction de la liste des utilisateurs (avant écriture,
+    // pour que le message persisté soit complet). Coûteux → derrière l'option.
+    if (run.options.includeReactionUsers) {
+      await this.enrichReactionUsers(channel.channelId, messages);
+    }
+
     const stored: StoredMessage[] = messages.map((m) => ({
       runId: run.id,
       channelId: channel.channelId,
@@ -251,6 +276,26 @@ export class ExportRunner {
         count,
         kind: kind as AssetKind,
       });
+    }
+  }
+
+  /**
+   * Récupère la liste des utilisateurs ayant réagi à chaque message et la
+   * pose dans `reaction.users`. Un appel API par emoji distinct — l'échec
+   * d'une réaction n'interrompt pas l'export.
+   */
+  private async enrichReactionUsers(
+    channelId: Snowflake,
+    messages: RawMessage[],
+  ): Promise<void> {
+    for (const m of messages) {
+      for (const r of m.reactions ?? []) {
+        try {
+          r.users = await this.api.getReactions(channelId, m.id, r.emoji);
+        } catch {
+          /* échec ponctuel sur une réaction — sans gravité, on continue */
+        }
+      }
     }
   }
 

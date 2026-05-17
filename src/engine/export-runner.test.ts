@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { CheckpointStore } from './checkpoint-store';
 import { ExportRunner, planGuildExport } from './export-runner';
 import type { DiscordApi } from './discord-api';
-import { DiscordApiError, type RawChannel, type RawMessage } from './types';
+import {
+  ChannelType,
+  DiscordApiError,
+  type RawChannel,
+  type RawMessage,
+} from './types';
 import { ALL_MEDIA, type ExportOptions } from './checkpoint-types';
 
 const OPTS: ExportOptions = { includeThreads: false, media: ALL_MEDIA };
@@ -112,5 +117,52 @@ describe('ExportRunner', () => {
     expect(assets).toHaveLength(1);
     expect(assets[0]?.status).toBe('done');
     expect(assets[0]?.blob).toBeInstanceOf(Blob);
+  });
+
+  it('saute un forum sans appeler getMessages (conteneur de posts)', async () => {
+    const forum: RawChannel = { id: 'f1', type: ChannelType.GUILD_FORUM, name: 'forum' };
+    const runId = await planGuildExport(store, { id: 'g1', name: 'G' }, [forum], OPTS);
+    let called = false;
+    const api = {
+      getMessages: async (): Promise<RawMessage[]> => {
+        called = true;
+        return [];
+      },
+      downloadAsset: async (): Promise<Blob | null> => null,
+    } as unknown as DiscordApi;
+
+    const status = await new ExportRunner(api, store).run(runId);
+
+    expect(status).toBe('completed');
+    expect(called).toBe(false); // un forum n'a pas de messages propres
+    expect((await store.getChannel(runId, 'f1'))?.status).toBe('done');
+  });
+
+  it('enrichit les réactions avec les utilisateurs si l\'option est activée', async () => {
+    const reacted: RawMessage = {
+      ...fakeMessage('1'),
+      reactions: [{ count: 2, emoji: { id: null, name: '👍' } }],
+    };
+    let batchCall = 0;
+    const api = {
+      getMessages: async (): Promise<RawMessage[]> => (batchCall++ === 0 ? [reacted] : []),
+      downloadAsset: async (): Promise<Blob | null> => null,
+      getReactions: async (): Promise<{ id: string; username: string }[]> => [
+        { id: 'u1', username: 'a' },
+        { id: 'u2', username: 'b' },
+      ],
+    } as unknown as DiscordApi;
+
+    const runId = await planGuildExport(
+      store,
+      { id: 'g1', name: 'G' },
+      [channel],
+      { ...OPTS, includeReactionUsers: true },
+    );
+    await new ExportRunner(api, store).run(runId);
+
+    const msgs: RawMessage[] = [];
+    await store.forEachMessage(runId, 'c1', (sm) => msgs.push(sm.message));
+    expect(msgs[0]?.reactions?.[0]?.users).toHaveLength(2);
   });
 });

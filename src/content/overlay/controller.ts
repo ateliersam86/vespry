@@ -199,8 +199,10 @@ export class VespryController {
   }
 
   /**
-   * Étend la liste de salons avec leurs threads (actifs + archivés publics).
-   * Un thread est un salon comme un autre pour le moteur d'export.
+   * Étend la liste de salons avec leurs threads — actifs, et archivés
+   * publics ET privés. Couvre aussi les posts de forum (qui sont des
+   * threads). Dédupliqué par id. Un thread est un salon comme un autre
+   * pour le moteur d'export.
    */
   private async withThreads(
     guildId: string,
@@ -208,22 +210,26 @@ export class VespryController {
   ): Promise<RawChannel[]> {
     if (!this.api) return channels;
     const selected = new Set(channels.map((c) => c.id));
-    const threads: RawChannel[] = [];
+    const threads = new Map<string, RawChannel>();
     try {
       for (const th of await this.api.getActiveThreads(guildId)) {
-        if (th.parent_id && selected.has(th.parent_id)) threads.push(th);
+        if (th.parent_id && selected.has(th.parent_id)) threads.set(th.id, th);
       }
     } catch {
       /* threads actifs indisponibles — sans gravité */
     }
     for (const ch of channels) {
-      try {
-        threads.push(...(await this.api.getArchivedThreads(ch.id, 'public')));
-      } catch {
-        /* salon sans threads ou accès refusé — ignoré */
+      for (const visibility of ['public', 'private'] as const) {
+        try {
+          for (const th of await this.api.getArchivedThreads(ch.id, visibility)) {
+            threads.set(th.id, th);
+          }
+        } catch {
+          /* salon sans threads de ce type ou accès refusé — ignoré */
+        }
       }
     }
-    return [...channels, ...threads];
+    return [...channels, ...threads.values()];
   }
 
   /** Ajoute une tâche d'export à la file et lance le traitement. */

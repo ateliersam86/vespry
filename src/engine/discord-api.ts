@@ -13,6 +13,7 @@ import {
   DiscordApiError,
   type ActiveThreadsResponse,
   type RawChannel,
+  type RawEmoji,
   type RawGuild,
   type RawMessage,
   type RawUser,
@@ -163,6 +164,61 @@ export class DiscordApi {
       `/guilds/${guildId}/threads/active`,
     );
     return res.threads;
+  }
+
+  /**
+   * Tous les utilisateurs ayant réagi à un message avec un emoji donné.
+   *
+   * L'`emojiParam` de l'URL diffère selon la nature de l'emoji :
+   * - unicode  → le `name` brut (ex. `👍`), URL-encodé ;
+   * - custom   → `name:id` (ex. `vespry:123456789`), URL-encodé.
+   *
+   * Discord distingue deux familles de réactions : normales (`type=0`) et
+   * « super-réactions » burst (`type=1`). On interroge les DEUX, puis on
+   * fusionne en dédupliquant par `user.id` — un même utilisateur peut figurer
+   * dans les deux familles.
+   *
+   * Chaque famille est paginée par lots de 100 via le curseur `after`.
+   */
+  async getReactions(
+    channelId: Snowflake,
+    messageId: Snowflake,
+    emoji: RawEmoji,
+  ): Promise<RawUser[]> {
+    // Emoji custom : `name:id`. Emoji unicode : `name` seul. Sans l'un ni
+    // l'autre, l'emoji n'est pas adressable — on renvoie une liste vide.
+    let emojiKey: string;
+    if (emoji.id) {
+      if (!emoji.name) return [];
+      emojiKey = `${emoji.name}:${emoji.id}`;
+    } else if (emoji.name) {
+      emojiKey = emoji.name;
+    } else {
+      return [];
+    }
+    const emojiParam = encodeURIComponent(emojiKey);
+    const basePath = `/channels/${channelId}/messages/${messageId}/reactions/${emojiParam}`;
+
+    const byId = new Map<Snowflake, RawUser>();
+    // type 0 = réactions normales, type 1 = super-réactions « burst ».
+    for (const type of [0, 1] as const) {
+      let after: Snowflake | undefined;
+      for (;;) {
+        const cursor = after ? `&after=${after}` : '';
+        const page = await this.request<RawUser[]>(
+          `${basePath}?limit=100&type=${type}${cursor}`,
+          true,
+        );
+        for (const user of page) {
+          if (!byId.has(user.id)) byId.set(user.id, user);
+        }
+        // Page incomplète → plus rien à paginer pour cette famille.
+        if (page.length < 100) break;
+        after = page[page.length - 1]?.id;
+        if (!after) break;
+      }
+    }
+    return [...byId.values()];
   }
 
   /**

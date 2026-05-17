@@ -91,6 +91,49 @@ describe('collectAssets', () => {
     const m = msg({ attachments: [a, a] });
     expect(collectAssets(m, ALL_MEDIA)).toHaveLength(1);
   });
+
+  it('collecte les emojis custom du contenu (animés ou non)', () => {
+    const m = msg({ content: 'hello <:wave:123> et <a:dance:456>' });
+    // Emojis collectés même si tous les médias sont désactivés.
+    const emojis = collectAssets(m, NONE).filter((a) => a.kind === 'emoji');
+    expect(emojis).toHaveLength(2);
+    expect(emojis.some((e) => e.url.endsWith('/emojis/123.png'))).toBe(true);
+    expect(emojis.some((e) => e.url.endsWith('/emojis/456.gif'))).toBe(true);
+  });
+
+  it('collecte les emojis custom des réactions, ignore les emojis Unicode', () => {
+    const m = msg({
+      reactions: [
+        { count: 2, emoji: { id: '789', name: 'pog' } },
+        { count: 5, emoji: { id: null, name: '👍' } },
+      ],
+    });
+    const emojis = collectAssets(m, NONE).filter((a) => a.kind === 'emoji');
+    expect(emojis).toHaveLength(1);
+    expect(emojis[0]?.url).toContain('/emojis/789.png');
+  });
+
+  it('collecte l\'avatar de l\'auteur, ignore l\'avatar par défaut', () => {
+    const withAvatar = msg({ author: { id: 'u9', username: 'x', avatar: 'abc' } });
+    expect(
+      collectAssets(withAvatar, NONE).filter((a) => a.kind === 'avatar'),
+    ).toHaveLength(1);
+    const noAvatar = msg({ author: { id: 'u9', username: 'x' } });
+    expect(
+      collectAssets(noAvatar, NONE).filter((a) => a.kind === 'avatar'),
+    ).toHaveLength(0);
+  });
+
+  it('collecte les icônes d\'embed (auteur + pied de page)', () => {
+    const m = msg({
+      embeds: [{
+        author: { icon_url: 'https://cdn/au.png' },
+        footer: { icon_url: 'https://cdn/fo.png' },
+      }],
+    });
+    const imgs = collectAssets(m, ALL_MEDIA).filter((a) => a.kind === 'image');
+    expect(imgs).toHaveLength(2);
+  });
 });
 
 describe('hashUrl', () => {

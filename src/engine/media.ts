@@ -3,6 +3,11 @@
  *
  * Par défaut on récupère TOUT ce que Discord expose : images, vidéos, audio,
  * fichiers. La `MediaSelection` de l'export permet de filtrer par type.
+ *
+ * En plus des médias filtrables, on collecte TOUJOURS (indépendamment de la
+ * sélection) les emojis custom — présents dans le `content` (`<:nom:id>` /
+ * `<a:nom:id>`) et dans les réactions — ainsi que l'avatar de l'auteur.
+ * Ces assets relèvent de l'identité du message, pas du choix de médias.
  */
 import type { AssetKind, MediaSelection } from './checkpoint-types';
 import type { RawMessage } from './types';
@@ -66,9 +71,32 @@ function wanted(kind: AssetKind, sel: MediaSelection): boolean {
   return key ? sel[key] : true;
 }
 
+/** Motif d'emoji custom dans le contenu : `<:nom:id>` / `<a:nom:id>`. */
+const CUSTOM_EMOJI_RE = /<(a?):(\w+):(\d+)>/g;
+
+/** Assainit un nom d'emoji pour un nom de fichier (non-`\w` → `_`). */
+function sanitizeName(name: string): string {
+  return name.replace(/\W/g, '_');
+}
+
+/**
+ * Construit le descripteur d'un emoji custom Discord.
+ * URL CDN : `/emojis/{id}.{gif|png}` selon `animated`.
+ */
+function emojiAsset(id: string, name: string, animated: boolean): AssetDescriptor {
+  const ext = animated ? 'gif' : 'png';
+  return {
+    assetId: `emoji_${id}`,
+    url: `https://cdn.discordapp.com/emojis/${id}.${ext}`,
+    kind: 'emoji',
+    filename: `emoji_${sanitizeName(name)}_${id}.${ext}`,
+  };
+}
+
 /**
  * Collecte les médias d'un message selon la sélection. Couvre les pièces
- * jointes, les médias d'embed (thumbnail / image / video) et les stickers.
+ * jointes, les médias d'embed (thumbnail / image / video), les stickers,
+ * les emojis custom (contenu + réactions) et l'avatar de l'auteur.
  * Dédupliqué par `assetId`.
  */
 export function collectAssets(
@@ -102,6 +130,13 @@ export function collectAssets(
       const id = hashUrl(embed.video.url);
       add({ assetId: id, url: embed.video.url, kind: 'video', filename: `embed_${id}.${ext || 'mp4'}` });
     }
+    // Icônes d'embed : auteur + pied de page (présentes sur les embeds de bots).
+    for (const icon of [embed.author?.icon_url, embed.footer?.icon_url]) {
+      if (!icon) continue;
+      const ext = extOf(icon);
+      const id = hashUrl(icon);
+      add({ assetId: id, url: icon, kind: 'image', filename: `embed_${id}.${ext || 'png'}` });
+    }
   }
 
   for (const sticker of message.sticker_items ?? []) {
@@ -113,6 +148,33 @@ export function collectAssets(
       url: `https://media.discordapp.net/stickers/${sticker.id}.${ext}`,
       kind: 'image',
       filename: `sticker_${sticker.id}.${ext}`,
+    });
+  }
+
+  // Emojis custom du contenu : `<:nom:id>` (statique) / `<a:nom:id>` (animé).
+  for (const m of message.content.matchAll(CUSTOM_EMOJI_RE)) {
+    const animated = m[1] === 'a';
+    const name = m[2] ?? '';
+    const id = m[3] ?? '';
+    add(emojiAsset(id, name, animated));
+  }
+
+  // Emojis custom des réactions : tout `emoji` avec un `id` non null.
+  for (const reaction of message.reactions ?? []) {
+    const { id, name } = reaction.emoji;
+    if (id === null) continue; // emoji Unicode standard : pas de CDN
+    add(emojiAsset(id, name ?? '', reaction.emoji.animated ?? false));
+  }
+
+  // Avatar de l'auteur (ignoré si avatar par défaut, donc hash absent).
+  const { author } = message;
+  if (author.avatar) {
+    const ext = author.avatar.startsWith('a_') ? 'gif' : 'png';
+    add({
+      assetId: `avatar_${author.id}`,
+      url: `https://cdn.discordapp.com/avatars/${author.id}/${author.avatar}.${ext}`,
+      kind: 'avatar',
+      filename: `avatar_${author.id}.${ext}`,
     });
   }
 
