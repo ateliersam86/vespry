@@ -9,7 +9,6 @@
  * - déclenche les téléchargements et les notifications.
  */
 import {
-  isClearToken,
   isCommandEnvelope,
   isDoDownload,
   isGetToken,
@@ -19,7 +18,7 @@ import {
   type VespryCommand,
   type VespryState,
 } from '../messaging';
-import { clearToken, getToken } from '../engine/auth';
+import { getToken } from '../engine/auth';
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
 const DISCORD_URL = 'https://discord.com/channels/@me';
@@ -179,11 +178,6 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
       sendResponse({ token: null });
     });
     return true;
-  }
-  if (isClearToken(message)) {
-    // Jeton mort (401) — on l'efface du stockage.
-    void clearToken();
-    return false;
   }
   if (typeof message === 'object' && message !== null
     && (message as { kind?: unknown }).kind === 'open-discord') {

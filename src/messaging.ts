@@ -151,20 +151,6 @@ export function isGetToken(m: unknown): m is GetTokenMessage {
     && (m as { kind?: unknown }).kind === 'get-token';
 }
 
-/**
- * Offscreen → service worker : « oublie le jeton stocké ».
- * Émis quand une requête Discord renvoie 401 (session expirée / déconnexion)
- * — sinon Vespry continuerait d'afficher « connecté » avec un jeton mort.
- */
-export interface ClearTokenMessage {
-  kind: 'clear-token';
-}
-
-export function isClearToken(m: unknown): m is ClearTokenMessage {
-  return typeof m === 'object' && m !== null
-    && (m as { kind?: unknown }).kind === 'clear-token';
-}
-
 export function isCommandEnvelope(m: unknown): m is CommandEnvelope {
   return typeof m === 'object' && m !== null
     && (m as { kind?: unknown }).kind === 'vespry-command';

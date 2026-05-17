@@ -75,19 +75,6 @@ async function requestToken(): Promise<string | null> {
   }
 }
 
-/**
- * Demande au service worker d'effacer le jeton stocké. Appelé sur un 401 :
- * le jeton est mort (déconnexion Discord / expiration), le garder ferait
- * croire à tort que la session est active.
- */
-async function clearStoredToken(): Promise<void> {
-  try {
-    await chrome.runtime.sendMessage({ kind: 'clear-token' });
-  } catch {
-    /* service worker indisponible — sans gravité */
-  }
-}
-
 /** Nom d'affichage d'une conversation privée, dérivé de ses destinataires. */
 function dmName(c: RawChannel): string {
   const names = (c.recipients ?? []).map((r) => r.global_name ?? r.username);
@@ -170,9 +157,13 @@ export class VespryController {
 
   /**
    * Charge la session Discord (utilisateur + serveurs). Renvoie `true` si la
-   * session est valide. Sur un 401, le jeton est mort (déconnexion / expiré)
-   * — on l'EFFACE et on repasse en « non connecté », plutôt que d'afficher
-   * une fausse session active.
+   * session est valide.
+   *
+   * Sur un 401, on repasse en « non connecté » (pour ne pas afficher une
+   * fausse session active) MAIS on n'efface PAS le jeton stocké : un 401
+   * passager (Cloudflare, pic) ne doit jamais faire perdre un jeton valide.
+   * `watchForToken` réessaiera ; une vraie reconnexion fera capter un jeton
+   * frais par le bridge, qui écrasera l'ancien.
    */
   private async loadSession(token: string): Promise<boolean> {
     this.api = new DiscordApi({ token });
@@ -186,15 +177,12 @@ export class VespryController {
       this.error = null;
       return true;
     } catch (e) {
-      if (e instanceof DiscordApiError && e.kind === 'auth') {
-        await clearStoredToken();
-        this.api = null;
-        this.currentUser = null;
-        this.guilds = [];
-        this.error = 'no-token';
-      } else {
-        this.error = e instanceof Error ? e.message : String(e);
-      }
+      this.api = null;
+      this.currentUser = null;
+      this.guilds = [];
+      this.error = e instanceof DiscordApiError && e.kind === 'auth'
+        ? 'no-token'
+        : (e instanceof Error ? e.message : String(e));
       return false;
     }
   }
