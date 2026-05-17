@@ -8,6 +8,7 @@
  *
  * Référence : https://docs.github.com/sponsors/integrating-with-github-sponsors
  */
+import { hmacSha256Hex, timingSafeEqual } from './hmac';
 
 export interface GithubSponsorship {
   login: string;
@@ -18,18 +19,6 @@ export interface GithubSponsorship {
   createdAt: number;
 }
 
-const enc = new TextEncoder();
-
-/** Comparaison à temps constant — évite les attaques temporelles sur la signature. */
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
-}
-
 /** Vérifie la signature HMAC-SHA256 d'un webhook GitHub. */
 export async function verifyGithubSignature(
   secret: string,
@@ -37,17 +26,7 @@ export async function verifyGithubSignature(
   header: string,
 ): Promise<boolean> {
   if (!secret || !header.startsWith('sha256=')) return false;
-  const key = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(body));
-  const hex = [...new Uint8Array(sig)]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+  const hex = await hmacSha256Hex(secret, body);
   return timingSafeEqual(`sha256=${hex}`, header);
 }
 

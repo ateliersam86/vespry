@@ -2,11 +2,15 @@
  * vespry-donors — Worker du mur des soutiens.
  *
  * Routes :
- *   GET  /donors          → flux public (DonorFeed), CORS ouvert, cache 60 s.
- *   POST /kofi/webhook    → ingestion Ko-Fi (auth : verification_token).
- *   POST /github/webhook  → ingestion GitHub Sponsors (auth : HMAC-SHA256).
- *   GET  /admin/list      → liste complète, masqués inclus (auth : ADMIN_SECRET).
- *   POST /admin/hide      → masque une entrée { seq } (auth : ADMIN_SECRET).
+ *   GET  /donors           → flux public (DonorFeed), CORS ouvert, cache 60 s.
+ *   POST /checkout         → crée une session Stripe Checkout → { url }.
+ *   POST /stripe/webhook   → ingestion Stripe (auth : signature HMAC).
+ *   GET  /checkout/success → page de retour (don réussi).
+ *   GET  /checkout/cancel  → page de retour (don annulé).
+ *   POST /kofi/webhook     → ingestion Ko-Fi (auth : verification_token).
+ *   POST /github/webhook   → ingestion GitHub Sponsors (auth : HMAC-SHA256).
+ *   GET  /admin/list       → liste complète, masqués inclus (auth : ADMIN_SECRET).
+ *   POST /admin/hide       → masque une entrée { seq } (auth : ADMIN_SECRET).
  *
  * Aucune donnée nominative n'est exposée sans le consentement du donateur
  * (`is_public`). Les montants ne sont jamais stockés ni renvoyés.
@@ -15,6 +19,13 @@ import { getFeed, hideDonor, insertDonor, listAll } from './donors';
 import { parseGithub, verifyGithubSignature } from './github';
 import { parseKofi } from './kofi';
 import { cleanText, MAX_MESSAGE, MAX_NAME } from './moderation';
+import { cancelPage, successPage } from './pages';
+import {
+  createCheckoutSession,
+  parseStripeEvent,
+  validAmount,
+  verifyStripeSignature,
+} from './stripe';
 
 export interface Env {
   DB: D1Database;
@@ -24,6 +35,10 @@ export interface Env {
   GITHUB_WEBHOOK_SECRET: string;
   /** Jeton d'administration (masquage manuel d'entrées). */
   ADMIN_SECRET: string;
+  /** Clé secrète Stripe (`sk_live_…`). */
+  STRIPE_SECRET_KEY: string;
+  /** Secret de signature du webhook Stripe (`whsec_…`). */
+  STRIPE_WEBHOOK_SECRET: string;
 }
 
 const CORS: Record<string, string> = {
@@ -93,6 +108,60 @@ async function handleGithub(req: Request, env: Env): Promise<Response> {
   return json({ ok: true });
 }
 
+/** Crée une session de paiement Stripe Checkout pour un don. */
+async function handleCheckout(req: Request, env: Env): Promise<Response> {
+  if (!env.STRIPE_SECRET_KEY) {
+    return json({ error: 'stripe not configured' }, 503);
+  }
+  const parsed = (await req.json().catch(() => null)) as {
+    amountCents?: unknown;
+    donorName?: unknown;
+    message?: unknown;
+    isPublic?: unknown;
+  } | null;
+  if (!parsed || !validAmount(parsed.amountCents)) {
+    return json({ error: 'invalid amount' }, 400);
+  }
+  const isPublic = parsed.isPublic === true;
+  const url = await createCheckoutSession(env.STRIPE_SECRET_KEY, {
+    amountCents: parsed.amountCents,
+    // Coupé en longueur ici ; le filtre de modération s'applique au webhook.
+    donorName:
+      isPublic && typeof parsed.donorName === 'string'
+        ? parsed.donorName.trim().slice(0, MAX_NAME)
+        : null,
+    message:
+      isPublic && typeof parsed.message === 'string'
+        ? parsed.message.trim().slice(0, MAX_MESSAGE)
+        : null,
+    isPublic,
+    origin: new URL(req.url).origin,
+  });
+  if (!url) return json({ error: 'stripe error' }, 502);
+  return json({ url });
+}
+
+/** Ingestion d'un don Stripe confirmé (`checkout.session.completed`). */
+async function handleStripeWebhook(req: Request, env: Env): Promise<Response> {
+  const body = await req.text();
+  const signature = req.headers.get('Stripe-Signature') ?? '';
+  if (!(await verifyStripeSignature(env.STRIPE_WEBHOOK_SECRET, body, signature))) {
+    return json({ error: 'bad signature' }, 401);
+  }
+  const event = parseStripeEvent(body);
+  if (!event) return json({ ok: true, skipped: 'event' });
+  if (!event.paid) return json({ ok: true, skipped: 'unpaid' });
+  await insertDonor(env.DB, {
+    source: 'stripe',
+    externalId: `stripe:${event.sessionId}`,
+    name: event.isPublic ? cleanText(event.donorName, MAX_NAME) : null,
+    message: event.isPublic ? cleanText(event.message, MAX_MESSAGE) : null,
+    isPublic: event.isPublic,
+    createdAt: Date.now(),
+  });
+  return json({ ok: true });
+}
+
 /** Endpoints d'administration — protégés par ADMIN_SECRET. */
 async function handleAdmin(
   req: Request,
@@ -136,6 +205,22 @@ export default {
     }
     if (req.method === 'POST' && pathname === '/github/webhook') {
       return handleGithub(req, env);
+    }
+    if (req.method === 'POST' && pathname === '/checkout') {
+      return handleCheckout(req, env);
+    }
+    if (req.method === 'POST' && pathname === '/stripe/webhook') {
+      return handleStripeWebhook(req, env);
+    }
+    if (req.method === 'GET' && pathname === '/checkout/success') {
+      return new Response(successPage(), {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+    }
+    if (req.method === 'GET' && pathname === '/checkout/cancel') {
+      return new Response(cancelPage(), {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
     }
     if (pathname.startsWith('/admin/')) {
       return handleAdmin(req, env, pathname);

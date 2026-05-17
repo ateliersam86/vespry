@@ -20,6 +20,10 @@ GitHub Sponsors ────┘                   │
 | Route | Méthode | Auth | Rôle |
 |---|---|---|---|
 | `/donors` | GET | — (CORS ouvert) | flux public, cache 60 s |
+| `/checkout` | POST | — (CORS ouvert) | crée une session Stripe Checkout → `{ url }` |
+| `/stripe/webhook` | POST | signature HMAC | ingestion Stripe |
+| `/checkout/success` | GET | — | page de retour (don réussi) |
+| `/checkout/cancel` | GET | — | page de retour (don annulé) |
 | `/kofi/webhook` | POST | `verification_token` | ingestion Ko-Fi |
 | `/github/webhook` | POST | HMAC-SHA256 | ingestion GitHub Sponsors |
 | `/admin/list` | GET | `ADMIN_SECRET` | liste complète (masqués inclus) |
@@ -40,10 +44,13 @@ npx wrangler d1 create vespry-donors
 # 2. Appliquer le schéma
 npx wrangler d1 execute vespry-donors --remote --file=schema.sql
 
-# 3. Définir les secrets (valeurs choisies ci-dessous)
+# 3. Définir les secrets (cf. « Branchement des plateformes » ci-dessous)
+npx wrangler secret put STRIPE_SECRET_KEY
+npx wrangler secret put STRIPE_WEBHOOK_SECRET
+npx wrangler secret put ADMIN_SECRET
+# Optionnels — canaux secondaires :
 npx wrangler secret put KOFI_VERIFICATION_TOKEN
 npx wrangler secret put GITHUB_WEBHOOK_SECRET
-npx wrangler secret put ADMIN_SECRET
 
 # 4. Déployer
 npm run deploy
@@ -54,14 +61,25 @@ Le déploiement affiche l'URL du Worker, par exemple
 
 ## Branchement des plateformes
 
-### Ko-Fi
+### Stripe — canal principal (paiement intégré)
+1. Crée le compte Stripe sur ta société, en mode « live ».
+2. Branding : Réglages Stripe → personnalise logo + couleur (la page Checkout
+   les reprend).
+3. **Clé API** : Développeurs → Clés API → copie la clé secrète `sk_live_…`
+   → secret `STRIPE_SECRET_KEY`.
+4. **Webhook** : Développeurs → Webhooks → ajoute un endpoint
+   `https://vespry-donors.<compte>.workers.dev/stripe/webhook`, événement
+   `checkout.session.completed`. Copie le secret de signature `whsec_…`
+   → secret `STRIPE_WEBHOOK_SECRET`.
+
+### Ko-Fi — canal secondaire (optionnel)
 1. Crée la page Ko-Fi, active le mode « donations ».
 2. Réglages → **API / Webhooks**.
 3. Webhook URL : `https://vespry-donors.<compte>.workers.dev/kofi/webhook`
 4. Copie le **Verification Token** affiché → c'est la valeur du secret
    `KOFI_VERIFICATION_TOKEN`.
 
-### GitHub Sponsors
+### GitHub Sponsors — canal secondaire (optionnel)
 1. Active GitHub Sponsors sur le compte.
 2. Tableau de bord Sponsors → **Webhooks** → *Add webhook*.
 3. Payload URL : `https://vespry-donors.<compte>.workers.dev/github/webhook`

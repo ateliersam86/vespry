@@ -14,7 +14,7 @@
 export interface Donor {
   /** Numéro de soutien séquentiel — pilote les paliers. */
   seq: number;
-  source: 'kofi' | 'github';
+  source: 'kofi' | 'github' | 'stripe';
   /** Nom affiché, ou null si le donateur a choisi l'anonymat. */
   name: string | null;
   /** Petit mot modéré, ou null. */

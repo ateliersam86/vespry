@@ -17,3 +17,5 @@ database_id = "REMPLIR_APRES_CREATION"
 #   npx wrangler secret put KOFI_VERIFICATION_TOKEN
 #   npx wrangler secret put GITHUB_WEBHOOK_SECRET
 #   npx wrangler secret put ADMIN_SECRET
+#   npx wrangler secret put STRIPE_SECRET_KEY      # clé sk_live_… de Stripe
+#   npx wrangler secret put STRIPE_WEBHOOK_SECRET  # secret whsec_… du webhook

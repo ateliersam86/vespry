@@ -6,10 +6,18 @@
  */
 import { milestoneFor, nextMilestone } from './milestones';
 
+/** Canal d'origine d'un soutien. */
+export type DonorSource = 'kofi' | 'github' | 'stripe';
+
+/** Normalise une valeur de colonne `source` en `DonorSource`. */
+function toSource(s: string): DonorSource {
+  return s === 'github' || s === 'stripe' ? s : 'kofi';
+}
+
 export interface Donor {
   /** Numéro de soutien séquentiel. */
   seq: number;
-  source: 'kofi' | 'github';
+  source: DonorSource;
   /** Nom affiché, null si anonyme. */
   name: string | null;
   /** Petit mot modéré, null si absent. */
@@ -31,7 +39,7 @@ export interface DonorFeed {
 
 /** Une nouvelle entrée à insérer (issue d'un webhook). */
 export interface NewDonor {
-  source: 'kofi' | 'github';
+  source: DonorSource;
   externalId: string;
   name: string | null;
   message: string | null;
@@ -78,7 +86,7 @@ export async function getFeed(db: D1Database): Promise<DonorFeed> {
 
   const recent: Donor[] = (res.results ?? []).map((r) => ({
     seq: r.seq,
-    source: r.source === 'github' ? 'github' : 'kofi',
+    source: toSource(r.source),
     name: r.name,
     message: r.message,
     createdAt: r.created_at,
