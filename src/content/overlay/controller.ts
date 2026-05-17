@@ -19,6 +19,7 @@ import type {
   MediaSelection,
   RunStatus,
 } from '../../engine/checkpoint-types';
+import { DiscordApiError } from '../../engine/types';
 import type { RawChannel, RawGuild, RawUser } from '../../engine/types';
 import type { EnqueueExtras, VespryState } from '../../messaging';
 
@@ -74,6 +75,19 @@ async function requestToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Demande au service worker d'effacer le jeton stocké. Appelé sur un 401 :
+ * le jeton est mort (déconnexion Discord / expiration), le garder ferait
+ * croire à tort que la session est active.
+ */
+async function clearStoredToken(): Promise<void> {
+  try {
+    await chrome.runtime.sendMessage({ kind: 'clear-token' });
+  } catch {
+    /* service worker indisponible — sans gravité */
+  }
+}
+
 /** Nom d'affichage d'une conversation privée, dérivé de ses destinataires. */
 function dmName(c: RawChannel): string {
   const names = (c.recipients ?? []).map((r) => r.global_name ?? r.username);
@@ -104,6 +118,8 @@ export class VespryController {
   ready = false;
 
   private draining = false;
+  /** Vrai tant qu'un `watchForToken` tourne — empêche les doublons. */
+  private watching = false;
   private readonly listeners = new Set<() => void>();
 
   subscribe(cb: () => void): () => void {
@@ -140,10 +156,11 @@ export class VespryController {
     }
 
     const token = await requestToken();
-    if (token) {
-      await this.loadSession(token);
-    } else {
-      this.error = 'no-token';
+    if (token) await this.loadSession(token);
+    if (!this.api) {
+      // Pas de session valide : on affiche « non connecté » et on surveille
+      // l'arrivée d'un jeton frais (reconnexion à Discord).
+      if (!this.error) this.error = 'no-token';
       void this.watchForToken();
     }
     this.ready = true;
@@ -151,9 +168,13 @@ export class VespryController {
     void this.drain();
   }
 
-  /** Charge la session Discord : utilisateur + serveurs. */
-  private async loadSession(token: string): Promise<void> {
-    this.error = null;
+  /**
+   * Charge la session Discord (utilisateur + serveurs). Renvoie `true` si la
+   * session est valide. Sur un 401, le jeton est mort (déconnexion / expiré)
+   * — on l'EFFACE et on repasse en « non connecté », plutôt que d'afficher
+   * une fausse session active.
+   */
+  private async loadSession(token: string): Promise<boolean> {
     this.api = new DiscordApi({ token });
     try {
       const [user, guilds] = await Promise.all([
@@ -162,26 +183,44 @@ export class VespryController {
       ]);
       this.currentUser = user;
       this.guilds = guilds;
+      this.error = null;
+      return true;
     } catch (e) {
-      this.error = e instanceof Error ? e.message : String(e);
+      if (e instanceof DiscordApiError && e.kind === 'auth') {
+        await clearStoredToken();
+        this.api = null;
+        this.currentUser = null;
+        this.guilds = [];
+        this.error = 'no-token';
+      } else {
+        this.error = e instanceof Error ? e.message : String(e);
+      }
+      return false;
     }
   }
 
   /**
-   * Surveille l'arrivée du jeton après l'init. Le bridge peut le capter avec
-   * un léger retard (dès que Discord émet une requête API). Dès qu'il
-   * apparaît, on charge la session et on notifie — rétablissement automatique.
+   * Surveille l'arrivée d'un jeton valide (premier lancement ou reconnexion
+   * après un 401). Le bridge capte le jeton dès que Discord émet une requête
+   * API ; dès qu'une session valide se charge, on notifie — rétablissement
+   * automatique. Un seul watcher à la fois (`this.watching`).
    */
   private async watchForToken(): Promise<void> {
-    for (let i = 0; i < 120; i += 1) {
-      await sleep(2500);
-      const token = await requestToken();
-      if (token) {
-        await this.loadSession(token);
-        this.notify();
-        void this.drain();
-        return;
+    if (this.watching) return;
+    this.watching = true;
+    try {
+      for (let i = 0; i < 240; i += 1) {
+        await sleep(2500);
+        if (this.api) return; // session chargée entre-temps
+        const token = await requestToken();
+        if (token && (await this.loadSession(token))) {
+          this.notify();
+          void this.drain();
+          return;
+        }
       }
+    } finally {
+      this.watching = false;
     }
   }
 

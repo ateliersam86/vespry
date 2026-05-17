@@ -21,9 +21,17 @@ await page
   .goto('https://discord.com/channels/@me', { waitUntil: 'load', timeout: 45_000 })
   .catch(() => { /* page de login ou hors-ligne — sans gravité */ });
 
+// Ouvre l'overlay automatiquement : le profil de test n'est pas connecté à
+// Discord (profil jetable), donc la PAGE montre l'écran de login — mais
+// l'extension, elle, a la session via le jeton injecté. On ouvre directement
+// l'overlay pour montrer Vespry qui fonctionne, pas la page de login derrière.
+await page.locator('#vespry-launch-btn').click({ timeout: 20_000 }).catch(() => {});
+
 console.log('────────────────────────────────────────────────────────');
-console.log('  Navigateur Vespry ouvert.');
-console.log('  Clique le bouton « Vespry » en haut à droite de Discord.');
+console.log('  Navigateur Vespry ouvert — overlay déjà affiché.');
+console.log('  La page Discord derrière montre un écran de login : c\'est');
+console.log('  normal, le profil de test n\'est pas connecté à Discord.');
+console.log('  L\'extension, elle, a la session (jeton injecté pour le test).');
 console.log('  Ferme la fenêtre du navigateur pour quitter.');
 console.log('────────────────────────────────────────────────────────');
 
