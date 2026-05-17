@@ -3,8 +3,11 @@
  * Génère les icônes d'extension PNG (16/48/128) depuis la mascotte Vespry —
  * le hibou pixel-art (concept B, tête seule), fond transparent.
  *
- * La carte 14×13 est paddée en 16×16 pour un scaling ENTIER (1×/3×/8×) :
- * les pixels restent parfaitement nets à chaque taille.
+ * Un fin liseré clair entoure le hibou : invisible sur barre d'outils claire,
+ * il le détache sur une barre sombre (sinon les bords sombres se fondent).
+ *
+ * Le hibou 14×13 + liseré 1px = 16×15, posé sur un canevas 16×16 → scaling
+ * entier (1×/3×/8×), pixels nets à chaque taille.
  *
  * Usage : node scripts/gen-icons.mjs
  */
@@ -16,8 +19,9 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const assets = join(root, 'src/assets');
 
 const PAL = { o: '#1F1A33', b: '#5D4EAE', f: '#F4EBD4', w: '#FEFDF8', p: '#1F1A33', k: '#F0B54A' };
+const RIM = '#F4EBD4';
 
-// Hibou tête seule, 14×13 — identique au mockup vespry-logos.html.
+// Hibou tête seule, 14×13 — identique au mockup et à src/ui/owl.ts.
 const HEAD = [
   '...oo....oo...',
   '..obbo..obbo..',
@@ -34,17 +38,36 @@ const HEAD = [
   '...obbbbbbo...',
 ];
 
-// Padding → 16×16 (1 colonne G/D, 1 ligne haut, 2 lignes bas).
-const EMPTY16 = '.'.repeat(16);
-const MAP = [EMPTY16, ...HEAD.map((r) => `.${r}.`), EMPTY16, EMPTY16];
+const H = HEAD.length;
+const W = HEAD[0].length;
+const filled = (x, y) => x >= 0 && x < W && y >= 0 && y < H && HEAD[y][x] !== '.';
 
+// Liseré : cases vides au contact du hibou (8-voisinage).
+const rim = [];
+for (let y = -1; y <= H; y += 1) {
+  for (let x = -1; x <= W; x += 1) {
+    if (filled(x, y)) continue;
+    let touches = false;
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        if (filled(x + dx, y + dy)) touches = true;
+      }
+    }
+    if (touches) rim.push({ x, y });
+  }
+}
+
+// Offset (+1,+1) → tout tient dans un canevas 16×16.
 function svg() {
   let rects = '';
-  for (let y = 0; y < 16; y += 1) {
-    for (let x = 0; x < 16; x += 1) {
-      const c = MAP[y][x];
+  for (const { x, y } of rim) {
+    rects += `<rect x="${x + 1}" y="${y + 1}" width="1" height="1" fill="${RIM}"/>`;
+  }
+  for (let y = 0; y < H; y += 1) {
+    for (let x = 0; x < W; x += 1) {
+      const c = HEAD[y][x];
       if (c === '.') continue;
-      rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="${PAL[c]}"/>`;
+      rects += `<rect x="${x + 1}" y="${y + 1}" width="1" height="1" fill="${PAL[c]}"/>`;
     }
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">${rects}</svg>`;
