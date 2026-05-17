@@ -115,6 +115,19 @@
 /* icônes SVG inline — héritent de la couleur du texte */
 .v-ico { width: 1em; height: 1em; display: inline-block; vertical-align: -0.13em; flex: none; }
 
+/* barre de défilement — fine, discrète, aux couleurs du thème.
+   Le liseré transparent + background-clip affinent le pouce (~5 px visibles). */
+.v-root ::-webkit-scrollbar { width: 9px; height: 9px; }
+.v-root ::-webkit-scrollbar-track { background: transparent; }
+.v-root ::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.v-root ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.v-root ::-webkit-scrollbar-corner { background: transparent; }
+
 /* top confirm header */
 .v-top {
   height: 54px; background: var(--bg3); border-bottom: 1px solid var(--border);
