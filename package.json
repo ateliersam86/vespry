@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "smoke": "node scripts/smoke-test.mjs",
     "test:bridge": "node scripts/bridge-test.mjs",
-    "test:e2e": "node scripts/e2e-test.mjs"
+    "test:e2e": "node scripts/e2e-test.mjs",
+    "play": "node scripts/play.mjs"
   },
   "dependencies": {
     "@transcend-io/conflux": "^4.1.0",

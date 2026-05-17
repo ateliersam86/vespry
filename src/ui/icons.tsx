@@ -8,6 +8,7 @@
  * `OwlMark` est la mascotte (hibou pixel-art, concept B) en SVG vectoriel.
  */
 import type { JSX } from 'preact';
+import { OWL_HEAD, OWL_PALETTE } from './owl';
 
 type IconProps = { class?: string };
 
@@ -78,32 +79,13 @@ export const IconExpand = stroke(<path d="M8 16 16 8M9 8h7v7" />);
 export const IconDownload = stroke(<path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" />);
 
 /** Mascotte Vespry — hibou pixel-art (concept B, tête seule). */
-const OWL_PAL: Record<string, string> = {
-  o: '#1F1A33', b: '#5D4EAE', f: '#F4EBD4', w: '#FEFDF8', p: '#1F1A33', k: '#F0B54A',
-};
-const OWL_HEAD = [
-  '...oo....oo...',
-  '..obbo..obbo..',
-  '.obbbbbbbbbbo.',
-  'obbbbbbbbbbbbo',
-  'obffffffffffbo',
-  'obfwwwffwwwfbo',
-  'obfwpwffwpwfbo',
-  'obfwwwffwwwfbo',
-  'obffffkkffffbo',
-  'obffffffffffbo',
-  '.obffffffffbo.',
-  '..obffffffbo..',
-  '...obbbbbbo...',
-];
-
 export function OwlMark({ class: cls }: IconProps): JSX.Element {
   const rects: JSX.Element[] = [];
   OWL_HEAD.forEach((row, y) => {
     [...row].forEach((c, x) => {
       if (c === '.') return;
       rects.push(
-        <rect key={`${x}-${y}`} x={x} y={y} width="1.02" height="1.02" fill={OWL_PAL[c]} />,
+        <rect key={`${x}-${y}`} x={x} y={y} width="1.02" height="1.02" fill={OWL_PALETTE[c]} />,
       );
     });
   });
