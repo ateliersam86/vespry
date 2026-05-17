@@ -39,7 +39,7 @@ function injectLauncher(): void {
   btn.textContent = 'Vespry';
   btn.style.cssText = [
     'position:fixed', 'top:10px', 'right:16px', 'z-index:2147482000',
-    'background:#5865f2', 'color:#fff', 'border:0', 'border-radius:8px',
+    'background:#6c5ce0', 'color:#fff', 'border:0', 'border-radius:8px',
     'font:600 13px "gg sans",Helvetica,Arial,sans-serif', 'padding:7px 13px',
     'cursor:pointer', 'box-shadow:0 2px 8px rgba(0,0,0,.4)',
   ].join(';');

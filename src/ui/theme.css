@@ -1,15 +1,15 @@
-/* Thème Vespry — palette alignée sur Discord pour une expérience continue. */
+/* Thème Vespry — palette « crépuscule » (popup + pages d'extension). */
 :root {
-  --v-bg: #313338;
-  --v-bg-alt: #2b2d31;
-  --v-bg-elevated: #1e1f22;
-  --v-text: #dbdee1;
-  --v-text-muted: #949ba4;
-  --v-accent: #5865f2;
-  --v-accent-hover: #4752c4;
-  --v-green: #23a55a;
-  --v-red: #f23f43;
-  --v-border: #3f4147;
+  --v-bg: #2a2536;
+  --v-bg-alt: #221d2e;
+  --v-bg-elevated: #181420;
+  --v-text: #e7e3f2;
+  --v-text-muted: #9991b3;
+  --v-accent: #6c5ce0;
+  --v-accent-hover: #5a49c8;
+  --v-green: #3fb27a;
+  --v-red: #e5556a;
+  --v-border: #352e44;
   --v-radius: 8px;
   --v-font: "gg sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
@@ -58,15 +58,17 @@ h1, h2, h3 { margin: 0 0 8px; font-weight: 600; }
   padding: 3px 8px;
   border-radius: 999px;
 }
-.v-pill--ok { background: rgba(35, 165, 90, 0.16); color: var(--v-green); }
-.v-pill--off { background: rgba(242, 63, 67, 0.16); color: var(--v-red); }
+.v-pill--ok { background: rgba(63, 178, 122, 0.18); color: var(--v-green); }
+.v-pill--off { background: rgba(229, 85, 106, 0.18); color: var(--v-red); }
 
 /* thème clair — appliqué via data-theme="light" sur <html> */
 :root[data-theme="light"] {
   --v-bg: #ffffff;
-  --v-bg-alt: #f2f3f5;
-  --v-bg-elevated: #e3e5e8;
-  --v-text: #2e3338;
-  --v-text-muted: #5c5e66;
-  --v-border: #d4d6da;
+  --v-bg-alt: #f4f2fa;
+  --v-bg-elevated: #ece9f4;
+  --v-text: #2a2540;
+  --v-text-muted: #6e6790;
+  --v-green: #1f9b5e;
+  --v-red: #d23b54;
+  --v-border: #ddd8ea;
 }

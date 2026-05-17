@@ -92,9 +92,9 @@ const EN: Dict = {
   'credits.donate_soon': 'Donations coming soon',
   'credits.supporters': 'Supporters',
   'credits.contributors': 'Contributors',
-  'credits.none_yet': 'Be the first ♥',
+  'credits.none_yet': 'Be the first',
   'credits.back': '← Back',
-  'credits.thanks': 'Export done. Vespry is free — ♥ support it',
+  'credits.thanks': 'Export done. Vespry is free — support it',
 };
 
 const FR: Dict = {
@@ -177,9 +177,9 @@ const FR: Dict = {
   'credits.donate_soon': 'Dons bientôt disponibles',
   'credits.supporters': 'Soutiens',
   'credits.contributors': 'Contributeurs',
-  'credits.none_yet': 'Sois le premier ♥',
+  'credits.none_yet': 'Sois le premier',
   'credits.back': '← Retour',
-  'credits.thanks': 'Export terminé. Vespry est gratuit — ♥ soutiens-le',
+  'credits.thanks': 'Export terminé. Vespry est gratuit — soutiens-le',
 };
 
 const IT: Dict = {

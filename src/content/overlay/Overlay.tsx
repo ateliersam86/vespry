@@ -22,8 +22,25 @@ import {
   setThemePref,
   type ThemePref,
 } from '../../ui/theme-pref';
+import {
+  IconMoon, IconSun, IconAuto, IconHeart, IconMail, IconCheck, IconMinus,
+  IconChevronDown, IconChevronRight, IconClose, IconMinimize, IconExpand,
+  IconDownload, OwlMark,
+} from '../../ui/icons';
 
-const THEME_ICON: Record<ThemePref, string> = { dark: '🌙', light: '☀️', auto: '◐' };
+/** Icône du thème courant (cyclé sombre → clair → auto). */
+function ThemeIcon({ pref }: { pref: ThemePref }): JSX.Element {
+  if (pref === 'dark') return <IconMoon />;
+  if (pref === 'light') return <IconSun />;
+  return <IconAuto />;
+}
+
+/** URL de l'icône d'un serveur Discord (CDN), ou null s'il n'en a pas. */
+function guildIconUrl(g: RawGuild): string | null {
+  if (!g.icon) return null;
+  const ext = g.icon.startsWith('a_') ? 'gif' : 'png';
+  return `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.${ext}?size=64`;
+}
 
 const EXPORTABLE = new Set<number>([
   ChannelType.GUILD_TEXT,
@@ -226,14 +243,14 @@ export function Overlay({
     <Shell onClose={onClose} theme={resolvedTheme}>
       {/* header de confirmation */}
       <div class="v-top">
-        <span class="v-logo">Vespry</span>
+        <span class="v-logo"><OwlMark class="v-mark" />Vespry</span>
         <span style="font-size:11px;color:var(--muted);font-weight:600">v{getVersion()}</span>
         <ReportLink summary="Problème signalé depuis Vespry" log={[]} label={t('report.problem')} />
         <span class="v-support-link" onClick={() => setView('credits')}>
-          ♥ {t('credits.support')}
+          <IconHeart /> {t('credits.support')}
         </span>
         <span class="v-theme-btn" onClick={cycleTheme} title={t(`theme.${theme}`)}>
-          {THEME_ICON[theme]} {t(`theme.${theme}`)}
+          <ThemeIcon pref={theme} /> {t(`theme.${theme}`)}
         </span>
         <span class="v-sum">
           {activeGuild ? (
@@ -260,9 +277,11 @@ export function Overlay({
           {t('overlay.add_to_queue')}
         </button>
         <span class="v-close" onClick={() => setMinimized(true)} title={t('overlay.minimize')}>
-          —
+          <IconMinimize />
         </span>
-        <span class="v-close" onClick={onClose} title={t('overlay.close')}>✕</span>
+        <span class="v-close" onClick={onClose} title={t('overlay.close')}>
+          <IconClose />
+        </span>
       </div>
 
       {view === 'credits' ? (
@@ -277,18 +296,23 @@ export function Overlay({
             title={t('overlay.dms')}
             onClick={() => selectGuild({ id: DM_ZONE, name: t('overlay.dms') })}
           >
-            ✉
+            <IconMail />
           </div>
-          {controller.guilds.map((g) => (
-            <div
-              key={g.id}
-              class={`v-sic ${activeGuild?.id === g.id ? 'act' : ''}`}
-              title={g.name}
-              onClick={() => selectGuild(g)}
-            >
-              {g.name.slice(0, 2).toUpperCase()}
-            </div>
-          ))}
+          {controller.guilds.map((g) => {
+            const icon = guildIconUrl(g);
+            return (
+              <div
+                key={g.id}
+                class={`v-sic ${activeGuild?.id === g.id ? 'act' : ''}`}
+                title={g.name}
+                onClick={() => selectGuild(g)}
+              >
+                {icon
+                  ? <img src={icon} alt="" loading="lazy" />
+                  : g.name.slice(0, 2).toUpperCase()}
+              </div>
+            );
+          })}
         </div>
 
         {/* liste des salons */}
@@ -313,8 +337,14 @@ export function Overlay({
               return (
                 <div key={group.id}>
                   <div class="v-cat" onClick={() => toggleGroup(group)}>
-                    <span class={`v-cbx ${on === group.channels.length ? 'on' : ''}`}>
-                      {on === group.channels.length ? '✓' : on > 0 ? '–' : ''}
+                    <span
+                      class={`v-cbx ${
+                        on === group.channels.length ? 'on' : on > 0 ? 'part' : ''
+                      }`}
+                    >
+                      {on === group.channels.length
+                        ? <IconCheck />
+                        : on > 0 ? <IconMinus /> : null}
                     </span>
                     {group.name}
                   </div>
@@ -331,7 +361,7 @@ export function Overlay({
                           toggleChannel(c.id);
                         }}
                       >
-                        {selected.has(c.id) ? '✓' : ''}
+                        {selected.has(c.id) ? <IconCheck /> : null}
                       </span>
                       <span class="v-hash">#</span>
                       {c.name}
@@ -375,7 +405,7 @@ export function Overlay({
                 onClick={() => setIncludeThreads(!includeThreads)}
               >
                 <span class={`v-cbx ${includeThreads ? 'on' : ''}`}>
-                  {includeThreads ? '✓' : ''}
+                  {includeThreads ? <IconCheck /> : null}
                 </span>
                 {t('overlay.include_threads')}
               </div>
@@ -429,8 +459,10 @@ function MiniWidget({
   return (
     <div class="v-mini" onClick={onExpand} title={t('mini.open')}>
       <div class="v-mini-hd">
-        <span class="v-logo">Vespry</span>
-        <span class="v-muted" style="font-size:12px">{running ? `${pct}%` : '↗'}</span>
+        <span class="v-logo"><OwlMark class="v-mark" />Vespry</span>
+        <span class="v-muted" style="font-size:12px;display:flex;align-items:center">
+          {running ? `${pct}%` : <IconExpand />}
+        </span>
       </div>
       <div class="v-mini-sub">
         {running
@@ -451,42 +483,61 @@ function CreditsPanel({ onBack }: { onBack: () => void }): JSX.Element {
     void loadCredits().then(setCredits);
   }, []);
 
+  const supporters = credits?.supporters ?? [];
+  const contributors = credits?.contributors ?? [];
+
   return (
     <div class="v-credits">
       <span class="v-link" onClick={onBack}>{t('credits.back')}</span>
-      <h2>{t('credits.title')}</h2>
-      <p class="v-intro">{t('credits.intro')}</p>
-      {credits?.koFiUrl ? (
-        <button
-          class="v-btn v-donate"
-          onClick={() => window.open(credits.koFiUrl, '_blank', 'noopener')}
-        >
-          {t('credits.donate')}
-        </button>
-      ) : (
-        <button class="v-btn v-donate" disabled>{t('credits.donate_soon')}</button>
-      )}
+      <div class="v-credits-hd">
+        <h2><OwlMark class="v-mark" />{t('credits.title')}</h2>
+        <p class="v-intro">{t('credits.intro')}</p>
+      </div>
       <div class="v-cred-grid">
-        <div class="v-cred-col">
-          <h3>{t('credits.supporters')}</h3>
-          {credits && credits.supporters.length > 0 ? (
+        {/* carte Soutiens — appel au don + donateurs */}
+        <div class="v-cred-card">
+          <h3><IconHeart /> {t('credits.supporters')}</h3>
+          {credits?.koFiUrl ? (
+            <button
+              class="v-donate"
+              onClick={() => window.open(credits.koFiUrl, '_blank', 'noopener')}
+            >
+              <IconHeart /> {t('credits.donate')}
+            </button>
+          ) : (
+            <button class="v-donate" disabled>
+              <IconHeart /> {t('credits.donate_soon')}
+            </button>
+          )}
+          {supporters.length > 0 ? (
             <ul class="v-cred-list">
-              {credits.supporters.map((s) => <li key={s}>{s}</li>)}
+              {supporters.map((s) => (
+                <li key={s}>
+                  <span class="v-avatar">{s.slice(0, 1).toUpperCase()}</span>
+                  <span>{s}</span>
+                </li>
+              ))}
             </ul>
           ) : (
             <div class="v-cred-empty">{t('credits.none_yet')}</div>
           )}
         </div>
-        <div class="v-cred-col">
+        {/* carte Contributeurs */}
+        <div class="v-cred-card">
           <h3>{t('credits.contributors')}</h3>
-          <ul class="v-cred-list">
-            {(credits?.contributors ?? []).map((c) => (
-              <li key={c.name}>
-                {c.name}
-                <span class="v-role">{c.role}</span>
-              </li>
-            ))}
-          </ul>
+          {contributors.length > 0 ? (
+            <ul class="v-cred-list">
+              {contributors.map((c) => (
+                <li key={c.name}>
+                  <span class="v-avatar">{c.name.slice(0, 1).toUpperCase()}</span>
+                  <span>{c.name}</span>
+                  <span class="v-role">{c.role}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div class="v-cred-empty">{t('credits.none_yet')}</div>
+          )}
         </div>
       </div>
     </div>
@@ -515,7 +566,8 @@ function ExportQueue({
   return (
     <div class="v-queue">
       <div class="v-q-hd" onClick={() => setOpen(!open)}>
-        {open ? '▾' : '▸'} {t('queue.title', { n: queue.length, a: active })}
+        {open ? <IconChevronDown /> : <IconChevronRight />}
+        {t('queue.title', { n: queue.length, a: active })}
       </div>
       {open && (
         <div class="v-q-body">
@@ -578,14 +630,18 @@ function TaskCard({
           />
         )}
         {done && item.zipReady && (
-          <span class="v-exp" onClick={onDownload}>{t('queue.download')}</span>
+          <span class="v-exp" onClick={onDownload}>
+            <IconDownload />{t('queue.download')}
+          </span>
         )}
         <span class="v-exp" onClick={onToggle}>
           {expanded ? t('queue.details_hide') : t('queue.details_show')}
         </span>
       </div>
       {done && (
-        <div class="v-thanks" onClick={onSupport}>{t('credits.thanks')}</div>
+        <div class="v-thanks" onClick={onSupport}>
+          <IconHeart />{t('credits.thanks')}
+        </div>
       )}
       {expanded && (
         <div class="v-details">
