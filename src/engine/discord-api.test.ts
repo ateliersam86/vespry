@@ -60,4 +60,79 @@ describe('DiscordApi', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })));
     expect(await api().downloadAsset('https://cdn/x.png')).toBeNull();
   });
+
+  // ─────────────────────────── deleteMessage ───────────────────────────
+  // Phase 2 — fonctionnalité de purge. La méthode doit :
+  // 1. émettre un DELETE sur le bon endpoint ;
+  // 2. accepter un 204 No Content sans tenter de parser un corps vide ;
+  // 3. traiter un 404 comme un succès idempotent (message déjà supprimé) ;
+  // 4. lever DiscordApiError('forbidden') sur 403 ;
+  // 5. réutiliser le back-off 429 partagé avec GET.
+
+  it('deleteMessage envoie un DELETE sur le bon endpoint et accepte 204', async () => {
+    // Typage explicite des args : sans ça `mock.calls[0]` est typé `[]`
+    // (tuple vide) et l'indexation génère une erreur TS2493 sous
+    // `noUncheckedIndexedAccess` strict.
+    const fetchMock = vi.fn(
+      async (_url: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(null, { status: 204 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await api().deleteMessage('c1', 'm1');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const call = fetchMock.mock.calls[0];
+    expect(String(call?.[0])).toContain('/channels/c1/messages/m1');
+    expect(call?.[1]?.method).toBe('DELETE');
+  });
+
+  it('deleteMessage est idempotent sur 404 (message déjà supprimé)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ message: 'Unknown Message' }, 404)));
+    // Ne lève pas — l'effet désiré est atteint.
+    await expect(api().deleteMessage('c1', 'm1')).resolves.toBeUndefined();
+  });
+
+  it('deleteMessage lève DiscordApiError(forbidden) sur 403', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ message: 'Missing Permissions' }, 403)));
+    await expect(api().deleteMessage('c1', 'm1')).rejects.toMatchObject({
+      name: 'DiscordApiError',
+      kind: 'forbidden',
+      status: 403,
+    });
+  });
+
+  it('deleteMessage lève DiscordApiError(auth) sur 401', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ message: '401: Unauthorized' }, 401)));
+    await expect(api().deleteMessage('c1', 'm1')).rejects.toMatchObject({
+      name: 'DiscordApiError',
+      kind: 'auth',
+    });
+  });
+
+  it('deleteMessage réutilise le back-off 429 (retry puis succès)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ retry_after: 0 }, 429))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await api().deleteMessage('c1', 'm1');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Les deux appels doivent être des DELETE sur la même URL.
+    for (const call of fetchMock.mock.calls) {
+      expect(String(call[0])).toContain('/channels/c1/messages/m1');
+      expect((call[1] as RequestInit | undefined)?.method).toBe('DELETE');
+    }
+  });
+
+  it('deleteMessage propage les erreurs HTTP inattendues', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ message: 'Server Error' }, 500)));
+    await expect(api().deleteMessage('c1', 'm1')).rejects.toMatchObject({
+      name: 'DiscordApiError',
+      kind: 'unknown',
+      status: 500,
+    });
+  });
 });

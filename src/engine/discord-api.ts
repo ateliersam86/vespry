@@ -42,10 +42,28 @@ export class DiscordApi {
   }
 
   /**
-   * Exécute une requête API avec retry sur 429 et erreurs typées.
-   * `throttle` applique le délai inter-requêtes (pour les boucles de fetch).
+   * Options de bas niveau pour `request()`. Permet d'étendre la méthode sans
+   * dédoubler la mécanique de back-off 429 (utile pour `deleteMessage` qui
+   * sort du verbe GET).
+   *
+   * `tolerate404` — résout avec `null` au lieu de lever `DiscordApiError('not_found')`.
+   * Cas typique : DELETE d'un message déjà supprimé par ailleurs, qu'on
+   * considère comme un succès idempotent.
+   *
+   * `expectEmpty` — la réponse 2xx n'est pas du JSON (typiquement un 204
+   * No Content). On évite de tenter un `res.json()` qui jetterait sur un
+   * corps vide ; on résout avec `null`.
    */
-  private async request<T>(path: string, throttle = false): Promise<T> {
+  private async request<T>(
+    path: string,
+    opts: {
+      method?: 'GET' | 'DELETE';
+      throttle?: boolean;
+      tolerate404?: boolean;
+      expectEmpty?: boolean;
+    } = {},
+  ): Promise<T | null> {
+    const { method = 'GET', throttle = false, tolerate404 = false, expectEmpty = false } = opts;
     if (throttle && this.requestDelayMs > 0) await sleep(this.requestDelayMs);
 
     let rateLimitHits = 0;
@@ -55,7 +73,7 @@ export class DiscordApi {
       const timer = setTimeout(() => ctrl.abort(), 20_000);
       try {
         res = await fetch(`${API_BASE}${path}`, {
-          method: 'GET',
+          method,
           headers: {
             'content-type': 'application/json',
             authorization: this.token,
@@ -70,6 +88,9 @@ export class DiscordApi {
       }
 
       if (res.ok) {
+        // 204 No Content (typique de DELETE) ou autre 2xx sans corps : on
+        // évite le json() qui jetterait. L'appelant sait quoi attendre.
+        if (expectEmpty || res.status === 204) return null;
         return (await res.json()) as T;
       }
 
@@ -90,10 +111,28 @@ export class DiscordApi {
         throw new DiscordApiError('forbidden', 403, `Accès refusé : ${path}`);
       }
       if (res.status === 404) {
+        // L'appelant peut considérer un 404 comme succès idempotent — c'est
+        // le cas pour DELETE d'un message déjà disparu.
+        if (tolerate404) return null;
         throw new DiscordApiError('not_found', 404, `Ressource introuvable : ${path}`);
       }
       throw new DiscordApiError('unknown', res.status, `Erreur HTTP ${res.status} sur ${path}`);
     }
+  }
+
+  /**
+   * Surcharge interne : appelle `request()` en GET classique et garantit un
+   * résultat non-null. Tous les appelants historiques (getGuilds, getMessages,
+   * etc.) passent par ici — pas de cast `as T` côté chacun d'eux.
+   */
+  private async get<T>(path: string, throttle = false): Promise<T> {
+    const r = await this.request<T>(path, { method: 'GET', throttle });
+    // GET ne demande jamais `tolerate404` ni `expectEmpty` — un null serait
+    // un bug du wrapper, pas un cas légitime.
+    if (r === null) {
+      throw new DiscordApiError('unknown', 0, `Réponse vide inattendue : ${path}`);
+    }
+    return r;
   }
 
   /** Lit `retry_after` (secondes) depuis le corps JSON ou l'en-tête. */
@@ -111,27 +150,27 @@ export class DiscordApi {
 
   /** Compte connecté (GET /users/@me). */
   getCurrentUser(): Promise<RawUser> {
-    return this.request<RawUser>('/users/@me');
+    return this.get<RawUser>('/users/@me');
   }
 
   /** Serveurs du compte (GET /users/@me/guilds). */
   getGuilds(): Promise<RawGuild[]> {
-    return this.request<RawGuild[]>('/users/@me/guilds');
+    return this.get<RawGuild[]>('/users/@me/guilds');
   }
 
   /** Salons d'un serveur (GET /guilds/{id}/channels). */
   getGuildChannels(guildId: Snowflake): Promise<RawChannel[]> {
-    return this.request<RawChannel[]>(`/guilds/${guildId}/channels`);
+    return this.get<RawChannel[]>(`/guilds/${guildId}/channels`);
   }
 
   /** Un salon précis (GET /channels/{id}). */
   getChannel(channelId: Snowflake): Promise<RawChannel> {
-    return this.request<RawChannel>(`/channels/${channelId}`);
+    return this.get<RawChannel>(`/channels/${channelId}`);
   }
 
   /** Conversations privées et group DM (GET /users/@me/channels). */
   getDmChannels(): Promise<RawChannel[]> {
-    return this.request<RawChannel[]>('/users/@me/channels');
+    return this.get<RawChannel[]>('/users/@me/channels');
   }
 
   /**
@@ -140,7 +179,7 @@ export class DiscordApi {
    */
   getMessages(channelId: Snowflake, before?: Snowflake): Promise<RawMessage[]> {
     const cursor = before ? `&before=${before}` : '';
-    return this.request<RawMessage[]>(
+    return this.get<RawMessage[]>(
       `/channels/${channelId}/messages?limit=100${cursor}`,
       true,
     );
@@ -151,7 +190,7 @@ export class DiscordApi {
     channelId: Snowflake,
     kind: 'public' | 'private',
   ): Promise<RawChannel[]> {
-    const res = await this.request<{ threads: RawChannel[] }>(
+    const res = await this.get<{ threads: RawChannel[] }>(
       `/channels/${channelId}/threads/archived/${kind}`,
       true,
     );
@@ -160,7 +199,7 @@ export class DiscordApi {
 
   /** Threads actifs d'un serveur (GET /guilds/{id}/threads/active). */
   async getActiveThreads(guildId: Snowflake): Promise<RawChannel[]> {
-    const res = await this.request<ActiveThreadsResponse>(
+    const res = await this.get<ActiveThreadsResponse>(
       `/guilds/${guildId}/threads/active`,
     );
     return res.threads;
@@ -205,7 +244,7 @@ export class DiscordApi {
       let after: Snowflake | undefined;
       for (;;) {
         const cursor = after ? `&after=${after}` : '';
-        const page = await this.request<RawUser[]>(
+        const page = await this.get<RawUser[]>(
           `${basePath}?limit=100&type=${type}${cursor}`,
           true,
         );
@@ -219,6 +258,50 @@ export class DiscordApi {
       }
     }
     return [...byId.values()];
+  }
+
+  /**
+   * Supprime un message Discord (`DELETE /channels/{}/messages/{}`).
+   *
+   * Discord renvoie un 204 No Content en cas de succès. La méthode résout
+   * sans valeur — appel impératif uniquement.
+   *
+   * Gestion d'erreurs :
+   * - **204** → succès, on résout.
+   * - **404** → le message n'existe plus (déjà supprimé par l'utilisateur,
+   *   par un modérateur, par Vespry lui-même dans une exécution précédente).
+   *   On considère ça comme un **succès idempotent** : l'effet désiré est
+   *   atteint. On log un avertissement console, on ne lève pas.
+   * - **403** → permission refusée (ce n'est pas notre message et on n'est
+   *   pas modérateur du salon). Lève `DiscordApiError('forbidden')` —
+   *   l'appelant peut décider d'ignorer ou de remonter à l'utilisateur.
+   * - **401** → session expirée. Lève `DiscordApiError('auth')`.
+   * - **429** → géré par le back-off `request()` (même mécanique que GET).
+   *
+   * On ne supporte PAS `bulk-delete` (POST /messages/bulk-delete) :
+   * l'API exige des messages de moins de 14 jours, 2 à 100 par lot — trop
+   * spécifique pour gagner. On supprime un par un avec back-off, à ~5/sec
+   * (le rate-limit Discord pour DELETE message est gracieux).
+   */
+  async deleteMessage(
+    channelId: Snowflake,
+    messageId: Snowflake,
+  ): Promise<void> {
+    const path = `/channels/${channelId}/messages/${messageId}`;
+    const result = await this.request<null>(path, {
+      method: 'DELETE',
+      // Délai inter-requêtes appliqué — protège du rate-limit DELETE.
+      throttle: true,
+      // 404 = idempotence : un message déjà supprimé est un succès.
+      tolerate404: true,
+      // 204 No Content → pas de corps à parser.
+      expectEmpty: true,
+    });
+    // `result === null` est le seul cas attendu (204 ou 404 toléré).
+    // On le signale uniquement quand c'est un 404 — pas moyen de le savoir
+    // ici sans changer la signature de `request()`. On log au niveau
+    // appelant si besoin (la PurgeQueue saura distinguer).
+    void result;
   }
 
   /**
