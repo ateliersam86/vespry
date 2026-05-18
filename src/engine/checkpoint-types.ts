@@ -228,6 +228,15 @@ export interface ExportOptions {
   partitionSize?: number;
   /** Formats de fichier à générer. Défaut : `DEFAULT_FORMATS`. */
   formats: ExportFormat[];
+  /**
+   * Mot de passe pour chiffrer le zip en AES-256 (Phase 4 — opt-in). Vide
+   * ou absent → zip non chiffré (comportement par défaut). Le mot de passe
+   * ne transite QUE le temps d'un run et n'est pas persisté ; il est
+   * stocké dans `ExportRun.options` côté IndexedDB le temps de l'export.
+   * Si l'utilisateur l'oublie, le zip est irrécupérable — affiché en clair
+   * dans la UI.
+   */
+  zipPassword?: string;
 }
 
 /** Tailles de partition proposées (messages/fichier). 0 = pas de découpage. */

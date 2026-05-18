@@ -108,6 +108,12 @@ export type VespryCommand =
       /** Messages/fichier (0 = pas de découpage). */
       partitionSize: number;
       formats: ExportFormat[];
+      /**
+       * Mot de passe pour chiffrer le zip en AES-256 (Phase 4). Vide ou
+       * absent → zip non chiffré. Le mot de passe ne transite que via cette
+       * commande et n'est pas persisté côté UI (RAM uniquement).
+       */
+      zipPassword?: string;
     }
   | { cmd: 'resume'; runId: string }
   | {
@@ -168,6 +174,12 @@ export interface EnqueueExtras {
   /** Messages/fichier (0 = pas de découpage). */
   partitionSize: number;
   formats: ExportFormat[];
+  /**
+   * Mot de passe pour chiffrer le zip en AES-256 (Phase 4 — opt-in).
+   * Propagé jusqu'à `ExportRun.options.zipPassword`, consommé par le
+   * packager au moment du finissage du zip.
+   */
+  zipPassword?: string;
 }
 
 /** Réponse à une commande. `data` selon la commande. */

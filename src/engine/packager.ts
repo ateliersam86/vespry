@@ -42,6 +42,7 @@ import {
   type ExportContext, type ExportLabels,
 } from './exporters';
 import { detectPerfProfile, type PerfProfile } from './perf-profile';
+import { encryptZipBlob } from './encrypt-zip';
 import { t } from '../ui/i18n';
 import type { RawMessage } from './types';
 
@@ -335,11 +336,19 @@ export async function packageRun(
 
   // manifest.json + INDEX.md
   const totalMessages = stats.reduce((s, c) => s + c.messages, 0);
+  // Scrub du mot de passe : il ne doit JAMAIS apparaître dans un artefact
+  // sérialisé. On garde le drapeau `encrypted` pour que l'utilisateur sache
+  // si son zip est chiffré sans avoir à le deviner.
+  const willEncrypt = typeof run.options.zipPassword === 'string'
+    && run.options.zipPassword.length > 0;
+  const safeOptions: Record<string, unknown> = { ...run.options };
+  delete safeOptions['zipPassword'];
   const manifest = {
     guild: run.guildName,
     guildId: run.guildId,
     exportedAt: new Date().toISOString(),
-    options: run.options,
+    options: safeOptions,
+    encrypted: willEncrypt,
     totals: {
       channels: stats.length,
       messages: totalMessages,
@@ -355,7 +364,15 @@ export async function packageRun(
   );
 
   await writer.close();
-  const blob = await zipBlobPromise;
+  let blob = await zipBlobPromise;
+
+  // Phase 4 — chiffrement AES-256 (opt-in). On encapsule le zip Conflux dans
+  // un second zip qui contient une unique entrée chiffrée. Le `Blob` final a
+  // toujours `application/zip` ; l'utilisateur ouvre avec 7-Zip / Keka, tape
+  // son mot de passe, et obtient le zip métier d'origine.
+  if (willEncrypt) {
+    blob = await encryptZipBlob(blob, run.options.zipPassword as string);
+  }
   return { blob, manifest };
 }
 

@@ -198,5 +198,14 @@
   "purge.partial": "Done with errors — {done} deleted, {failed} refused.",
   "overlay.filename_label": "Zip file name",
   "overlay.filename_help": "Placeholders: {guildName}, {date}, {datetime}. Default: vespry-{guildName}",
-  "overlay.filename_preview": "Preview: {name}"
+  "overlay.filename_preview": "Preview: {name}",
+  "password.label": "Encrypt the export (optional)",
+  "password.placeholder": "Type a password",
+  "password.show": "Show password",
+  "password.hide": "Hide password",
+  "password.help": "AES-256 encryption. If you forget the password, the export is unrecoverable.",
+  "password.strength_empty": "No encryption",
+  "password.strength_weak": "Weak — at least 8 chars",
+  "password.strength_medium": "Medium",
+  "password.strength_strong": "Strong"
 }

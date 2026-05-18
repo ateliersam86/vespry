@@ -57,6 +57,7 @@ import type { RemoteController } from '../../ui/remote-controller';
 import { ScheduleSection } from './ScheduleSection';
 import { PurgeModal } from './PurgeModal';
 import { FilenameTemplateField } from './FilenameTemplateField';
+import { PasswordSection } from './PasswordSection';
 import {
   DEFAULT_ZIP_TEMPLATE,
   loadZipTemplate,
@@ -283,6 +284,12 @@ export function Overlay({
   }, []);
   /** Découpage des gros salons : messages/fichier (0 = pas de découpage). */
   const [partitionSize, setPartitionSize] = useState(0);
+  /**
+   * Mot de passe AES-256 du zip (Phase 4 — opt-in). RAM uniquement, jamais
+   * persisté. Propagé à `enqueue()` au clic « Ajouter à la file », vidé
+   * juste après comme `manualSel` / `selected`.
+   */
+  const [zipPassword, setZipPassword] = useState('');
   /** Panneau d'export : mode avancé (options pointues visibles) ou simple. */
   const [advanced, setAdvanced] = useState(false);
   const [view, setView] = useState<'export' | 'credits'>('export');
@@ -448,10 +455,15 @@ export function Overlay({
     };
     if (reactionUsers) extras.includeReactionUsers = true;
     if (incremental) extras.incremental = true;
+    if (zipPassword) extras.zipPassword = zipPassword;
     void controller.enqueue(activeGuild, picked, media, extras);
     setSelected(new Set());
     setManualSel(new Map());
     setFocus(null);
+    // Sécurité : le mot de passe n'est pas censé survivre à la commande
+    // (UN run = UN ciblage). On le vide ; si l'utilisateur enchaîne un
+    // second export il devra le retaper.
+    setZipPassword('');
   }
 
   /** Bascule un drapeau de critère (pinned, image, sticker…). */
@@ -914,6 +926,7 @@ export function Overlay({
             )}
             <FilenameTemplateField activeGuild={activeGuild} />
             <ScheduleSection guilds={controller.guilds} />
+            <PasswordSection password={zipPassword} onChange={setZipPassword} />
             </>
             )}
           </div>

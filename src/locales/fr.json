@@ -198,5 +198,14 @@
   "purge.partial": "Terminé avec erreurs — {done} supprimés, {failed} refus.",
   "overlay.filename_label": "Nom du fichier zip",
   "overlay.filename_help": "Variables : {guildName}, {date}, {datetime}. Par défaut : vespry-{guildName}",
-  "overlay.filename_preview": "Aperçu : {name}"
+  "overlay.filename_preview": "Aperçu : {name}",
+  "password.label": "Chiffrer l'export (optionnel)",
+  "password.placeholder": "Tapez un mot de passe",
+  "password.show": "Afficher le mot de passe",
+  "password.hide": "Masquer le mot de passe",
+  "password.help": "Chiffrement AES-256. Si vous oubliez le mot de passe, l'export sera irrécupérable.",
+  "password.strength_empty": "Pas de chiffrement",
+  "password.strength_weak": "Faible — au moins 8 caractères",
+  "password.strength_medium": "Moyen",
+  "password.strength_strong": "Fort"
 }
