@@ -104,6 +104,139 @@ function safeName(s: string): string {
   return cleaned.slice(0, 100) || 'x';
 }
 
+/**
+ * Mapping enum lisible des `RawMessage.type` numériques Discord.
+ * Permet à un agent IA "froid" d'avoir directement `"REPLY"` plutôt qu'à
+ * deviner `19`. Le numérique reste dans `type` (forward-compat API).
+ *
+ * Valeurs : https://discord.com/developers/docs/resources/message#message-object-message-types
+ */
+const MESSAGE_TYPE_NAMES: Record<number, string> = {
+  0: 'DEFAULT',
+  1: 'RECIPIENT_ADD',
+  2: 'RECIPIENT_REMOVE',
+  3: 'CALL',
+  4: 'CHANNEL_NAME_CHANGE',
+  5: 'CHANNEL_ICON_CHANGE',
+  6: 'CHANNEL_PINNED_MESSAGE',
+  7: 'USER_JOIN',
+  8: 'GUILD_BOOST',
+  9: 'GUILD_BOOST_TIER_1',
+  10: 'GUILD_BOOST_TIER_2',
+  11: 'GUILD_BOOST_TIER_3',
+  12: 'CHANNEL_FOLLOW_ADD',
+  14: 'GUILD_DISCOVERY_DISQUALIFIED',
+  15: 'GUILD_DISCOVERY_REQUALIFIED',
+  16: 'GUILD_DISCOVERY_GRACE_PERIOD_INITIAL_WARNING',
+  17: 'GUILD_DISCOVERY_GRACE_PERIOD_FINAL_WARNING',
+  18: 'THREAD_CREATED',
+  19: 'REPLY',
+  20: 'CHAT_INPUT_COMMAND',
+  21: 'THREAD_STARTER_MESSAGE',
+  22: 'GUILD_INVITE_REMINDER',
+  23: 'CONTEXT_MENU_COMMAND',
+  24: 'AUTO_MODERATION_ACTION',
+  25: 'ROLE_SUBSCRIPTION_PURCHASE',
+  26: 'INTERACTION_PREMIUM_UPSELL',
+  27: 'STAGE_START',
+  28: 'STAGE_END',
+  29: 'STAGE_SPEAKER',
+  31: 'STAGE_TOPIC',
+  32: 'GUILD_APPLICATION_PREMIUM_SUBSCRIPTION',
+  36: 'GUILD_INCIDENT_ALERT_MODE_ENABLED',
+  37: 'GUILD_INCIDENT_ALERT_MODE_DISABLED',
+  38: 'GUILD_INCIDENT_REPORT_RAID',
+  39: 'GUILD_INCIDENT_REPORT_FALSE_ALARM',
+  46: 'PURCHASE_NOTIFICATION',
+};
+
+/**
+ * Mapping enum lisible des `RawChannel.type` numériques Discord.
+ * Permet de mettre `"GUILD_TEXT"` à côté de `0` dans l'enveloppe JSON.
+ */
+const CHANNEL_TYPE_NAMES: Record<number, string> = {
+  0: 'GUILD_TEXT',
+  1: 'DM',
+  2: 'GUILD_VOICE',
+  3: 'GROUP_DM',
+  4: 'GUILD_CATEGORY',
+  5: 'GUILD_ANNOUNCEMENT',
+  10: 'ANNOUNCEMENT_THREAD',
+  11: 'PUBLIC_THREAD',
+  12: 'PRIVATE_THREAD',
+  13: 'GUILD_STAGE_VOICE',
+  14: 'GUILD_DIRECTORY',
+  15: 'GUILD_FORUM',
+  16: 'GUILD_MEDIA',
+};
+
+/**
+ * URL du schéma JSON publié (placeholder — à mettre derrière une vraie
+ * page une fois v0.1.0 publiée). Inclus dans chaque fichier JSON pour
+ * permettre à un agent IA / outil de validation de connaître le contrat.
+ */
+const JSON_SCHEMA_URL = 'https://github.com/ateliersam86/vespry/blob/main/docs/SCHEMA.md';
+
+/**
+ * Version Vespry à embarquer dans le JSON. `chrome.runtime.getManifest()`
+ * en runtime, fallback statique pour les tests (vitest n'a pas `chrome`).
+ */
+function vespryVersion(): string {
+  try {
+    return chrome.runtime.getManifest().version;
+  } catch {
+    return '0.1.0';
+  }
+}
+
+/**
+ * Construit l'enveloppe JSON d'un fichier d'export. Cohérente entre les
+ * chemins bulk (ligne ~300) et streaming (`jsonHeader` plus bas) —
+ * AVANT, le shape était dupliqué et les deux pouvaient diverger
+ * silencieusement (cf. note de l'audit B+C, 2026-05-18).
+ *
+ * Schéma volontairement enrichi par rapport à l'API Discord brute :
+ *   - `$schema`, `vespryVersion`, `exportedAt`           → traçabilité
+ *   - `guild { id, name }`                               → fichier autoportant
+ *   - `channel { id, name, type, typeName }`             → enum lisible
+ *   - `messages[].typeName`                              → enum lisible
+ *
+ * Les champs Discord originaux (snake_case, `type` numérique, etc.) sont
+ * conservés intacts — forward-compat sur les futurs champs API.
+ */
+function buildJsonEnvelope(args: {
+  guildId: string;
+  guildName: string;
+  channel: { id: string; name: string; type: number };
+  part?: { index: number; total: number };
+  messages: unknown[];
+}): Record<string, unknown> {
+  // On enrichit chaque message d'un `typeName` lisible (le `type` numérique
+  // reste pour la fidélité API). On évite Object.assign sur des messages
+  // déjà passés par enrichMessage — on caste pour ajouter une clé.
+  const messages = args.messages.map((m): unknown => {
+    const msg = m as { type?: number };
+    const t = typeof msg.type === 'number' ? msg.type : 0;
+    return { ...msg, typeName: MESSAGE_TYPE_NAMES[t] ?? `UNKNOWN_${t}` };
+  });
+  const envelope: Record<string, unknown> = {
+    $schema: JSON_SCHEMA_URL,
+    vespryVersion: vespryVersion(),
+    exportedAt: new Date().toISOString(),
+    guild: { id: args.guildId, name: args.guildName },
+    channel: {
+      id: args.channel.id,
+      name: args.channel.name,
+      type: args.channel.type,
+      typeName: CHANNEL_TYPE_NAMES[args.channel.type] ?? `UNKNOWN_${args.channel.type}`,
+    },
+    messageCount: messages.length,
+    messages,
+  };
+  if (args.part) envelope['part'] = args.part;
+  return envelope;
+}
+
 /** Message enrichi du chemin local de ses médias. */
 function enrichMessage(msg: RawMessage, urlToPath: Map<string, string>): unknown {
   const attachments = msg.attachments.map((a) => {
@@ -265,6 +398,7 @@ export async function packageRun(
         channel: ch,
         slug,
         guildName: run.guildName,
+        guildId: run.guildId,
         formats,
         partSize,
         labels,
@@ -288,27 +422,33 @@ export async function packageRun(
         const suffix = parts.length > 1 ? `.part${p + 1}` : '';
         const ctx: ExportContext = {
           guildName: run.guildName,
+          guildId: run.guildId,
           channelName: parts.length > 1
             ? `${ch.name} (${t('exp.part', { n: p + 1, total: parts.length })})`
             : ch.name,
+          channel: { id: ch.channelId, name: ch.name, type: ch.type },
           urlToPath,
           labels,
         };
         for (const format of formats) {
           const file = `${FORMAT_DIR[format]}/${slug}${suffix}.${format}`;
           if (format === 'json') {
-            await writeText(file, JSON.stringify(
-              {
-                channel: { id: ch.channelId, name: ch.name, type: ch.type },
-                part: parts.length > 1
-                  ? { index: p + 1, total: parts.length }
-                  : undefined,
-                messageCount: chunk.length,
-                messages: chunk.map((m) => enrichMessage(m, urlToPath)),
-              },
-              null,
-              2,
-            ));
+            const envArgs: {
+              guildId: string;
+              guildName: string;
+              channel: { id: string; name: string; type: number };
+              part?: { index: number; total: number };
+              messages: unknown[];
+            } = {
+              guildId: run.guildId,
+              guildName: run.guildName,
+              channel: { id: ch.channelId, name: ch.name, type: ch.type },
+              messages: chunk.map((m) => enrichMessage(m, urlToPath)),
+            };
+            if (parts.length > 1) {
+              envArgs.part = { index: p + 1, total: parts.length };
+            }
+            await writeText(file, JSON.stringify(buildJsonEnvelope(envArgs), null, 2));
           } else if (format === 'html') {
             await writeText(file, toHtml(ctx, chunk));
           } else if (format === 'csv') {
@@ -391,6 +531,7 @@ async function packageChannelStreaming(args: {
   channel: { channelId: string; name: string; type: number };
   slug: string;
   guildName: string;
+  guildId: string;
   formats: ExportFormat[];
   partSize: number;
   labels: ExportLabels;
@@ -400,7 +541,7 @@ async function packageChannelStreaming(args: {
   files: string[];
 }): Promise<number> {
   const {
-    store, runId, channel: ch, slug, guildName, formats, partSize, labels,
+    store, runId, channel: ch, slug, guildName, guildId, formats, partSize, labels,
     urlToPath, profile, writeStream, files,
   } = args;
 
@@ -422,7 +563,7 @@ async function packageChannelStreaming(args: {
       ? `${ch.name} (${t('exp.part', { n: p + 1, total: partitions.length })})`
       : ch.name;
     await writeAllStreams({
-      channel: ch, slug, guildName,
+      channel: ch, slug, guildName, guildId,
       formats, labels, urlToPath, profile, writeStream, files,
       partSuffix,
       channelDisplayName,
@@ -441,6 +582,7 @@ async function writeAllStreams(args: {
   channel: { channelId: string; name: string; type: number };
   slug: string;
   guildName: string;
+  guildId: string;
   formats: ExportFormat[];
   labels: ExportLabels;
   urlToPath: Map<string, string>;
@@ -452,12 +594,14 @@ async function writeAllStreams(args: {
   messages: RawMessage[];
 }): Promise<void> {
   const {
-    channel: ch, slug, guildName, formats, labels, urlToPath, profile,
+    channel: ch, slug, guildName, guildId, formats, labels, urlToPath, profile,
     writeStream, files, partSuffix, channelDisplayName, messages,
   } = args;
   const ctx: ExportContext = {
     guildName,
+    guildId,
     channelName: channelDisplayName,
+    channel: { id: ch.channelId, name: ch.name, type: ch.type },
     urlToPath,
     labels,
   };
@@ -502,8 +646,18 @@ async function* generateFormat(args: {
   };
 
   if (format === 'json') {
+    // Streaming JSON : on émet la MÊME enveloppe que le chemin bulk
+    // (cf. buildJsonEnvelope) en deux temps — l'en-tête, puis les
+    // messages ligne par ligne. Sans ça, les deux chemins divergeaient
+    // silencieusement (audit B+C, 2026-05-18).
+    const tType = ch.type;
+    const cType = CHANNEL_TYPE_NAMES[tType] ?? `UNKNOWN_${tType}`;
     yield '{\n'
-      + `  "channel": ${JSON.stringify({ id: ch.channelId, name: ch.name, type: ch.type })},\n`
+      + `  "$schema": ${JSON.stringify(JSON_SCHEMA_URL)},\n`
+      + `  "vespryVersion": ${JSON.stringify(vespryVersion())},\n`
+      + `  "exportedAt": ${JSON.stringify(new Date().toISOString())},\n`
+      + `  "guild": ${JSON.stringify({ id: ctx.guildId, name: ctx.guildName })},\n`
+      + `  "channel": ${JSON.stringify({ id: ch.channelId, name: ch.name, type: tType, typeName: cType })},\n`
       + `  "messageCount": ${expectedCount},\n`
       + '  "messages": [';
     const acc: string[] = [];
@@ -512,7 +666,10 @@ async function* generateFormat(args: {
     for (const m of messages) {
       const sep = first ? '\n    ' : ',\n    ';
       first = false;
-      acc.push(`${sep}${jsonMessage(m, urlToPath)}`);
+      // Injecte `typeName` au message en streaming aussi.
+      const enriched = JSON.parse(jsonMessage(m, urlToPath)) as { type?: number };
+      const tname = MESSAGE_TYPE_NAMES[enriched.type ?? 0] ?? `UNKNOWN_${enriched.type ?? 0}`;
+      acc.push(`${sep}${JSON.stringify({ ...enriched, typeName: tname })}`);
       count += 1;
       if (count >= buffer) {
         yield flush(acc);

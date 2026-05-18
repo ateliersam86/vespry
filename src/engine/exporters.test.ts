@@ -6,7 +6,9 @@ import type { RawMessage } from './types';
 
 const ctx: ExportContext = {
   guildName: 'Groupe avec Sora',
+  guildId: '1467246938280952014',
   channelName: 'questions-sam',
+  channel: { id: 'c1', name: 'questions-sam', type: 0 },
   urlToPath: new Map([['https://cdn/x.png', 'media/questions-sam/x.png']]),
   labels: ENGLISH_LABELS,
 };
@@ -50,10 +52,17 @@ describe('toTxt', () => {
 });
 
 describe('toCsv', () => {
-  it('produit un en-tête et une ligne par message', () => {
+  it('produit un en-tête et une ligne par message (avec BOM UTF-8 et colonnes Channel)', () => {
     const out = toCsv(ctx, [msg(), msg({ id: '2' })]);
-    const lines = out.trimEnd().split('\r\n');
-    expect(lines[0]).toBe('AuthorID,Author,Date,Edited,Content,Attachments,Reactions');
+    // Le BOM UTF-8 (`﻿`) est obligatoire pour qu'Excel Windows
+    // n'interprète pas le fichier en latin-1 (sinon accents/emojis cassés).
+    expect(out.startsWith('﻿')).toBe(true);
+    const lines = out.slice(1).trimEnd().split('\r\n');
+    // Colonnes Channel{ID,Name,Type} ajoutées pour exploiter un CSV
+    // concaténé sur plusieurs salons (BI / pivot tableur).
+    expect(lines[0]).toBe(
+      'ChannelID,Channel,ChannelType,AuthorID,Author,Date,Edited,Content,Attachments,Reactions',
+    );
     expect(lines).toHaveLength(3);
   });
 

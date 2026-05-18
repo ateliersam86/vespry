@@ -68,7 +68,20 @@ export interface ExportLabels {
 /** Contexte passé à chaque exporteur. */
 export interface ExportContext {
   guildName: string;
+  /**
+   * Id du serveur — propagé dans l'enveloppe JSON et utilisé par les
+   * exporters pour produire des références univoques quand plusieurs
+   * exports sont concaténés (CSV cross-guild, BI).
+   */
+  guildId: string;
   channelName: string;
+  /**
+   * Identifiants complets du salon — id Snowflake + nom + type Discord
+   * (0 = guild text, 1 = DM, 3 = group DM, 5 = announce, 10/11/12 = threads,
+   * 15 = forum). Permet aux exports CSV/JSON de rester exploitables après
+   * concaténation et donne aux agents IA une donnée univoque (l'ID).
+   */
+  channel: { id: string; name: string; type: number };
   /** url d'origine → chemin du média dans le zip (`media/slug/fichier`). */
   urlToPath: Map<string, string>;
   labels: ExportLabels;
@@ -235,12 +248,19 @@ function attachmentsCell(m: RawMessage, urlToPath: Map<string, string>): string 
  * réactions, et un indicateur « édité ».
  */
 export function toCsv(ctx: ExportContext, messages: RawMessage[]): string {
+  // Colonnes : ID + nom + type du salon en tête pour que la concaténation
+  // multi-salons reste exploitable (filtres / TCD Excel). `Edited` distinct
+  // de Date (Vespry est seul à le distinguer vs DCE/Discrub).
   const header = [
+    'ChannelID', 'Channel', 'ChannelType',
     'AuthorID', 'Author', 'Date', 'Edited', 'Content', 'Attachments', 'Reactions',
   ];
   const rows = [header.join(',')];
   for (const m of messages) {
     rows.push([
+      csvCell(ctx.channel.id),
+      csvCell(ctx.channel.name),
+      csvCell(String(ctx.channel.type)),
       csvCell(m.author.id),
       csvCell(authorName(m)),
       csvCell(m.timestamp),
@@ -250,7 +270,10 @@ export function toCsv(ctx: ExportContext, messages: RawMessage[]): string {
       csvCell((m.reactions ?? []).map(reactionText).join(' ')),
     ].join(','));
   }
-  return `${rows.join('\r\n')}\r\n`;
+  // BOM UTF-8 (`﻿`) en tête : sans lui, Excel sous Windows interprète
+  // le fichier en latin-1 et casse accents/emojis. Aucun coût côté Numbers,
+  // LibreOffice, Google Sheets, awk/grep (BOM ignoré ou stripé).
+  return `﻿${rows.join('\r\n')}\r\n`;
 }
 
 // ─────────────────────────────── HTML ───────────────────────────────
@@ -533,6 +556,43 @@ const HTML_STYLE = HTML_STYLE_POLL + `
   .reactions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .react { background: #2a2536; border-radius: 999px; padding: 2px 9px;
     font-size: 13px; }
+
+  /* ─── Impression — Vespry est le premier à le gérer parmi DCE/Discrub ───
+     Tous les exports HTML concurrents sont en dark sans @media print.
+     Soit le navigateur imprime le fond foncé (forêt d'encre), soit il ne
+     l'imprime pas et on a du texte clair sur blanc → invisible. On force
+     un thème clair lisible pour le print, on évite la coupure de messages,
+     et on imprime l'URL des liens (sans la perdre comme avec du texte gris).
+     Audit B+C, 2026-05-18. */
+  @media print {
+    :root { color-scheme: light; }
+    body {
+      background: #fff !important; color: #111 !important;
+      font-family: "Segoe UI", system-ui, sans-serif !important;
+    }
+    .wrap { max-width: none; padding: 12mm; }
+    /* Évite qu'un message soit coupé entre deux pages. */
+    .msg, .embed, .poll, .reply { break-inside: avoid; page-break-inside: avoid; }
+    .author { color: #111 !important; }
+    .time, .edited, .sys, .reply { color: #555 !important; }
+    /* Imprime l'URL effective des liens — sinon le lecteur perd la cible. */
+    .content a::after { content: " (" attr(href) ")"; font-size: 11px; color: #555; }
+    /* Avatar pastille sur fond clair = peu lisible, on ajoute un liseré. */
+    .av { border: 1px solid #ccc; box-shadow: none; }
+    .reply { border-left-color: #999 !important; }
+    .embed { border-left-color: #777 !important; background: #f5f5f7 !important; }
+    .reactions .react {
+      background: transparent !important;
+      border: 1px solid #999; color: #111 !important;
+    }
+    pre, code { background: #f5f5f7 !important; color: #111 !important; }
+    /* Image et stickers réduits pour ne pas déborder en portrait étroit. */
+    .att-img, .embed-img, .embed-thumb, .sticker-img {
+      max-width: 100% !important; max-height: 200px !important;
+    }
+    /* Composants interactifs (boutons, menus) n'ont aucun sens en print. */
+    .components, .att-file { display: none !important; }
+  }
 `;
 
 /** Rend un message système : ligne centrée et discrète. */

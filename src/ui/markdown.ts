@@ -72,7 +72,16 @@ function inlineMd(s: string): string {
   // italique : `*…*` ou `_…_`, en évitant les doublons traités plus haut.
   r = r.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, '$1<em>$2</em>');
   r = r.replace(/(^|[^_])_([^_\n]+?)_(?!_)/g, '$1<em>$2</em>');
-  r = r.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" rel="noopener">$1</a>');
+  // Liens auto. La classe finale `[^\s<]+` consommait la ponctuation
+  // terminale (`.`, `,`, `)`, `!`, `?`, `;`, `:`) — un lien collé à une
+  // phrase comme `Vois https://x.com/foo.` finissait avec un `.` dans
+  // l'URL et 404. On exclut explicitement ces caractères en fin de match,
+  // puis on les remet hors du `<a>` via une post-capture optionnelle.
+  // Audit B+C (2026-05-18).
+  r = r.replace(
+    /(https?:\/\/[^\s<]*?)([.,)!?;:]*)(?=\s|$|[<])/g,
+    '<a href="$1" rel="noopener">$1</a>$2',
+  );
   return r;
 }
 
