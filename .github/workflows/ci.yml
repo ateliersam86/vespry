@@ -17,3 +17,9 @@ jobs:
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
+      # Build Firefox en parallèle pour détecter toute régression du portage.
+      # Pas de `tsc --noEmit` ici (déjà fait au-dessus) — uniquement vite.
+      - run: npx vite build --config vite.firefox.config.ts
+      # Lint AMO : web-ext lint échoue uniquement sur les erreurs (warnings
+      # tolérés). Garantit que `dist-firefox/` reste soumissible à AMO.
+      - run: npm run firefox:lint
