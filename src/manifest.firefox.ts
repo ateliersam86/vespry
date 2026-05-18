@@ -100,6 +100,11 @@ export default defineManifest({
     // l'event page (cf. `src/firefox/background.ts`).
     'notifications', // notifier fin d'export / session expirée
     'downloads', // déclencher le téléchargement du zip
+    // Phase 3 — planification d'export récurrent. L'event page Firefox écoute
+    // `chrome.alarms.onAlarm` exactement comme le service worker Chrome
+    // (cf. `src/background/service-worker.ts`), avec resync au démarrage et
+    // sur changement de `chrome.storage.local`.
+    'alarms',
   ],
 
   host_permissions: [

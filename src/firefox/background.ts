@@ -42,6 +42,14 @@ import { getToken } from '../engine/auth';
 import { installGlobalHandlers } from '../diagnostics';
 import { loadCredits } from '../credits';
 import { createCheckout, fetchDonorFeed } from '../donors';
+import { ALL_MEDIA, DEFAULT_FORMATS } from '../engine/checkpoint-types';
+import {
+  SCHEDULE_STORAGE_KEY,
+  SCHEDULED_EXPORT_ALARM_NAME,
+  installAlarmFor,
+  isScheduledExport,
+  loadSchedule,
+} from '../engine/scheduler';
 import {
   isCommandEnvelope,
   isDoDownload,
@@ -85,6 +93,74 @@ function broadcast(): void {
 
 controller.subscribe(broadcast);
 void controller.init().then(broadcast);
+
+// --- planificateur d'export (Phase 3) — équivalent Firefox du wiring
+// `service-worker.ts` côté Chrome. Même contrat, même clé de storage, même
+// nom d'alarme — le module `scheduler.ts` est partagé.
+
+/**
+ * Aligne l'alarme `chrome.alarms` sur l'état stocké dans
+ * `chrome.storage.local`. Idempotent : sûr à appeler plusieurs fois.
+ * Pas de planning enregistré → l'alarme est nettoyée.
+ */
+async function syncScheduledAlarm(): Promise<void> {
+  try {
+    const schedule = await loadSchedule(chrome.storage.local);
+    await installAlarmFor(chrome.alarms, schedule);
+  } catch (e) {
+    console.warn('[Vespry] sync alarm a échoué :', e);
+  }
+}
+
+// Au démarrage de Firefox / installation / mise à jour : ré-aligne l'alarme.
+// Sans ça, après une mise à jour Firefox efface les alarmes ; la planification
+// serait silencieusement perdue jusqu'au prochain enregistrement utilisateur.
+chrome.runtime.onStartup.addListener(() => {
+  void syncScheduledAlarm();
+});
+chrome.runtime.onInstalled.addListener(() => {
+  void syncScheduledAlarm();
+});
+
+// Recharge l'alarme dès que la UI modifie le planning dans storage.
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local') return;
+  if (!(SCHEDULE_STORAGE_KEY in changes)) return;
+  void syncScheduledAlarm();
+});
+
+// Réveil sur l'alarme planifiée : on exécute directement la commande
+// `scheduled-export-fire` dans CE contexte (le moteur est ici), pas de
+// forward à un offscreen comme côté Chrome.
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== SCHEDULED_EXPORT_ALARM_NAME) return;
+  void onScheduledAlarmFire();
+});
+
+async function onScheduledAlarmFire(): Promise<void> {
+  const schedule = await loadSchedule(chrome.storage.local);
+  if (!isScheduledExport(schedule)) {
+    // Storage vidé entre-temps — on désinstalle l'alarme par sécurité.
+    await chrome.alarms.clear(SCHEDULED_EXPORT_ALARM_NAME);
+    return;
+  }
+  const result = await exec({
+    cmd: 'scheduled-export-fire',
+    guildId: schedule.guildId,
+    guildName: schedule.guildName,
+  });
+  if (!result.ok) {
+    // Échec non bloquant : la prochaine occurrence (24 h / 7 j) retentera.
+    notify(
+      'Export planifié — impossible',
+      `${schedule.guildName} : ${result.error ?? 'erreur inconnue'}. Ouvre Discord pour réessayer.`,
+    );
+  }
+}
+
+// Premier alignement au chargement de l'event page : si Firefox a réveillé
+// l'event page parce qu'une alarme attendait, le storage a la priorité.
+void syncScheduledAlarm();
 
 // --- exécution des commandes (anciennement offscreen) ---
 
@@ -140,9 +216,29 @@ async function exec(command: VespryCommand): Promise<CommandResponse> {
     }
     case 'scheduled-export-fire': {
       // Phase 3 — la planification déclenche un export incrémental depuis
-      // ce contexte (background event page côté Firefox). Cf. offscreen.ts
-      // pour le pendant Chrome — même logique, on n'utilise que les API
-      // partagées.
+      // ce contexte (background event page côté Firefox). Logique identique
+      // au handler `offscreen.ts` côté Chrome : on charge la liste des salons
+      // du guild ciblé puis on enqueue un export incrémental avec les défauts
+      // utilisateur (tous médias, formats JSON+HTML). Si Discord est
+      // déconnecté, `loadChannels()` renvoie une liste vide et on ignore
+      // silencieusement — la prochaine occurrence (24 h / 7 j) retentera.
+      const channels = await controller.loadChannels(command.guildId);
+      if (channels.length === 0) {
+        return { ok: false, error: 'aucun salon accessible — Discord déconnecté ?' };
+      }
+      await controller.enqueue(
+        { id: command.guildId, name: command.guildName },
+        channels,
+        ALL_MEDIA,
+        {
+          includeThreads: false,
+          zones: [],
+          zoneMode: 'any',
+          incremental: true,
+          partitionSize: 0,
+          formats: [...DEFAULT_FORMATS],
+        },
+      );
       return { ok: true, state: controller.toState() };
     }
     case 'checkout': {
