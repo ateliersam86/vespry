@@ -52,6 +52,20 @@ export interface ProgressSnapshot {
   channelsDone: number;
   currentChannel: string | null;
   messagesTotal: number;
+  /**
+   * Total estimé de messages attendus sur tout le run, calculé via
+   * `DiscordApi.searchMessageCount` au démarrage (un appel par salon, en
+   * parallèle). `null` si l'estimation a échoué (perms, rate-limit,
+   * DM non supporté) — la UI retombe alors sur `channelsDone/channelsTotal`.
+   *
+   * Permet une barre de progression FLUIDE qui ne saute plus de 0 à 80 %
+   * en avalant des petits salons puis stagne sur le gros — le rapport
+   * `messagesTotal / estimatedMessagesTotal` reste à peu près linéaire dans
+   * le temps. Plafond Discord : 8000 par salon (au-delà l'API renvoie
+   * 8000+, donc on sous-estime un peu sur les très gros salons — acceptable
+   * pour une barre indicative).
+   */
+  estimatedMessagesTotal: number | null;
   assetsDone: number;
   assetsFailed: number;
   /** Décompte des médias téléchargés par type (pour le détail 100 %). */
@@ -161,6 +175,14 @@ export class ExportRunner {
   private assetsDone = 0;
   private assetsFailed = 0;
   private reactions = 0;
+  /**
+   * Total estimé de messages attendus sur tout le run, calculé via l'API
+   * `search` au démarrage. `null` tant que le pré-comptage n'a pas eu lieu
+   * ou s'il a complètement échoué (perms manquantes, rate-limit excédé).
+   * La UI s'en sert pour rendre la barre fluide ; sinon retombe sur
+   * `channelsDone/channelsTotal`.
+   */
+  private estimatedMessagesTotal: number | null = null;
   private readonly assetsByKind: Record<AssetKind, number> = {
     image: 0,
     video: 0,
@@ -200,6 +222,19 @@ export class ExportRunner {
     const concurrency = clampChannelConcurrency(
       this.options.channelConcurrency ?? 1,
     );
+
+    // Pré-comptage des messages attendus, en parallèle, avant de démarrer.
+    // 1 appel `messages/search?channel_id=X&limit=1` par salon pending, qui
+    // renvoie `total_results` plafonné à 8000 (limite ES Discord). Au-delà
+    // on sous-estime un peu, mais ça suffit largement à pondérer la barre.
+    // Échec d'estimation = on retombe sur le calcul historique côté UI ;
+    // pas de blocage du run sur un pré-comptage qui foire.
+    await this.preCount(run.guildId, pending);
+    // Premier broadcast avec l'estimation totale, AVANT toute pagination —
+    // la barre est ainsi prête à afficher du % dès le premier batch.
+    if (this.events.onProgress) {
+      void this.snapshot(runId, null).then(this.events.onProgress);
+    }
 
     let anyPartial = false;
     let paused = false;
@@ -495,10 +530,61 @@ export class ExportRunner {
       ).length,
       currentChannel,
       messagesTotal: channels.reduce((s, c) => s + c.messageCount, 0),
+      estimatedMessagesTotal: this.estimatedMessagesTotal,
       assetsDone: this.assetsDone,
       assetsFailed: this.assetsFailed,
       assetsByKind: { ...this.assetsByKind },
       reactions: this.reactions,
     };
+  }
+
+  /**
+   * Lance `searchMessageCount` pour chaque salon pending en parallèle (cap 5
+   * pour rester sous le rate-limit Discord ~50/min). Stocke le total estimé
+   * dans `this.estimatedMessagesTotal`. Quand une estimation échoue pour un
+   * salon donné, on l'ignore — l'estimation totale est juste un peu basse,
+   * pas un blocage. Si TOUS les salons échouent, `estimatedMessagesTotal`
+   * reste null et la UI retombe sur le calcul par salons.
+   */
+  private async preCount(
+    guildId: Snowflake,
+    pending: ChannelProgress[],
+  ): Promise<void> {
+    if (pending.length === 0) {
+      this.estimatedMessagesTotal = 0;
+      return;
+    }
+    const CONCURRENCY = 5;
+    const counts: (number | null)[] = new Array(pending.length).fill(null);
+    let cursor = 0;
+    const next = (): number | null => {
+      if (cursor >= pending.length) return null;
+      const i = cursor;
+      cursor += 1;
+      return i;
+    };
+    const isDmGuild = !guildId || guildId === '@me';
+    const workers = Array.from({ length: Math.min(CONCURRENCY, pending.length) }, async () => {
+      for (;;) {
+        const i = next();
+        if (i === null) return;
+        const ch = pending[i];
+        if (!ch) return; // garde-fou : `next()` est cohérent mais TS l'ignore
+        // Type 1 (DM) et 3 (group DM) → endpoint channel/search, sinon guild/search.
+        // L'API guild search exige aussi que le user soit dans le guild, ce qui est
+        // évidemment le cas (on vient d'en récupérer la liste des salons).
+        const n = (isDmGuild || ch.type === 1 || ch.type === 3)
+          ? await this.api.searchDmMessageCount(ch.channelId)
+          : await this.api.searchMessageCount(guildId, ch.channelId);
+        counts[i] = n;
+      }
+    });
+    await Promise.all(workers);
+    const total = counts.reduce<number>((s, c) => s + (c ?? 0), 0);
+    const anySuccess = counts.some((c) => c !== null);
+    // Si aucune estimation n'a marché → null. Sinon, total même partiel
+    // (les salons sans estimation sont juste comptés à 0, donc la barre
+    // sous-estime un peu mais ne se trompe pas dans l'autre sens).
+    this.estimatedMessagesTotal = anySuccess ? total : null;
   }
 }

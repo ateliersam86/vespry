@@ -41,6 +41,30 @@ export function isBridgeTokenMessage(data: unknown): data is BridgeTokenMessage 
 // --- état sérialisable diffusé par l'offscreen ---
 
 /** Vue d'une tâche d'export (sans le Blob — non sérialisable en messaging). */
+/**
+ * Pourcentage d'avancement à afficher pour un item de la file.
+ *
+ * Préfère le ratio `messages / estimatedMessages` (barre fluide pondérée
+ * par messages réels) quand le pré-comptage du runner a abouti. Sinon
+ * retombe sur `channelsDone / channelsTotal` (moins fluide, mais robuste
+ * si l'API search Discord a refusé l'estimation). Partagé entre overlay,
+ * popup, badge icône, label du bouton lanceur — un seul calcul, partout.
+ */
+export function progressPct(item: {
+  channelsTotal: number;
+  channelsDone: number;
+  messages: number;
+  estimatedMessages: number | null;
+}): number {
+  if (item.estimatedMessages && item.estimatedMessages > 0) {
+    return Math.min(100, Math.round((item.messages / item.estimatedMessages) * 100));
+  }
+  if (item.channelsTotal > 0) {
+    return Math.round((item.channelsDone / item.channelsTotal) * 100);
+  }
+  return 0;
+}
+
 export interface QueueItemView {
   runId: string;
   guildName: string;
@@ -48,6 +72,13 @@ export interface QueueItemView {
   channelsTotal: number;
   channelsDone: number;
   messages: number;
+  /**
+   * Total estimé de messages attendus, calculé via l'API search Discord
+   * au démarrage du run. `null` si l'estimation a échoué (perms, rate-limit,
+   * salon trop gros — l'API plafonne à 8000 par salon). La UI s'en sert
+   * pour rendre la barre fluide ; sinon retombe sur channelsDone/channelsTotal.
+   */
+  estimatedMessages: number | null;
   assetsByKind: { image: number; video: number; audio: number; file: number };
   reactions: number;
   log: string[];

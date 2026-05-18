@@ -47,6 +47,8 @@ export interface QueueItem {
   channelsTotal: number;
   channelsDone: number;
   messages: number;
+  /** Total estimé de messages attendus (cf. `QueueItemView.estimatedMessages`). */
+  estimatedMessages: number | null;
   assetsByKind: Record<AssetKind, number>;
   reactions: number;
   /** Lignes de la mini-console (plafonné). */
@@ -449,6 +451,11 @@ export class VespryController {
       channelsTotal: expanded.length,
       channelsDone: 0,
       messages: 0,
+      // null = pré-comptage pas encore exécuté (le runner le calcule au
+      // démarrage et le pousse via onProgress). La UI affichera une barre
+      // indéterminée pendant cette ~1 s, puis fluide quand l'estimation
+      // arrive.
+      estimatedMessages: null,
       assetsByKind: { ...ZERO_KINDS },
       reactions: 0,
       log: [],
@@ -676,6 +683,7 @@ export class VespryController {
         channelsTotal: q.channelsTotal,
         channelsDone: q.channelsDone,
         messages: q.messages,
+        estimatedMessages: q.estimatedMessages,
         assetsByKind: q.assetsByKind,
         reactions: q.reactions,
         log: q.log,
@@ -727,6 +735,7 @@ export class VespryController {
           item.channelsTotal = s.channelsTotal;
           item.channelsDone = s.channelsDone;
           item.messages = s.messagesTotal;
+          item.estimatedMessages = s.estimatedMessagesTotal;
           item.assetsByKind = s.assetsByKind;
           item.reactions = s.reactions;
           this.notify();
@@ -779,6 +788,9 @@ export class VespryController {
       channelsTotal: channels.length,
       channelsDone: channels.filter((c) => c.status === 'done' || c.status === 'partial').length,
       messages: channels.reduce((s, c) => s + c.messageCount, 0),
+      // Le run repris n'a pas refait de pré-comptage — le runner va re-tirer
+      // l'estimation au prochain `run()`, donc null en attendant.
+      estimatedMessages: null,
       assetsByKind: byKind,
       reactions: 0,
       log: [`${clock()}  ↻ run repris depuis le checkpoint`],

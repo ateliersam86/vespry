@@ -1466,8 +1466,15 @@ function MiniWidget({
   onExpand: () => void;
 }): JSX.Element {
   const running = controller.queue.find((q) => q.status === 'in_progress');
-  const pct = running && running.channelsTotal > 0
-    ? Math.round((running.channelsDone / running.channelsTotal) * 100)
+  // Pourcentage fluide quand l'estimation totale par messages est dispo
+  // (cf. ExportRunner.preCount). Sinon repli sur channels — moins fluide
+  // mais robuste si le pré-comptage a échoué (perms, salon trop gros).
+  const pct = running
+    ? (running.estimatedMessages && running.estimatedMessages > 0
+        ? Math.min(100, Math.round((running.messages / running.estimatedMessages) * 100))
+        : running.channelsTotal > 0
+          ? Math.round((running.channelsDone / running.channelsTotal) * 100)
+          : 0)
     : 0;
   return (
     <div class="v-mini" onClick={onExpand} title={t('mini.open')}>
@@ -2079,9 +2086,13 @@ function TaskCard({
   onResume: () => void;
   onSupport: () => void;
 }): JSX.Element {
-  const pct = item.channelsTotal > 0
-    ? Math.round((item.channelsDone / item.channelsTotal) * 100)
-    : 0;
+  // Même règle que MiniWidget : préfère le ratio messages/estimation
+  // quand dispo, sinon retombe sur channelsDone/channelsTotal.
+  const pct = item.estimatedMessages && item.estimatedMessages > 0
+    ? Math.min(100, Math.round((item.messages / item.estimatedMessages) * 100))
+    : item.channelsTotal > 0
+      ? Math.round((item.channelsDone / item.channelsTotal) * 100)
+      : 0;
   const done = item.status === 'completed' || item.status === 'partial';
 
   return (

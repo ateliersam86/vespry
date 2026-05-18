@@ -185,6 +185,52 @@ export class DiscordApi {
     );
   }
 
+  /**
+   * Nombre estimé de messages dans un salon — sert au pré-comptage pour la
+   * barre de progression fluide. Discord renvoie `total_results` plafonné
+   * à 8000 (limite de son index Elasticsearch). Au-delà, on a 8000+ ; ce
+   * n'est pas parfait mais ça suffit largement à pondérer correctement
+   * une barre vis-à-vis des autres salons.
+   *
+   * Renvoie `null` si l'appel échoue (perms manquantes, salon vide,
+   * erreur réseau) — l'appelant retombe sur l'ancien calcul par salons.
+   */
+  async searchMessageCount(
+    guildId: Snowflake,
+    channelId: Snowflake,
+  ): Promise<number | null> {
+    try {
+      const res = await this.get<{ total_results?: number }>(
+        `/guilds/${guildId}/messages/search?channel_id=${channelId}&limit=1`,
+        true,
+      );
+      const n = res.total_results;
+      return typeof n === 'number' && n >= 0 ? n : null;
+    } catch {
+      // 403 (pas la permission de chercher), 404 (salon inaccessible),
+      // 429 (rate-limit excédé) — tous non-fatals pour l'export lui-même.
+      return null;
+    }
+  }
+
+  /**
+   * Variante DM : l'API search guild n'existe pas pour les DMs. Discord
+   * expose `/channels/{id}/messages/search?limit=1` qui marche aussi pour
+   * les channels DM/group. On essaie d'abord la voie guild, sinon DM.
+   */
+  async searchDmMessageCount(channelId: Snowflake): Promise<number | null> {
+    try {
+      const res = await this.get<{ total_results?: number }>(
+        `/channels/${channelId}/messages/search?limit=1`,
+        true,
+      );
+      const n = res.total_results;
+      return typeof n === 'number' && n >= 0 ? n : null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Threads archivés d'un salon (`public` ou `private`). */
   async getArchivedThreads(
     channelId: Snowflake,

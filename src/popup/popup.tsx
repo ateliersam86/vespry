@@ -7,6 +7,7 @@
 import { type JSX, render } from 'preact';
 import { useEffect, useReducer, useState } from 'preact/hooks';
 import { RemoteController } from '../ui/remote-controller';
+import { progressPct } from '../messaging';
 import { t } from '../ui/i18n';
 import { getVersion } from '../version';
 import { getThemePref, resolveTheme } from '../ui/theme-pref';
@@ -60,9 +61,7 @@ function Popup(): JSX.Element {
       {running.length > 0 && (
         <div class="popup__tasks">
           {running.map((task) => {
-            const pct = task.channelsTotal > 0
-              ? Math.round((task.channelsDone / task.channelsTotal) * 100)
-              : 0;
+            const pct = progressPct(task);
             return (
               <div class="popup__task" key={task.runId}>
                 <div class="popup__task-row">

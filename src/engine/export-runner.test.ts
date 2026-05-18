@@ -41,12 +41,26 @@ function batch(start: number, count: number): RawMessage[] {
 
 const channel: RawChannel = { id: 'c1', type: 0, name: 'général' };
 
+/**
+ * Stubs des nouvelles méthodes d'estimation introduites par le pré-comptage.
+ * Renvoient `null` pour simuler l'absence de search API — l'objectif des
+ * tests existants est de couvrir la pagination/reprise, pas le calcul
+ * d'estimation. Quand `null`, le runner garde le comportement historique
+ * (progression par salons) ; les assertions sur `messageCount` / `cursor`
+ * restent valides.
+ */
+const NULL_SEARCH = {
+  searchMessageCount: async (): Promise<number | null> => null,
+  searchDmMessageCount: async (): Promise<number | null> => null,
+};
+
 /** Faux DiscordApi : sert des lots prédéfinis. */
 function fakeApi(batches: RawMessage[][]): DiscordApi {
   let call = 0;
   return {
     getMessages: async (): Promise<RawMessage[]> => batches[call++] ?? [],
     downloadAsset: async (): Promise<Blob> => new Blob(['img']),
+    ...NULL_SEARCH,
   } as unknown as DiscordApi;
 }
 
@@ -64,6 +78,7 @@ function perChannelApi(
       return byChannel[channelId]?.[i] ?? [];
     },
     downloadAsset: async (): Promise<Blob | null> => null,
+    ...NULL_SEARCH,
   } as unknown as DiscordApi;
   return { api, calls };
 }
@@ -175,6 +190,7 @@ describe('ExportRunner', () => {
         throw new DiscordApiError('auth', 401, 'expirée');
       },
       downloadAsset: async (): Promise<Blob | null> => null,
+    ...NULL_SEARCH,
     } as unknown as DiscordApi;
 
     const status = await new ExportRunner(api, store).run(runId);
@@ -190,6 +206,7 @@ describe('ExportRunner', () => {
         throw new DiscordApiError('forbidden', 403, 'refusé');
       },
       downloadAsset: async (): Promise<Blob | null> => null,
+    ...NULL_SEARCH,
     } as unknown as DiscordApi;
 
     const status = await new ExportRunner(api, store).run(runId);
@@ -220,6 +237,7 @@ describe('ExportRunner', () => {
         return [];
       },
       downloadAsset: async (): Promise<Blob | null> => null,
+    ...NULL_SEARCH,
     } as unknown as DiscordApi;
 
     const status = await new ExportRunner(api, store).run(runId);
@@ -256,6 +274,7 @@ describe('ExportRunner', () => {
         return [fakeMessage(`${channelId}-1`)];
       },
       downloadAsset: async (): Promise<Blob | null> => null,
+    ...NULL_SEARCH,
     } as unknown as DiscordApi;
 
     const status = await new ExportRunner(api, store, {}, { channelConcurrency: 2 }).run(runId);
@@ -288,6 +307,7 @@ describe('ExportRunner', () => {
         return [fakeMessage(`${channelId}-1`)];
       },
       downloadAsset: async (): Promise<Blob | null> => null,
+    ...NULL_SEARCH,
     } as unknown as DiscordApi;
 
     await new ExportRunner(api, store, {}, { channelConcurrency: 1 }).run(runId);
@@ -304,6 +324,7 @@ describe('ExportRunner', () => {
     const api = {
       getMessages: async (): Promise<RawMessage[]> => (batchCall++ === 0 ? [reacted] : []),
       downloadAsset: async (): Promise<Blob | null> => null,
+    ...NULL_SEARCH,
       getReactions: async (): Promise<{ id: string; username: string }[]> => [
         { id: 'u1', username: 'a' },
         { id: 'u2', username: 'b' },

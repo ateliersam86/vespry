@@ -13,6 +13,7 @@ import {
   isDoDownload,
   isGetToken,
   isStateBroadcast,
+  progressPct,
   type CommandResponse,
   type ExecEnvelope,
   type VespryCommand,
@@ -165,9 +166,7 @@ const lastStatus = new Map<string, string>();
 function updateBadge(state: VespryState): void {
   const running = state.queue.find((q) => q.status === 'in_progress');
   if (running) {
-    const pct = running.channelsTotal > 0
-      ? Math.round((running.channelsDone / running.channelsTotal) * 100)
-      : 0;
+    const pct = progressPct(running);
     void chrome.action.setBadgeBackgroundColor({ color: '#5865f2' });
     void chrome.action.setBadgeText({ text: `${pct}%` });
     return;

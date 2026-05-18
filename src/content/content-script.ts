@@ -8,7 +8,7 @@
  * Le moteur d'export NE tourne PAS ici : il vit dans l'offscreen document.
  * Ce script ne fait que piloter une vue via le RemoteController.
  */
-import { isBridgeTokenMessage } from '../messaging';
+import { isBridgeTokenMessage, progressPct } from '../messaging';
 import { saveToken } from '../engine/auth';
 import { RemoteController } from '../ui/remote-controller';
 import { installGlobalHandlers } from '../diagnostics';
@@ -59,9 +59,7 @@ function updateLauncher(): void {
   if (!label) return;
   const running = controller.queue.find((q) => q.status === 'in_progress');
   if (running) {
-    const pct = running.channelsTotal > 0
-      ? Math.round((running.channelsDone / running.channelsTotal) * 100)
-      : 0;
+    const pct = progressPct(running);
     label.textContent = `Vespry · ${pct}%`;
   } else {
     label.textContent = 'Vespry';
