@@ -180,5 +180,7 @@
   "exp.part": "パート {n}/{total}",
   "mention.user": "@メンバー",
   "mention.role": "@ロール",
-  "mention.channel": "#チャンネル"
+  "mention.channel": "#チャンネル",
+  "exp.poll": "投票",
+  "exp.poll_votes": "{n} 票"
 }

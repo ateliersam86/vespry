@@ -180,5 +180,7 @@
   "exp.part": "bölüm {n}/{total}",
   "mention.user": "@üye",
   "mention.role": "@rol",
-  "mention.channel": "#kanal"
+  "mention.channel": "#kanal",
+  "exp.poll": "anket",
+  "exp.poll_votes": "{n} oy"
 }

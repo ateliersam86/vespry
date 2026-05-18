@@ -139,6 +139,28 @@ export interface RawReaction {
   users?: RawUser[];
 }
 
+/** Une réponse à un sondage Discord (option proposée). */
+export interface RawPollAnswer {
+  answer_id: number;
+  poll_media: { text?: string; emoji?: { name?: string; id?: string | null } };
+}
+
+/** Résultats d'un sondage (si déjà votés). */
+export interface RawPollResults {
+  is_finalized?: boolean;
+  answer_counts?: { id: number; count: number; me_voted?: boolean }[];
+}
+
+/** Sondage Discord (feature « Polls »). */
+export interface RawPoll {
+  question: { text?: string };
+  answers: RawPollAnswer[];
+  expiry?: string | null;
+  allow_multiselect?: boolean;
+  layout_type?: number;
+  results?: RawPollResults;
+}
+
 export interface RawMessage {
   id: Snowflake;
   type: number;
@@ -164,8 +186,8 @@ export interface RawMessage {
   thread?: RawChannel;
   /** Composants interactifs (boutons, menus). Forme libre, conservée telle quelle. */
   components?: unknown[];
-  /** Sondage attaché. Forme libre, conservée telle quelle. */
-  poll?: unknown;
+  /** Sondage Discord attaché. */
+  poll?: RawPoll;
   /** Données d'appel (DM vocaux). */
   call?: { participants: Snowflake[]; ended_timestamp?: string | null };
 }

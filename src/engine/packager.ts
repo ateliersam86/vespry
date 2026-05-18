@@ -40,6 +40,8 @@ function buildLabels(): ExportLabels {
     systemLabel: t('exp.system_label'),
     systemMessage: (type) => t('exp.system_message', { n: type }),
     exportedBy: t('exp.exported_by'),
+    poll: t('exp.poll'),
+    pollVotes: (n) => t('exp.poll_votes', { n }),
     mentions: {
       user: t('mention.user'),
       role: t('mention.role'),

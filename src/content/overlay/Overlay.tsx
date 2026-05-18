@@ -47,6 +47,7 @@ import {
   type RawEmbed,
   type RawGuild,
   type RawMessage,
+  type RawPoll,
   type RawReaction,
   type RawUser,
 } from '../../engine/types';
@@ -54,7 +55,8 @@ import type { EnqueueExtras, QueueItemView } from '../../messaging';
 import type { RemoteController } from '../../ui/remote-controller';
 import { t } from '../../ui/i18n';
 import {
-  humanize, renderInlineHtml, type MentionLabels,
+  humanize, renderInlineHtml,
+  type MentionLabels, type ResolvedMentions,
 } from '../../ui/markdown';
 import { getVersion } from '../../version';
 import { reportProblem } from '../../diagnostics';
@@ -139,6 +141,7 @@ const EXPORTABLE = new Set<number>([
   ChannelType.GUILD_TEXT,
   ChannelType.GUILD_ANNOUNCEMENT,
   ChannelType.GUILD_FORUM,
+  ChannelType.GUILD_VOICE, // chat texte associé au salon vocal
   ChannelType.DM,
   ChannelType.GROUP_DM,
 ]);
@@ -944,6 +947,15 @@ function cleanContent(text: string): string {
   return humanize(text, MENTIONS);
 }
 
+/** Construit la table des mentions résolues à partir de `message.mentions[]`. */
+function resolvedFor(message: RawMessage): ResolvedMentions {
+  const users: Record<string, string> = {};
+  for (const u of message.mentions ?? []) {
+    users[u.id] = u.global_name ?? u.username;
+  }
+  return { users };
+}
+
 /** Classe une pièce jointe par type, d'après son content-type ou extension. */
 function attKind(a: RawAttachment): 'image' | 'audio' | 'video' | 'file' {
   const ct = a.content_type ?? '';
@@ -1018,6 +1030,34 @@ function EmbedCard({ embed }: { embed: RawEmbed }): JSX.Element {
         />
       )}
       {img && <img class="v-embed-img" src={img} alt="" loading="lazy" />}
+    </div>
+  );
+}
+
+/** Sondage Discord — titre, options, votes. */
+function Poll({ poll }: { poll: RawPoll }): JSX.Element {
+  const counts = new Map<number, number>();
+  for (const c of poll.results?.answer_counts ?? []) counts.set(c.id, c.count);
+  return (
+    <div class="v-poll">
+      <div class="v-poll-title">[{t('exp.poll')}]</div>
+      <div class="v-poll-question">{poll.question.text ?? ''}</div>
+      <ul class="v-poll-answers">
+        {poll.answers.map((a) => {
+          const c = counts.get(a.answer_id);
+          return (
+            <li key={a.answer_id}>
+              {a.poll_media.emoji?.name && (
+                <span class="v-poll-emoji">{a.poll_media.emoji.name} </span>
+              )}
+              {a.poll_media.text}
+              {c !== undefined && (
+                <span class="v-poll-votes"> · {t('exp.poll_votes', { n: c })}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -1104,8 +1144,17 @@ function MessageRow({
         {m.content && (
           <div
             class="v-msg-content"
-            dangerouslySetInnerHTML={{ __html: renderInlineHtml(m.content, MENTIONS) }}
+            dangerouslySetInnerHTML={{
+              __html: renderInlineHtml(m.content, MENTIONS, resolvedFor(m))
+                // marqueur édité visible aussi quand le message est groupé
+                + (grouped && m.edited_timestamp
+                  ? ` <span class="v-msg-edited">(${t('exp.edited')})</span>`
+                  : ''),
+            }}
           />
+        )}
+        {!m.content && grouped && m.edited_timestamp && (
+          <span class="v-msg-edited">({t('exp.edited')})</span>
         )}
         {m.attachments.length > 0 && (
           <div class="v-msg-atts">
@@ -1120,6 +1169,7 @@ function MessageRow({
           </div>
         )}
         {embeds.map((e, i) => <EmbedCard key={i} embed={e} />)}
+        {m.poll && <Poll poll={m.poll} />}
         {m.reactions && m.reactions.length > 0 && <Reactions reactions={m.reactions} />}
       </div>
     </div>

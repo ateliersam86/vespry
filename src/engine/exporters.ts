@@ -13,13 +13,23 @@ import type {
   RawAttachment,
   RawEmbed,
   RawMessage,
+  RawPoll,
   RawReaction,
 } from './types';
-import type { MentionLabels } from '../ui/markdown';
+import type { MentionLabels, ResolvedMentions } from '../ui/markdown';
 import {
   humanize as humanizeMentions,
   renderInlineHtml,
 } from '../ui/markdown';
+
+/** Construit la table des mentions résolues depuis `message.mentions[]`. */
+function resolvedFrom(m: RawMessage): ResolvedMentions {
+  const users: Record<string, string> = {};
+  for (const u of m.mentions ?? []) {
+    users[u.id] = u.global_name ?? u.username;
+  }
+  return { users };
+}
 
 /**
  * Libellés traduits injectés dans les fichiers exportés. Construits par le
@@ -38,6 +48,8 @@ export interface ExportLabels {
   /** Libellé d'un message système sans contenu, p.ex. « message système (type 7) ». */
   systemMessage: (type: number) => string;
   exportedBy: string;
+  poll: string;
+  pollVotes: (n: number) => string;
   /** Étiquettes des mentions Discord (`@membre`, `@rôle`, `#salon`). */
   mentions: MentionLabels;
 }
@@ -63,6 +75,8 @@ export const ENGLISH_LABELS: ExportLabels = {
   systemLabel: 'system',
   systemMessage: (type) => `system message (type ${type})`,
   exportedBy: 'exported with Vespry',
+  poll: 'poll',
+  pollVotes: (n) => `${n} votes`,
   mentions: { user: '@member', role: '@role', channel: '#channel' },
 };
 
@@ -165,6 +179,15 @@ export function toTxt(ctx: ExportContext, messages: RawMessage[]): string {
         out.push(`  [${L.embed} : ${humanize(e.title ?? e.description ?? '', L.mentions)}]`);
       }
     }
+    if (m.poll) {
+      const counts = pollCountByAnswerId(m.poll);
+      out.push(`  [${L.poll}] ${m.poll.question.text ?? ''}`);
+      for (const a of m.poll.answers) {
+        const c = counts.get(a.answer_id);
+        const v = c !== undefined ? ` (${L.pollVotes(c)})` : '';
+        out.push(`    - ${a.poll_media.text ?? ''}${v}`);
+      }
+    }
     if (m.reactions && m.reactions.length > 0) {
       out.push(`  [${L.reactions} : ${m.reactions.map(reactionText).join('  ')}]`);
     }
@@ -227,8 +250,12 @@ function esc(text: string): string {
  * Rend le contenu d'un message en HTML — délègue au module partagé
  * `ui/markdown` pour rester aligné sur l'aperçu de l'extension.
  */
-function renderContent(raw: string, mentions: MentionLabels): string {
-  return renderInlineHtml(raw, mentions);
+function renderContent(
+  raw: string,
+  mentions: MentionLabels,
+  resolved?: ResolvedMentions,
+): string {
+  return renderInlineHtml(raw, mentions, resolved);
 }
 
 /** Pastille d'avatar : initiale colorée — self-contained, pas de média externe. */
@@ -318,6 +345,34 @@ function renderReply(ref: RawMessage, mentions: MentionLabels): string {
   );
 }
 
+/** Compteur de votes d'une option de sondage (id → count). */
+function pollCountByAnswerId(poll: RawPoll): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const c of poll.results?.answer_counts ?? []) map.set(c.id, c.count);
+  return map;
+}
+
+/** Rend un sondage Discord en HTML : question + options + votes. */
+function renderPoll(poll: RawPoll, labels: ExportLabels): string {
+  const counts = pollCountByAnswerId(poll);
+  const items = poll.answers.map((a) => {
+    const txt = esc(a.poll_media.text ?? '');
+    const emoji = a.poll_media.emoji?.name
+      ? `<span class="poll-emoji">${esc(a.poll_media.emoji.name)}</span> `
+      : '';
+    const c = counts.get(a.answer_id);
+    const votes = c !== undefined
+      ? ` <span class="poll-votes">· ${esc(labels.pollVotes(c))}</span>`
+      : '';
+    return `<li>${emoji}${txt}${votes}</li>`;
+  }).join('');
+  const q = esc(poll.question.text ?? '');
+  return (
+    `<div class="poll"><div class="poll-title">[${esc(labels.poll)}]</div>`
+    + `<div class="poll-question">${q}</div><ul class="poll-answers">${items}</ul></div>`
+  );
+}
+
 /** Bandeau des réactions d'un message. */
 function renderReactions(reactions: RawReaction[]): string {
   const chips = reactions
@@ -327,7 +382,25 @@ function renderReactions(reactions: RawReaction[]): string {
 }
 
 /** Style intégré — page autonome, pas de fichier CSS externe. */
-const HTML_STYLE = `
+/** Style CSS injecté dans chaque export HTML (page autonome). */
+const HTML_STYLE_POLL = `
+  .poll { background: #221d2e; border: 1px solid #2a2536; border-radius: 8px;
+    padding: 10px 12px; margin-top: 6px; max-width: 520px; }
+  .poll-title { font-size: 11px; color: #9991b3; text-transform: uppercase;
+    letter-spacing: .5px; margin-bottom: 4px; }
+  .poll-question { font-weight: 600; margin-bottom: 6px; }
+  .poll-answers { list-style: none; margin: 0; padding: 0;
+    display: flex; flex-direction: column; gap: 4px; }
+  .poll-answers li { background: #1a1622; border-radius: 6px;
+    padding: 6px 10px; font-size: 14px; }
+  .poll-votes { color: #9991b3; font-size: 12px; }
+  .poll-emoji { margin-right: 4px; }
+  .spoiler { background: #2a2536; color: transparent; border-radius: 4px;
+    padding: 0 4px; cursor: pointer; transition: color .2s ease, background .2s ease; }
+  .spoiler:hover { color: inherit; background: transparent; }
+`;
+
+const HTML_STYLE = HTML_STYLE_POLL + `
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   body { margin: 0; background: #1a1622; color: #e7e3f2;
@@ -401,7 +474,7 @@ function renderMessage(m: RawMessage, grouped: boolean, ctx: ExportContext): str
     );
   }
   if (m.content.trim()) {
-    parts.push(`<div class="content">${renderContent(m.content, L.mentions)}</div>`);
+    parts.push(`<div class="content">${renderContent(m.content, L.mentions, resolvedFrom(m))}</div>`);
   }
   for (const a of m.attachments) parts.push(renderAttachment(a, ctx.urlToPath));
   for (const s of m.sticker_items ?? []) parts.push(renderSticker(s, ctx.urlToPath, L));
@@ -410,6 +483,7 @@ function renderMessage(m: RawMessage, grouped: boolean, ctx: ExportContext): str
       parts.push(renderEmbed(e, ctx.urlToPath, L.mentions));
     }
   }
+  if (m.poll) parts.push(renderPoll(m.poll, L));
   if (m.reactions && m.reactions.length > 0) {
     parts.push(renderReactions(m.reactions));
   }

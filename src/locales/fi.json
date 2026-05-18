@@ -180,5 +180,7 @@
   "exp.part": "osa {n}/{total}",
   "mention.user": "@jäsen",
   "mention.role": "@rooli",
-  "mention.channel": "#kanava"
+  "mention.channel": "#kanava",
+  "exp.poll": "kysely",
+  "exp.poll_votes": "{n} ääntä"
 }

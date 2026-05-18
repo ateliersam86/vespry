@@ -153,4 +153,44 @@ describe('toHtml', () => {
     const out = toHtml(ctx, [msg({ type: 7, content: '' })]);
     expect(out).toContain('class="sys"');
   });
+
+  it('rend les spoilers et le souligné', () => {
+    const out = toHtml(ctx, [msg({ content: '||caché|| et __souligné__' })]);
+    expect(out).toContain('<span class="spoiler">caché</span>');
+    expect(out).toContain('<u>souligné</u>');
+  });
+
+  it('rend titres, citations et listes', () => {
+    const out = toHtml(ctx, [msg({ content: '# Titre\n> citation\n- un\n- deux' })]);
+    expect(out).toContain('<h1 class="md-h1">Titre</h1>');
+    expect(out).toContain('<blockquote>citation</blockquote>');
+    expect(out).toContain('<ul>');
+    expect(out).toContain('<li>un</li>');
+  });
+
+  it('résout les mentions @<id> via message.mentions', () => {
+    const out = toHtml(ctx, [msg({
+      content: 'salut <@42> !',
+      mentions: [{ id: '42', username: 'sora', global_name: 'Sora' }],
+    })]);
+    expect(out).toContain('@Sora');
+    expect(out).not.toContain('@member');
+  });
+
+  it('rend un sondage Discord avec question et options', () => {
+    const out = toHtml(ctx, [msg({
+      poll: {
+        question: { text: 'Quel hibou ?' },
+        answers: [
+          { answer_id: 1, poll_media: { text: 'Hibou grand-duc' } },
+          { answer_id: 2, poll_media: { text: 'Chouette effraie' } },
+        ],
+        results: { answer_counts: [{ id: 1, count: 3 }, { id: 2, count: 7 }] },
+      },
+    })]);
+    expect(out).toContain('Quel hibou ?');
+    expect(out).toContain('Hibou grand-duc');
+    expect(out).toContain('3 votes');
+    expect(out).toContain('7 votes');
+  });
 });

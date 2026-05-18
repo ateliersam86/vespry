@@ -180,5 +180,7 @@
   "exp.part": "часть {n}/{total}",
   "mention.user": "@участник",
   "mention.role": "@роль",
-  "mention.channel": "#канал"
+  "mention.channel": "#канал",
+  "exp.poll": "опрос",
+  "exp.poll_votes": "{n} голосов"
 }

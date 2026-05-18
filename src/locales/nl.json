@@ -180,5 +180,7 @@
   "exp.part": "deel {n}/{total}",
   "mention.user": "@lid",
   "mention.role": "@rol",
-  "mention.channel": "#kanaal"
+  "mention.channel": "#kanaal",
+  "exp.poll": "peiling",
+  "exp.poll_votes": "{n} stemmen"
 }

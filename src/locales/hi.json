@@ -180,5 +180,7 @@
   "exp.part": "भाग {n}/{total}",
   "mention.user": "@सदस्य",
   "mention.role": "@भूमिका",
-  "mention.channel": "#चैनल"
+  "mention.channel": "#चैनल",
+  "exp.poll": "मतदान",
+  "exp.poll_votes": "{n} वोट"
 }

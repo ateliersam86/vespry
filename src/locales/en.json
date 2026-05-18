@@ -180,5 +180,7 @@
   "exp.part": "part {n}/{total}",
   "mention.user": "@member",
   "mention.role": "@role",
-  "mention.channel": "#channel"
+  "mention.channel": "#channel",
+  "exp.poll": "poll",
+  "exp.poll_votes": "{n} votes"
 }

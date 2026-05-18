@@ -180,5 +180,7 @@
   "exp.part": "파트 {n}/{total}",
   "mention.user": "@멤버",
   "mention.role": "@역할",
-  "mention.channel": "#채널"
+  "mention.channel": "#채널",
+  "exp.poll": "투표",
+  "exp.poll_votes": "{n} 표"
 }
