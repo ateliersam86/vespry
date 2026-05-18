@@ -9,12 +9,13 @@ import {
   isStateBroadcast,
   type CommandResponse,
   type EnqueueExtras,
+  type PurgeItemView,
   type QueueItemView,
   type VespryCommand,
   type VespryState,
 } from '../messaging';
 import type { MediaSelection } from '../engine/checkpoint-types';
-import type { RawChannel, RawGuild, RawMessage } from '../engine/types';
+import type { RawChannel, RawGuild, RawMessage, Snowflake } from '../engine/types';
 import type { DonorFeed } from '../donors';
 
 const EMPTY: VespryState = {
@@ -23,6 +24,7 @@ const EMPTY: VespryState = {
   userName: null,
   guilds: [],
   queue: [],
+  purgeQueue: [],
 };
 
 const sleep = (ms: number): Promise<void> =>
@@ -47,6 +49,8 @@ export class RemoteController {
   get error(): string | null { return this.state.error; }
   get guilds(): RawGuild[] { return this.state.guilds; }
   get queue(): QueueItemView[] { return this.state.queue; }
+  /** File des purges en cours (Phase 2). Vide tant qu'aucune purge lancée. */
+  get purgeQueue(): PurgeItemView[] { return this.state.purgeQueue; }
 
   subscribe(cb: () => void): () => void {
     this.listeners.add(cb);
@@ -107,6 +111,29 @@ export class RemoteController {
     extras: EnqueueExtras,
   ): Promise<void> {
     await this.send({ cmd: 'enqueue', guild, channels, media, ...extras });
+  }
+
+  /**
+   * Phase 2 — lance une purge de messages dans un salon.
+   *
+   * `messageIds` doit être la sélection explicite faite par l'utilisateur
+   * dans l'aperçu (la modale de confirmation se charge du triple garde-fou
+   * côté UI — cf. tâche #6). Le moteur traite la file en arrière-plan,
+   * ~5/s, et l'état progresse dans `purgeQueue` via les broadcasts d'état.
+   *
+   * Renvoie l'id local de la purge — utile à l'overlay pour cibler l'item
+   * affiché dans la console.
+   */
+  async purge(
+    guild: RawGuild,
+    channelId: Snowflake,
+    channelName: string,
+    messageIds: Snowflake[],
+  ): Promise<string | null> {
+    const r = await this.send({
+      cmd: 'purge', guild, channelId, channelName, messageIds,
+    });
+    return r.purgeRunId ?? null;
   }
 
   /** Flux du mur des soutiens. Renvoie null si le service est indisponible. */

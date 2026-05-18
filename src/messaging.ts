@@ -15,7 +15,7 @@ import type {
   SelectionZone,
   ZoneMode,
 } from './engine/checkpoint-types';
-import type { RawChannel, RawGuild, RawMessage } from './engine/types';
+import type { RawChannel, RawGuild, RawMessage, Snowflake } from './engine/types';
 import type { DonorFeed } from './donors';
 
 // --- bridge MAIN → ISOLATED (capture du jeton) ---
@@ -54,12 +54,38 @@ export interface QueueItemView {
   zipReady: boolean;
 }
 
+/**
+ * Vue d'une tâche de purge (Phase 2 — fonctionnalité de suppression).
+ *
+ * Parallèle à `QueueItemView`, indépendante de l'export. Le moteur supprime
+ * les messages un par un côté Discord ; la vue lit ces champs pour afficher
+ * la progression (« 12 / 50 supprimés, 1 échec »).
+ */
+export interface PurgeItemView {
+  /** Id local de la purge (`purge_<ts>_<rand>`) — pas lié à Discord. */
+  runId: string;
+  guildName: string;
+  channelId: Snowflake;
+  channelName: string;
+  status: 'in_progress' | 'completed' | 'partial' | 'failed';
+  /** Nombre total de messages dans la sélection initiale. */
+  total: number;
+  /** Messages traités avec succès (204 ou 404 — idempotent). */
+  done: number;
+  /** Messages refusés (403) ou en erreur non récupérable, traités quand même. */
+  failed: number;
+  /** Lignes de la mini-console (plafonné à 250). */
+  log: string[];
+}
+
 export interface VespryState {
   ready: boolean;
   error: string | null;
   userName: string | null;
   guilds: RawGuild[];
   queue: QueueItemView[];
+  /** File des opérations de purge en cours / terminées (Phase 2). */
+  purgeQueue: PurgeItemView[];
 }
 
 // --- commandes vue → offscreen (via le service worker) ---
@@ -94,6 +120,28 @@ export type VespryCommand =
       donorName?: string;
       message?: string;
       isPublic: boolean;
+    }
+  | {
+      /**
+       * Déclenche un export incrémental d'un serveur planifié (Phase 3).
+       * Émis par le service worker quand `chrome.alarms.onAlarm` réveille
+       * Vespry. L'offscreen charge la liste des salons du guild ciblé et
+       * `enqueue()` avec `incremental: true` + médias/formats par défaut.
+       */
+      cmd: 'scheduled-export-fire';
+      guildId: string;
+      guildName: string;
+    }
+  | {
+      /**
+       * Phase 2 — purge de messages. La sélection vient de l'overlay
+       * (cases cochées dans l'aperçu, validation explicite par l'utilisateur).
+       */
+      cmd: 'purge';
+      guild: RawGuild;
+      channelId: Snowflake;
+      channelName: string;
+      messageIds: Snowflake[];
     };
 
 /**
@@ -124,6 +172,8 @@ export interface CommandResponse {
   donors?: DonorFeed | null;
   /** URL de la session Stripe Checkout (commande `checkout`). */
   checkoutUrl?: string;
+  /** Id local de la purge créée (commande `purge`). */
+  purgeRunId?: string;
 }
 
 // --- messages de routage ---

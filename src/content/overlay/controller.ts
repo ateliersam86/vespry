@@ -23,13 +23,20 @@ import type {
   RunStatus,
 } from '../../engine/checkpoint-types';
 import { DiscordApiError } from '../../engine/types';
-import type { RawChannel, RawGuild, RawMessage, RawUser } from '../../engine/types';
-import type { EnqueueExtras, VespryState } from '../../messaging';
+import type { RawChannel, RawGuild, RawMessage, RawUser, Snowflake } from '../../engine/types';
+import type { EnqueueExtras, PurgeItemView, VespryState } from '../../messaging';
 
 const MAX_LOG = 250;
 const ZERO_KINDS: Record<AssetKind, number> = {
   image: 0, video: 0, audio: 0, file: 0, emoji: 0, avatar: 0,
 };
+
+/**
+ * Délai inter-DELETE pour la purge. Discord renvoie un 429 quand on dépasse
+ * ~5 DELETE/s sur un même salon — on se cale à 200 ms (cf. tâche #4, le
+ * back-off 429 dans `DiscordApi.deleteMessage` reste un filet de sécurité).
+ */
+const PURGE_DELAY_MS = 200;
 
 /** Une tâche d'export dans la file. */
 export interface QueueItem {
@@ -45,6 +52,36 @@ export interface QueueItem {
   /** Lignes de la mini-console (plafonné). */
   log: string[];
   zip: Blob | null;
+}
+
+/**
+ * Statut d'une opération de purge (Phase 2). `failed` est réservé aux
+ * erreurs fatales bloquantes (auth perdue) — les 403 / 404 ne stoppent pas
+ * la file, ils incrémentent simplement les compteurs.
+ */
+export type PurgeStatus = 'in_progress' | 'completed' | 'partial' | 'failed';
+
+/**
+ * Une tâche de purge dans la file. Parallèle à `QueueItem` — la suppression
+ * n'a rien à voir avec un export, on les juxtapose dans deux files distinctes.
+ */
+export interface PurgeItem {
+  /** Id local (`purge_<ts>_<rand>`), indépendant de Discord. */
+  runId: string;
+  guildName: string;
+  channelId: Snowflake;
+  channelName: string;
+  status: PurgeStatus;
+  /** Nombre total de messages à traiter (taille de la sélection). */
+  total: number;
+  /** Messages traités avec succès (204) ou déjà absents (404 = idempotent). */
+  done: number;
+  /** Messages refusés (403) ou en erreur récupérable — traités quand même. */
+  failed: number;
+  /** Lignes de la mini-console (plafonné à MAX_LOG). */
+  log: string[];
+  /** Ids restants à supprimer — consommé par le drain, non broadcastée. */
+  pending: Snowflake[];
 }
 
 const KIND_LABEL: Record<AssetKind, string> = {
@@ -97,17 +134,31 @@ function formatLog(e: RunnerLogEvent): string {
   }
 }
 
+/** Ajoute une ligne à un log plafonné (mute la dernière ligne si dépassement). */
+function pushLog(log: string[], line: string): void {
+  log.push(line);
+  if (log.length > MAX_LOG) log.splice(0, log.length - MAX_LOG);
+}
+
 export class VespryController {
   readonly store = new CheckpointStore();
   api: DiscordApi | null = null;
   currentUser: RawUser | null = null;
   guilds: RawGuild[] = [];
   queue: QueueItem[] = [];
+  /**
+   * File des opérations de purge (Phase 2 — suppression de messages).
+   * Indépendante de la file d'export : on peut purger un salon pendant
+   * qu'un export tourne ailleurs.
+   */
+  purgeQueue: PurgeItem[] = [];
   /** `no-token` si la session Discord n'a pas été captée. */
   error: string | null = null;
   ready = false;
 
   private draining = false;
+  /** Vrai tant qu'une purge est en cours (singleton de file). */
+  private purging = false;
   /** Vrai tant qu'un `watchForToken` tourne — empêche les doublons. */
   private watching = false;
   private readonly listeners = new Set<() => void>();
@@ -328,6 +379,182 @@ export class VespryController {
     void this.drain();
   }
 
+  /**
+   * Phase 2 — purge de messages dans un salon.
+   *
+   * Garde-fous côté UI (cf. tâche #6) : la modale de confirmation a déjà
+   * exigé une frappe explicite de l'utilisateur. Côté contrôleur on fait
+   * confiance à `messageIds` — c'est la sélection cochée dans l'aperçu.
+   *
+   * Crée une `PurgeItem` dans `purgeQueue` et lance le drain. Le moteur
+   * traite la file en série, ~5/s (cf. `PURGE_DELAY_MS`), avec back-off
+   * 429 hérité de `DiscordApi.deleteMessage`. On poursuit sur 403 / 404
+   * et on stoppe net sur 401 (session morte).
+   *
+   * Renvoie l'id local de la purge (utile à l'overlay pour cibler l'item
+   * dans la console).
+   */
+  async purgeMessages(
+    guild: RawGuild,
+    channelId: Snowflake,
+    channelName: string,
+    messageIds: Snowflake[],
+  ): Promise<string> {
+    const runId = `purge_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const item: PurgeItem = {
+      runId,
+      guildName: guild.name,
+      channelId,
+      channelName,
+      status: 'in_progress',
+      total: messageIds.length,
+      done: 0,
+      failed: 0,
+      log: [],
+      pending: [...messageIds],
+    };
+
+    if (messageIds.length === 0) {
+      // Cas dégénéré : rien à supprimer. On marque completed et on notifie.
+      // L'UI affichera « 0/0 supprimés » — légitime si la sélection vide.
+      item.status = 'completed';
+      pushLog(item.log, `${clock()}  ⚠ aucun message à supprimer`);
+      this.purgeQueue.push(item);
+      this.notify();
+      return runId;
+    }
+
+    if (!this.api) {
+      item.status = 'failed';
+      pushLog(item.log, `${clock()}  ✗ pas de session Discord active`);
+      this.purgeQueue.push(item);
+      this.notify();
+      return runId;
+    }
+
+    pushLog(
+      item.log,
+      `${clock()}  🗑 purge de ${messageIds.length} message(s) dans #${channelName}`,
+    );
+    this.purgeQueue.push(item);
+    this.notify();
+    void this.drainPurge();
+    return runId;
+  }
+
+  /**
+   * Traite la file de purge en série. Tolérant aux appels concurrents
+   * (`this.purging`) — l'overlay peut lancer plusieurs purges, on les
+   * enchaîne sans retour.
+   */
+  private async drainPurge(): Promise<void> {
+    if (this.purging) return;
+    this.purging = true;
+    try {
+      for (;;) {
+        const item = this.purgeQueue.find((p) => p.status === 'in_progress');
+        if (!item) break;
+        await this.runPurgeItem(item);
+      }
+    } finally {
+      this.purging = false;
+    }
+  }
+
+  /** Traite tous les ids restants d'une `PurgeItem`. */
+  private async runPurgeItem(item: PurgeItem): Promise<void> {
+    if (!this.api) {
+      item.status = 'failed';
+      pushLog(item.log, `${clock()}  ✗ session Discord perdue`);
+      this.notify();
+      return;
+    }
+
+    // Bornes pour logguer la progression sans saturer la console — un
+    // tick toutes les ~10 % d'avancement, et toujours sur le dernier.
+    const logEvery = Math.max(1, Math.floor(item.total / 10));
+
+    while (item.pending.length > 0) {
+      const messageId = item.pending.shift();
+      if (messageId === undefined) break;
+
+      try {
+        await this.api.deleteMessage(item.channelId, messageId);
+        // `DiscordApi.deleteMessage` résout sur 204 ET sur 404 (idempotent
+        // côté tâche #4). On agrège les deux dans `done` — l'utilisateur
+        // voit « X / Y supprimés » sans distinction utile.
+        item.done += 1;
+      } catch (e) {
+        if (e instanceof DiscordApiError) {
+          if (e.kind === 'auth') {
+            // Session morte — la suite est sans espoir. On stoppe la file
+            // proprement avec un message clair, l'utilisateur reconnecte
+            // Discord et relance la purge (les ids restants sont déjà sortis
+            // de `pending`, donc le redémarrage repart de zéro côté UI ;
+            // pour la v1 c'est acceptable, on documentera dans #6).
+            pushLog(
+              item.log,
+              `${clock()}  ✗ session Discord expirée — reconnecte-toi puis relance la purge`,
+            );
+            item.status = 'failed';
+            this.notify();
+            return;
+          }
+          if (e.kind === 'forbidden') {
+            item.failed += 1;
+            pushLog(
+              item.log,
+              `${clock()}  ⊘ 403 sur message ${messageId} — accès refusé`,
+            );
+          } else {
+            item.failed += 1;
+            pushLog(
+              item.log,
+              `${clock()}  ✗ message ${messageId} — ${e.message}`,
+            );
+          }
+        } else {
+          // Erreur inattendue (réseau, parsing) — on incrémente et on
+          // continue, l'utilisateur saura en lisant le log.
+          item.failed += 1;
+          pushLog(
+            item.log,
+            `${clock()}  ✗ message ${messageId} — `
+            + (e instanceof Error ? e.message : String(e)),
+          );
+        }
+      }
+
+      const processed = item.done + item.failed;
+      if (processed % logEvery === 0 || item.pending.length === 0) {
+        pushLog(
+          item.log,
+          `${clock()}  · ${processed}/${item.total} traités (`
+          + `${item.done} OK, ${item.failed} échec)`,
+        );
+      }
+      this.notify();
+
+      // Throttle inter-DELETE. On le saute sur le dernier message
+      // (200 ms perçues en moins à la fin).
+      if (item.pending.length > 0) await sleep(PURGE_DELAY_MS);
+    }
+
+    // Bilan final.
+    item.status = item.failed > 0 ? 'partial' : 'completed';
+    pushLog(
+      item.log,
+      `${clock()}  ${item.failed > 0 ? '⚠' : '✓'} terminé — `
+      + `${item.done} supprimé(s), ${item.failed} échec(s)`,
+    );
+
+    // Notification système (toast natif). Le service worker écoute déjà
+    // les broadcasts d'état et peut afficher un toast en transition de
+    // status (`in_progress` → `completed`/`partial`) — pas besoin d'un
+    // message ad-hoc pour ce premier shipping.
+    this.notify();
+  }
+
   /** Reprend une tâche mise en pause (après reconnexion à Discord). */
   resume(runId: string): void {
     const item = this.queue.find((q) => q.runId === runId);
@@ -370,6 +597,19 @@ export class VespryController {
         log: q.log,
         zipReady: q.zip !== null,
       })),
+      purgeQueue: this.purgeQueue.map((p): PurgeItemView => ({
+        runId: p.runId,
+        guildName: p.guildName,
+        channelId: p.channelId,
+        channelName: p.channelName,
+        status: p.status,
+        total: p.total,
+        done: p.done,
+        failed: p.failed,
+        // On exclut `pending` du broadcast — c'est de la donnée interne
+        // (potentiellement des milliers d'ids) sans valeur pour l'UI.
+        log: p.log,
+      })),
     };
   }
 
@@ -408,8 +648,7 @@ export class VespryController {
           this.notify();
         },
         onLog: (e) => {
-          item.log.push(formatLog(e));
-          if (item.log.length > MAX_LOG) item.log.shift();
+          pushLog(item.log, formatLog(e));
           this.notify();
         },
       },
@@ -420,13 +659,13 @@ export class VespryController {
       status = await runner.run(item.runId);
     } catch (e) {
       status = 'failed';
-      item.log.push(`${clock()}  ✗ ${e instanceof Error ? e.message : String(e)}`);
+      pushLog(item.log, `${clock()}  ✗ ${e instanceof Error ? e.message : String(e)}`);
     }
     item.status = status;
     if (status === 'completed' || status === 'partial') {
       const { blob } = await packageRun(this.store, item.runId);
       item.zip = blob;
-      item.log.push(`${clock()}  📦 Paquet prêt — ${(blob.size / 1e6).toFixed(1)} Mo`);
+      pushLog(item.log, `${clock()}  📦 Paquet prêt — ${(blob.size / 1e6).toFixed(1)} Mo`);
     }
     // Si l'utilisateur a opt-in à la télémétrie de schéma, on envoie un
     // rapport minimal (version + locale + champs Discord inconnus). Sans
