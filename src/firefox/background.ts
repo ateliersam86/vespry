@@ -29,6 +29,13 @@
  * On NE FORK PAS le moteur. On importe `VespryController` tel quel — c'est
  * la même classe que celle utilisée par l'offscreen Chrome. Toute évolution
  * du moteur profite aux deux builds.
+ *
+ * Pourquoi pas `webextension-polyfill`. Firefox MV3 expose `chrome.*`
+ * nativement comme alias de `browser.*` ET renvoie des Promises sur les
+ * méthodes asynchrones (depuis Firefox 109). Le code partagé Vespry utilise
+ * `chrome.*` + `await` partout — c'est déjà cross-browser, pas besoin de
+ * polyfill. On garde `web-ext` côté devDependencies pour le lint / run /
+ * package, mais pas le polyfill runtime.
  */
 import { VespryController } from '../content/overlay/controller';
 import { getToken } from '../engine/auth';
