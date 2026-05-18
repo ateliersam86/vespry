@@ -40,6 +40,7 @@ Discord : tu peux fermer l'onglet, il continue.
 | **Langues de l'interface** | 15 | anglais | anglais | anglais |
 | Gratuit, sans quota | ✅ | ✅ | ✅ | ❌ quotas |
 | Open source | ✅ | ✅ | ✅ | ❌ |
+| **Tout en local, télémétrie opt-in défaut OFF** | ✅ | ✅ | ⚠️ télémetrie | ❌ comptes externes |
 
 Vespry est le seul à reprendre un export interrompu et à faire de l'incrémental
 sans installer d'application, et le seul traduit en 15 langues. Il ne supprime
@@ -128,6 +129,41 @@ Un clic sur l'icône de l'extension : l'état de la session, les exports en
 cours, l'accès rapide à Discord.
 
 ![Le popup de l'extension](docs/screenshots/popup.png)
+
+## Confidentialité
+
+**Vespry tourne entièrement en local sur ton ordinateur.** Tes conversations
+Discord, les médias téléchargés, les exports — tout vit dans la mémoire de ton
+navigateur (IndexedDB) puis dans le fichier `.zip` que tu télécharges. Rien ne
+sort, rien ne transite par un serveur Vespry.
+
+**Trois exceptions, toutes explicites :**
+
+1. **Discord** — Vespry parle à l'API Discord avec **ton** jeton de session,
+   exactement comme ton client Discord. C'est forcément le cas pour récupérer
+   tes messages — c'est l'opération elle-même.
+2. **Stripe** (dons uniquement) — quand tu choisis de soutenir le projet, la
+   page de paiement est ouverte par Stripe dans une popup. Aucune carte ne
+   touche le code de Vespry. Rien n'est envoyé à Stripe si tu ne donnes pas.
+3. **Télémétrie de schéma** — opt-in **explicite**, désactivée par défaut.
+   Si tu choisis de la cocher dans le panneau Avancé, Vespry envoie au service
+   Vespry un message contenant **uniquement** :
+
+   - la version de Vespry,
+   - la langue de ton navigateur (`fr-FR`),
+   - les **noms** des champs Discord rencontrés qui ne sont pas encore rendus
+     (par exemple `voice_notes_v2`), filtrés à `[a-z][a-z0-9_]+`.
+
+   **Jamais** : ton jeton, le contenu d'un message, un identifiant
+   utilisateur, un identifiant de salon, un nom de personne, ton IP stockée,
+   une stack trace. Vérifiable dans `src/engine/schema-report.ts` (60 lignes).
+
+   Ce signal sert à ouvrir automatiquement une issue GitHub publique quand
+   Discord ajoute une fonctionnalité que Vespry ne sait pas encore rendre —
+   pour que la mise à jour vienne vite et bénéficie à tout le monde.
+
+Aucune analytics, aucun pixel, aucun tracker. Le code est public et lisible :
+les 60 lignes du module de télémétrie suffisent à vérifier ce qui sort.
 
 ## Installation
 
