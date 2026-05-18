@@ -38,11 +38,20 @@ C'est ce zip qui est uploadé sur AMO.
   - `UNSAFE_VAR_ASSIGNMENT` × 2 sur `assets/theme-pref-*.js` et
     `assets/content-script.ts-*.js` (Preact utilise `innerHTML` pour ses
     rendus — pas de contenu utilisateur non échappé côté Vespry).
-  - `DANGEROUS_EVAL` × 1 sur `assets/i18n-*.js` (`Function()` est utilisé
-    par `@transcend-io/conflux`, la bibliothèque de zip — pas de
-    `Function()` dans le code Vespry lui-même).
+  - `DANGEROUS_EVAL` × 1 sur `assets/background.ts-*.js` (`Function()` est
+    utilisé par `@transcend-io/conflux` (lib de zip streaming) et
+    `@zip.js/zip.js` (chiffrement AES-256, Phase 4) — pas de `Function()`
+    dans le code Vespry lui-même.
 
-Si un nouveau warning ou une erreur apparaît, traiter avant la soumission.
+Le hash du chunk où apparaît `DANGEROUS_EVAL` peut changer entre deux
+builds : avant la Phase 4 AES, le `Function()` constructor était isolé
+dans le chunk `assets/i18n-*.js` ; depuis, il vit dans le bundle
+`assets/background.ts-*.js` côté Firefox (entry point qui consomme
+conflux + zip.js). C'est une réorganisation Vite, pas un changement de
+sécurité — toujours 0 erreur, toujours 3 warnings.
+
+Si un nouveau warning ou une erreur apparaît au-delà de ces trois,
+traiter avant la soumission.
 
 ## Tester localement dans Firefox
 
