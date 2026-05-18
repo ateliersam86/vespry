@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CheckpointStore } from './checkpoint-store';
 import { packageRun } from './packager';
+import { profileForTier } from './perf-profile';
 import { ALL_MEDIA } from './checkpoint-types';
 import type { ChannelProgress, ExportRun, StoredAsset, StoredMessage } from './checkpoint-types';
 import type { RawMessage } from './types';
@@ -124,5 +125,83 @@ describe('packageRun', () => {
     const ascii = new TextDecoder().decode(new Uint8Array(buf));
     expect(ascii).toContain('future_discord_field');
     expect(ascii).toContain('voice_note_v2');
+  });
+
+  it('mode bulk (fast) — comportement historique préservé', async () => {
+    await store.putRun(run('rfast'));
+    await store.putChannel(channel('rfast', 'c1', 'général'));
+    await store.appendMessages([
+      message('rfast', 'c1', '1'),
+      message('rfast', 'c1', '2'),
+    ]);
+
+    const { blob, manifest } = await packageRun(store, 'rfast', {
+      profile: profileForTier('fast'),
+    });
+    expect(blob.size).toBeGreaterThan(0);
+    const m = manifest as { totals: { messages: number } };
+    expect(m.totals.messages).toBe(2);
+
+    // En mode bulk le JSON contient bien le tableau `messages` au sens classique.
+    const ascii = new TextDecoder().decode(new Uint8Array(await blob.arrayBuffer()));
+    expect(ascii).toContain('"messages"');
+    expect(ascii).toContain('"msg 1"');
+  });
+
+  it('mode streaming (low) — exporte 1 000 messages sans tout charger', async () => {
+    // Profil `low` : `bufferMessagesPerPage = 0` ; le packager clampe à un
+    // plancher interne pour ne pas saturer le pipeline conflux. On vérifie
+    // que le chemin streaming traite un salon dont les messages dépassent
+    // largement la taille d'un fichier d'export courant, et que le JSON
+    // produit est intègre. 1 000 messages × 4 formats reste rapide en
+    // fake-indexeddb (Chromium natif est ordre de grandeur plus rapide).
+    const N = 1_000;
+    await store.putRun(run('rbig'));
+    await store.putChannel(channel('rbig', 'c1', 'général'));
+    for (let i = 0; i < N; i += 500) {
+      const batch: StoredMessage[] = [];
+      for (let j = 0; j < 500 && i + j < N; j += 1) {
+        const id = String(i + j + 1).padStart(7, '0');
+        batch.push(message('rbig', 'c1', id));
+      }
+      await store.appendMessages(batch);
+    }
+
+    const { blob, manifest } = await packageRun(store, 'rbig', {
+      profile: profileForTier('low'),
+    });
+    expect(blob.size).toBeGreaterThan(0);
+    const m = manifest as { totals: { messages: number } };
+    expect(m.totals.messages).toBe(N);
+
+    // Le JSON streamé contient bien le compteur et les bornes du salon.
+    const ascii = new TextDecoder().decode(new Uint8Array(await blob.arrayBuffer()));
+    expect(ascii).toContain(`"messageCount": ${N}`);
+    expect(ascii).toContain('"msg 0000001"');
+    expect(ascii).toContain(`"msg ${String(N).padStart(7, '0')}"`);
+  }, 60_000);
+
+  it('mode streaming respecte le partitionnement utilisateur', async () => {
+    const r = run('rstreampart');
+    r.options.partitionSize = 2;
+    r.options.formats = ['json'];
+    await store.putRun(r);
+    await store.putChannel(channel('rstreampart', 'c1', 'general'));
+    await store.appendMessages([
+      message('rstreampart', 'c1', '1'),
+      message('rstreampart', 'c1', '2'),
+      message('rstreampart', 'c1', '3'),
+      message('rstreampart', 'c1', '4'),
+      message('rstreampart', 'c1', '5'),
+    ]);
+
+    const { manifest } = await packageRun(store, 'rstreampart', {
+      profile: profileForTier('low'),
+    });
+    const m = manifest as { channels: { files: string[]; messages: number }[] };
+    expect(m.channels[0]?.files).toHaveLength(3);
+    expect(m.channels[0]?.files.some((f) => /\.part1\.json$/.test(f))).toBe(true);
+    expect(m.channels[0]?.files.some((f) => /\.part3\.json$/.test(f))).toBe(true);
+    expect(m.channels[0]?.messages).toBe(5);
   });
 });

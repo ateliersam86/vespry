@@ -165,6 +165,30 @@ export class CheckpointStore {
     }
   }
 
+  /**
+   * Variante asynchrone-iterable de `forEachMessage` : permet au consommateur
+   * d'`await` entre deux messages (utile pour pousser dans un ReadableStream
+   * avec back-pressure sans tout charger en RAM).
+   *
+   * Une transaction IndexedDB se termine dès qu'un tick microtâche se déroule
+   * sans accès — on ouvre donc le curseur, et le `await` côté consommateur
+   * doit rester dans la même boucle d'événements. C'est le cas quand on le
+   * branche directement sur la lecture d'un ReadableStream.
+   */
+  async *iterateMessages(
+    runId: string,
+    channelId: string,
+  ): AsyncIterable<StoredMessage> {
+    let cursor = await this.conn
+      .transaction('messages')
+      .store.index('by-channel')
+      .openCursor(IDBKeyRange.only([runId, channelId]));
+    while (cursor) {
+      yield cursor.value;
+      cursor = await cursor.continue();
+    }
+  }
+
   // --- Assets ---
 
   async putAsset(asset: StoredAsset): Promise<void> {

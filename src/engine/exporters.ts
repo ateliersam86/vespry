@@ -3,8 +3,18 @@
  * ou texte brut. Le JSON reste géré directement par le packager (sérialisation
  * fidèle, pas de mise en forme).
  *
- * Toutes les fonctions sont PURES (entrée → chaîne) : testables sans IndexedDB
- * ni réseau. Le packager les appelle une fois par salon et par format choisi.
+ * Deux modes par format :
+ *
+ * 1. **Bulk** (`toHtml`, `toCsv`, `toTxt`) — entrée `RawMessage[]` → chaîne
+ *    complète. PURE, testable sans IndexedDB. Utilisé par le packager en
+ *    profil `fast` (machine puissante, on charge tout en RAM pour aller vite).
+ *
+ * 2. **Streaming** (`htmlHeader`/`htmlMessage`/`htmlFooter`, etc.) — émet un
+ *    fichier morceau par morceau. Le packager itère le curseur IndexedDB et
+ *    appelle ces helpers sans jamais accumuler tous les messages. Utilisé en
+ *    profils `balanced` et `low`. Les helpers sont PURS aussi : un message en
+ *    entrée → une chaîne en sortie. Le contexte (grouping HTML, header CSV)
+ *    est externalisé dans un objet `StreamState` que le packager fait évoluer.
  *
  * Les exporteurs vivent dans un sous-dossier du zip (`html/`, `csv/`, `txt/`),
  * d'où le préfixe `../` vers les médias rangés à la racine.
@@ -605,4 +615,136 @@ ${blocks.join('\n')}
 </div>
 </body>
 </html>`;
+}
+
+// ─────────────────────── VARIANTES STREAMING ───────────────────────
+//
+// Les exporteurs bulk ci-dessus produisent toute la chaîne en une fois. En
+// streaming on émet header → corps message-par-message → footer. Le packager
+// itère le curseur IndexedDB et concatène les morceaux dans un ReadableStream
+// (cf. `packageRun`).
+
+/**
+ * État entretenu par le packager pendant qu'il streame un salon. Permet aux
+ * helpers de connaître le message précédent (regroupement HTML) et de savoir
+ * combien de messages ont déjà été émis (séparateurs JSON, comptage).
+ */
+export interface StreamState {
+  /** Index 0-based du prochain message à émettre — sert au séparateur JSON. */
+  index: number;
+  /** Dernier message émis (non système) — pour le regroupement visuel HTML. */
+  prev: RawMessage | null;
+}
+
+/** Crée un état neuf. */
+export function createStreamState(): StreamState {
+  return { index: 0, prev: null };
+}
+
+// HTML stream ─────────────────────────────────────────────────────────
+
+/** Entête HTML : `<!doctype>` jusqu'à `<div class="sub">…`, sans le footer. */
+export function htmlHeader(ctx: ExportContext, messageCount: number): string {
+  return `<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(ctx.guildName)} — #${esc(ctx.channelName)}</title>
+<style>${HTML_STYLE}</style>
+</head>
+<body>
+<div class="wrap">
+<h1>#${esc(ctx.channelName)}</h1>
+<div class="sub">${esc(ctx.guildName)} · ${messageCount} ${esc(ctx.labels.messages)} · ${esc(ctx.labels.exportedBy)}</div>
+`;
+}
+
+/** Rend UN message HTML et met à jour l'état (regroupement). */
+export function htmlMessage(
+  ctx: ExportContext,
+  state: StreamState,
+  m: RawMessage,
+): string {
+  let chunk: string;
+  if (isSystem(m)) {
+    chunk = renderSystemMessage(m, ctx.labels);
+  } else {
+    const prev = state.prev;
+    const grouped = Boolean(
+      prev
+      && !isSystem(prev)
+      && prev.author.id === m.author.id
+      && !m.referenced_message
+      && Date.parse(m.timestamp) - Date.parse(prev.timestamp) < 7 * 60_000,
+    );
+    chunk = renderMessage(m, grouped, ctx);
+  }
+  state.prev = m;
+  state.index += 1;
+  // Saut de ligne entre blocs comme dans la version bulk (`blocks.join('\n')`).
+  return state.index === 1 ? chunk : `\n${chunk}`;
+}
+
+/** Footer HTML qui ferme la page. */
+export function htmlFooter(): string {
+  return `\n</div>\n</body>\n</html>`;
+}
+
+// CSV stream ──────────────────────────────────────────────────────────
+
+const CSV_HEADER =
+  'AuthorID,Author,Date,Edited,Content,Attachments,Reactions\r\n';
+
+/** Première ligne CSV — colonnes. À émettre une seule fois par fichier. */
+export function csvHeader(): string {
+  return CSV_HEADER;
+}
+
+/** Une ligne CSV pour un message. Inclut le `\r\n` final. */
+export function csvMessage(ctx: ExportContext, m: RawMessage): string {
+  return [
+    csvCell(m.author.id),
+    csvCell(authorName(m)),
+    csvCell(m.timestamp),
+    csvCell(isEdited(m) ? 'yes' : ''),
+    csvCell(humanize(m.content, ctx.labels.mentions)),
+    csvCell(attachmentsCell(m, ctx.urlToPath)),
+    csvCell((m.reactions ?? []).map(reactionText).join(' ')),
+  ].join(',') + '\r\n';
+}
+
+// TXT stream ──────────────────────────────────────────────────────────
+
+/** Entête texte (titre + total + séparateur). */
+export function txtHeader(ctx: ExportContext, messageCount: number): string {
+  const L = ctx.labels;
+  return [
+    `${ctx.guildName} — #${ctx.channelName}`,
+    `${messageCount} ${L.messages}`,
+    '='.repeat(60),
+    '',
+    '',
+  ].join('\n');
+}
+
+/** Bloc texte d'un message (suivi d'une ligne vide). */
+export function txtMessage(ctx: ExportContext, m: RawMessage): string {
+  // On réutilise `toTxt` avec un tableau d'un seul élément, puis on retire
+  // l'entête (3 premières lignes + ligne vide). Le coût est négligeable et
+  // ça garantit le rendu strictement identique à la version bulk.
+  const single = toTxt(ctx, [m]);
+  // L'entête fait quatre `\n` : titre, compteur, séparateur, ligne vide.
+  const headerEnd = nthIndex(single, '\n', 4);
+  return headerEnd >= 0 ? single.slice(headerEnd + 1) : single;
+}
+
+/** Position du `n`-ième occurrence d'un caractère, ou -1. */
+function nthIndex(s: string, ch: string, n: number): number {
+  let pos = -1;
+  for (let k = 0; k < n; k += 1) {
+    pos = s.indexOf(ch, pos + 1);
+    if (pos === -1) return -1;
+  }
+  return pos;
 }

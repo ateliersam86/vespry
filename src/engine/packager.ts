@@ -15,6 +15,20 @@
  *
  * Le zip est streamé via conflux : les données étant déjà dans IndexedDB, un
  * échec de zip est relançable sans re-fetcher Discord.
+ *
+ * Performance adaptative (Phase 1) — le packager consulte `detectPerfProfile()`
+ * au démarrage et choisit entre deux chemins :
+ *
+ * - **Bulk** (profil `fast`) — comportement historique : pour chaque salon on
+ *   matérialise le rendu complet (HTML/CSV/TXT/JSON) en RAM puis on l'écrit
+ *   d'un coup. Plus rapide quand la RAM est large.
+ *
+ * - **Streaming** (profils `balanced` et `low`) — on charge les messages bruts
+ *   du salon en RAM (N × ~500 octets, supportable même à 100 000 messages),
+ *   mais le RENDU est produit par chunks via un `ReadableStream`. C'est ce
+ *   rendu qui peut multiplier la taille par 5-10× en HTML : ÇA, on ne le
+ *   matérialise jamais. `profile.bufferMessagesPerPage` fixe la granularité
+ *   des chunks émis (250 en balanced, ≤ 64 en low).
  */
 import { Writer } from '@transcend-io/conflux';
 import type { CheckpointStore } from './checkpoint-store';
@@ -22,8 +36,12 @@ import type { AssetKind, ExportFormat } from './checkpoint-types';
 import { DEFAULT_FORMATS } from './checkpoint-types';
 import {
   toCsv, toHtml, toTxt,
+  csvHeader, csvMessage,
+  createStreamState, htmlFooter, htmlHeader, htmlMessage,
+  txtHeader, txtMessage,
   type ExportContext, type ExportLabels,
 } from './exporters';
+import { detectPerfProfile, type PerfProfile } from './perf-profile';
 import { t } from '../ui/i18n';
 import type { RawMessage } from './types';
 
@@ -67,7 +85,9 @@ const KIND_DIR: Record<AssetKind, string> = {
 
 /**
  * Découpe une liste de messages en partitions de `size` au plus.
- * `size` ≤ 0 → une seule partition (pas de découpage).
+ * `size` ≤ 0 → une seule partition (pas de découpage). Utilisé seulement en
+ * mode bulk (profil `fast`) ; le streaming gère le partitionnement par slicing
+ * du tableau `messages` une fois drainé.
  */
 function partitionMessages(messages: RawMessage[], size: number): RawMessage[][] {
   if (size <= 0 || messages.length <= size) return [messages];
@@ -120,15 +140,66 @@ export interface PackageResult {
   manifest: unknown;
 }
 
+/** Options optionnelles pour `packageRun` — surtout pour les tests. */
+export interface PackageOptions {
+  /**
+   * Profil de performance à utiliser. En production on laisse undefined : le
+   * packager détecte la machine via `detectPerfProfile()`. Les tests peuvent
+   * passer un profil forgé (`'low'`) pour vérifier le chemin streaming.
+   */
+  profile?: PerfProfile;
+}
+
+/** Encode une chaîne UTF-8 — partagé entre tous les helpers de stream. */
+const ENCODER = new TextEncoder();
+
+/**
+ * Crée un `ReadableStream<Uint8Array>` qui appelle un async generator pour
+ * produire ses chunks (chaînes ASCII/UTF-8). On encode dans le stream pour
+ * que Conflux reçoive directement des octets.
+ */
+function streamFromGenerator(
+  gen: () => AsyncGenerator<string, void, void>,
+): ReadableStream<Uint8Array> {
+  let iter: AsyncGenerator<string, void, void> | null = null;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (!iter) iter = gen();
+      const { value, done } = await iter.next();
+      if (done) {
+        controller.close();
+        return;
+      }
+      if (value.length > 0) controller.enqueue(ENCODER.encode(value));
+    },
+    async cancel() {
+      if (iter) await iter.return();
+    },
+  });
+}
+
+/** Sérialise un message JSON (enrichi) avec une indentation deux espaces. */
+function jsonMessage(msg: RawMessage, urlToPath: Map<string, string>): string {
+  // Ré-indentation pour matcher la mise en forme historique (élément indenté
+  // de 4 espaces dans `JSON.stringify(..., 2)` à l'intérieur d'un tableau).
+  return JSON.stringify(enrichMessage(msg, urlToPath), null, 2)
+    .replace(/\n/g, '\n    ');
+}
+
 /** Construit le paquet zip agent-ready pour un run. */
 export async function packageRun(
   store: CheckpointStore,
   runId: string,
+  opts: PackageOptions = {},
 ): Promise<PackageResult> {
   const run = await store.getRun(runId);
   if (!run) throw new Error(`run introuvable : ${runId}`);
   const channels = await store.getChannels(runId);
   const assets = await store.getAssets(runId);
+
+  // Profil performance : choisi par l'appelant (tests) ou détecté depuis la
+  // machine courante. Sur `fast` on garde le chemin bulk historique.
+  const profile = opts.profile ?? detectPerfProfile();
 
   const channelSlug = new Map<string, string>();
   for (const ch of channels) channelSlug.set(ch.channelId, safeName(ch.name));
@@ -161,6 +232,12 @@ export async function packageRun(
   const writeText = async (name: string, text: string): Promise<void> => {
     await writer.write({ name, stream: () => new Blob([text]).stream() });
   };
+  const writeStream = async (
+    name: string,
+    stream: ReadableStream<Uint8Array>,
+  ): Promise<void> => {
+    await writer.write({ name, stream: () => stream });
+  };
 
   // Formats choisis — défaut robuste si un run d'avant cette option est repris.
   const formats = run.options.formats?.length
@@ -176,56 +253,77 @@ export async function packageRun(
 
   for (const ch of channels) {
     const slug = channelSlug.get(ch.channelId) ?? 'unknown';
-    // Messages bruts collectés une fois, réutilisés par tous les formats.
-    const raw: RawMessage[] = [];
-    await store.forEachMessage(runId, ch.channelId, (sm) => {
-      raw.push(sm.message);
-    });
-    const parts = partitionMessages(raw, partSize);
     const files: string[] = [];
+    let totalMessages = 0;
 
-    for (let p = 0; p < parts.length; p += 1) {
-      const chunk = parts[p] ?? [];
-      // Suffixe `.partN` seulement s'il y a plus d'une partition.
-      const suffix = parts.length > 1 ? `.part${p + 1}` : '';
-      const ctx: ExportContext = {
+    if (profile.streaming) {
+      // ─── Mode streaming (balanced / low) ──────────────────────────────
+      const written = await packageChannelStreaming({
+        store,
+        runId,
+        channel: ch,
+        slug,
         guildName: run.guildName,
-        channelName: parts.length > 1
-          ? `${ch.name} (${t('exp.part', { n: p + 1, total: parts.length })})`
-          : ch.name,
-        urlToPath,
+        formats,
+        partSize,
         labels,
-      };
-      for (const format of formats) {
-        const file = `${FORMAT_DIR[format]}/${slug}${suffix}.${format}`;
-        if (format === 'json') {
-          await writeText(file, JSON.stringify(
-            {
-              channel: { id: ch.channelId, name: ch.name, type: ch.type },
-              part: parts.length > 1
-                ? { index: p + 1, total: parts.length }
-                : undefined,
-              messageCount: chunk.length,
-              messages: chunk.map((m) => enrichMessage(m, urlToPath)),
-            },
-            null,
-            2,
-          ));
-        } else if (format === 'html') {
-          await writeText(file, toHtml(ctx, chunk));
-        } else if (format === 'csv') {
-          await writeText(file, toCsv(ctx, chunk));
-        } else {
-          await writeText(file, toTxt(ctx, chunk));
+        urlToPath,
+        profile,
+        writeStream,
+        files,
+      });
+      totalMessages = written;
+    } else {
+      // ─── Mode bulk (fast) ─────────────────────────────────────────────
+      const raw: RawMessage[] = [];
+      await store.forEachMessage(runId, ch.channelId, (sm) => {
+        raw.push(sm.message);
+      });
+      totalMessages = raw.length;
+      const parts = partitionMessages(raw, partSize);
+
+      for (let p = 0; p < parts.length; p += 1) {
+        const chunk = parts[p] ?? [];
+        const suffix = parts.length > 1 ? `.part${p + 1}` : '';
+        const ctx: ExportContext = {
+          guildName: run.guildName,
+          channelName: parts.length > 1
+            ? `${ch.name} (${t('exp.part', { n: p + 1, total: parts.length })})`
+            : ch.name,
+          urlToPath,
+          labels,
+        };
+        for (const format of formats) {
+          const file = `${FORMAT_DIR[format]}/${slug}${suffix}.${format}`;
+          if (format === 'json') {
+            await writeText(file, JSON.stringify(
+              {
+                channel: { id: ch.channelId, name: ch.name, type: ch.type },
+                part: parts.length > 1
+                  ? { index: p + 1, total: parts.length }
+                  : undefined,
+                messageCount: chunk.length,
+                messages: chunk.map((m) => enrichMessage(m, urlToPath)),
+              },
+              null,
+              2,
+            ));
+          } else if (format === 'html') {
+            await writeText(file, toHtml(ctx, chunk));
+          } else if (format === 'csv') {
+            await writeText(file, toCsv(ctx, chunk));
+          } else {
+            await writeText(file, toTxt(ctx, chunk));
+          }
+          files.push(file);
         }
-        files.push(file);
       }
     }
 
     stats.push({
       name: ch.name,
       files,
-      messages: raw.length,
+      messages: totalMessages,
       media: mediaPerChannel.get(ch.channelId) ?? 0,
     });
   }
@@ -259,6 +357,203 @@ export async function packageRun(
   await writer.close();
   const blob = await zipBlobPromise;
   return { blob, manifest };
+}
+
+/**
+ * Implémente le chemin streaming : draine les messages bruts du salon en RAM
+ * via le curseur IndexedDB (peu coûteux : N × ~500 octets/message), puis émet
+ * chaque fichier d'export comme un `ReadableStream` qui produit le rendu par
+ * chunks de `profile.bufferMessagesPerPage` messages.
+ *
+ * L'invariant Phase 1 protégé ici : on ne matérialise JAMAIS le rendu complet
+ * du salon (le HTML peut représenter 5-10× la taille des messages bruts).
+ */
+async function packageChannelStreaming(args: {
+  store: CheckpointStore;
+  runId: string;
+  channel: { channelId: string; name: string; type: number };
+  slug: string;
+  guildName: string;
+  formats: ExportFormat[];
+  partSize: number;
+  labels: ExportLabels;
+  urlToPath: Map<string, string>;
+  profile: PerfProfile;
+  writeStream: (name: string, stream: ReadableStream<Uint8Array>) => Promise<void>;
+  files: string[];
+}): Promise<number> {
+  const {
+    store, runId, channel: ch, slug, guildName, formats, partSize, labels,
+    urlToPath, profile, writeStream, files,
+  } = args;
+
+  // Drain du curseur en une seule passe (transaction unique). C'est le RENDU
+  // (HTML/CSV/TXT) qu'on évite de matérialiser, pas les messages bruts.
+  const all: RawMessage[] = [];
+  await store.forEachMessage(runId, ch.channelId, (sm) => {
+    all.push(sm.message);
+  });
+  const total = all.length;
+
+  const partitions = partitionMessages(all, partSize);
+  const multiPart = partitions.length > 1;
+
+  for (let p = 0; p < partitions.length; p += 1) {
+    const chunk = partitions[p] ?? [];
+    const partSuffix = multiPart ? `.part${p + 1}` : '';
+    const channelDisplayName = multiPart
+      ? `${ch.name} (${t('exp.part', { n: p + 1, total: partitions.length })})`
+      : ch.name;
+    await writeAllStreams({
+      channel: ch, slug, guildName,
+      formats, labels, urlToPath, profile, writeStream, files,
+      partSuffix,
+      channelDisplayName,
+      messages: chunk,
+    });
+  }
+  return total;
+}
+
+/**
+ * Émet tous les formats d'un salon (ou d'une partition) en streaming —
+ * `messages[]` est en RAM, mais le rendu n'est jamais matérialisé en entier :
+ * le générateur yield par chunks de `profile.bufferMessagesPerPage` messages.
+ */
+async function writeAllStreams(args: {
+  channel: { channelId: string; name: string; type: number };
+  slug: string;
+  guildName: string;
+  formats: ExportFormat[];
+  labels: ExportLabels;
+  urlToPath: Map<string, string>;
+  profile: PerfProfile;
+  writeStream: (name: string, stream: ReadableStream<Uint8Array>) => Promise<void>;
+  files: string[];
+  partSuffix: string;
+  channelDisplayName: string;
+  messages: RawMessage[];
+}): Promise<void> {
+  const {
+    channel: ch, slug, guildName, formats, labels, urlToPath, profile,
+    writeStream, files, partSuffix, channelDisplayName, messages,
+  } = args;
+  const ctx: ExportContext = {
+    guildName,
+    channelName: channelDisplayName,
+    urlToPath,
+    labels,
+  };
+
+  for (const format of formats) {
+    const file = `${FORMAT_DIR[format]}/${slug}${partSuffix}.${format}`;
+    files.push(file);
+    const stream = streamFromGenerator(() =>
+      generateFormat({ ch, format, ctx, urlToPath, profile, messages }),
+    );
+    await writeStream(file, stream);
+  }
+}
+
+/**
+ * Génère le contenu d'un fichier d'export par chunks. Le buffer
+ * `profile.bufferMessagesPerPage` (clampé à un plancher minimum) fixe le
+ * nombre de messages rendus avant chaque yield.
+ */
+async function* generateFormat(args: {
+  ch: { channelId: string; name: string; type: number };
+  format: ExportFormat;
+  ctx: ExportContext;
+  urlToPath: Map<string, string>;
+  profile: PerfProfile;
+  messages: RawMessage[];
+}): AsyncGenerator<string, void, void> {
+  const { ch, format, ctx, urlToPath, profile, messages } = args;
+  // `bufferMessagesPerPage = 0` (profil `low`) signifie « le plus strict
+  // possible » côté mémoire ; flusher message-par-message saturerait conflux
+  // pour aucun gain réel, on garde un plancher (64 chunks rendus ≈ 32 ko).
+  const MIN_BUFFER_LOW = 64;
+  const buffer = profile.bufferMessagesPerPage <= 0
+    ? MIN_BUFFER_LOW
+    : profile.bufferMessagesPerPage;
+  const expectedCount = messages.length;
+
+  const flush = (parts: string[]): string => {
+    const out = parts.join('');
+    parts.length = 0;
+    return out;
+  };
+
+  if (format === 'json') {
+    yield '{\n'
+      + `  "channel": ${JSON.stringify({ id: ch.channelId, name: ch.name, type: ch.type })},\n`
+      + `  "messageCount": ${expectedCount},\n`
+      + '  "messages": [';
+    const acc: string[] = [];
+    let first = true;
+    let count = 0;
+    for (const m of messages) {
+      const sep = first ? '\n    ' : ',\n    ';
+      first = false;
+      acc.push(`${sep}${jsonMessage(m, urlToPath)}`);
+      count += 1;
+      if (count >= buffer) {
+        yield flush(acc);
+        count = 0;
+      }
+    }
+    if (acc.length > 0) yield flush(acc);
+    yield '\n  ]\n}\n';
+    return;
+  }
+
+  if (format === 'html') {
+    yield htmlHeader(ctx, expectedCount);
+    const state = createStreamState();
+    const acc: string[] = [];
+    let count = 0;
+    for (const m of messages) {
+      acc.push(htmlMessage(ctx, state, m));
+      count += 1;
+      if (count >= buffer) {
+        yield flush(acc);
+        count = 0;
+      }
+    }
+    if (acc.length > 0) yield flush(acc);
+    yield htmlFooter();
+    return;
+  }
+
+  if (format === 'csv') {
+    yield csvHeader();
+    const acc: string[] = [];
+    let count = 0;
+    for (const m of messages) {
+      acc.push(csvMessage(ctx, m));
+      count += 1;
+      if (count >= buffer) {
+        yield flush(acc);
+        count = 0;
+      }
+    }
+    if (acc.length > 0) yield flush(acc);
+    return;
+  }
+
+  // txt
+  yield txtHeader(ctx, expectedCount);
+  const acc: string[] = [];
+  let count = 0;
+  for (const m of messages) {
+    acc.push(txtMessage(ctx, m));
+    count += 1;
+    if (count >= buffer) {
+      yield flush(acc);
+      count = 0;
+    }
+  }
+  if (acc.length > 0) yield flush(acc);
 }
 
 function buildIndex(
