@@ -134,13 +134,17 @@ L'export est une archive `.zip` autonome :
 
 ## Traductions
 
+[![Crowdin](https://badges.crowdin.net/vespry/localized.svg)](https://crowdin.com/project/vespry)
+
 Vespry est traduit dans 15 langues. Les chaînes vivent dans
-`src/locales/<lang>.json`. Pour proposer une amélioration ou ajouter
-une langue, passe par [Crowdin](https://crowdin.com/) — édition dans le
-navigateur, mémoire de traduction, suggestions, sans toucher au code.
-Crowdin ouvre automatiquement une PR sur le dépôt quand les chaînes
-sont validées. Le lien vers le projet Crowdin sera ici une fois la
-plateforme branchée.
+`src/locales/<lang>.json`. Le projet est ouvert aux contributions sur
+[Crowdin](https://crowdin.com/project/vespry) — édition dans le
+navigateur, mémoire de traduction, suggestions IA, sans toucher au
+code. Quand des chaînes sont validées, Crowdin pousse automatiquement
+une PR sur le dépôt.
+
+L'anglais est la langue source ; les 14 autres sont traduites par la
+communauté.
 
 ## Soutenir le projet
 

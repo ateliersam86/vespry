@@ -15,6 +15,11 @@ import type {
   RawMessage,
   RawReaction,
 } from './types';
+import type { MentionLabels } from '../ui/markdown';
+import {
+  humanize as humanizeMentions,
+  renderInlineHtml,
+} from '../ui/markdown';
 
 /**
  * Libellés traduits injectés dans les fichiers exportés. Construits par le
@@ -33,6 +38,8 @@ export interface ExportLabels {
   /** Libellé d'un message système sans contenu, p.ex. « message système (type 7) ». */
   systemMessage: (type: number) => string;
   exportedBy: string;
+  /** Étiquettes des mentions Discord (`@membre`, `@rôle`, `#salon`). */
+  mentions: MentionLabels;
 }
 
 /** Contexte passé à chaque exporteur. */
@@ -56,6 +63,7 @@ export const ENGLISH_LABELS: ExportLabels = {
   systemLabel: 'system',
   systemMessage: (type) => `system message (type ${type})`,
   exportedBy: 'exported with Vespry',
+  mentions: { user: '@member', role: '@role', channel: '#channel' },
 };
 
 /** Chemin d'un média relatif à un fichier d'export (dans `html/`, `txt/`…). */
@@ -99,15 +107,12 @@ function isSystem(m: RawMessage): boolean {
 }
 
 /**
- * Remplace les balises Discord brutes par du texte lisible. Commun au texte
- * brut et au CSV (le HTML applique en plus un rendu markdown).
+ * Remplace les balises Discord brutes par du texte lisible — délègue au module
+ * partagé `ui/markdown` pour que mentions et i18n soient cohérentes entre
+ * l'aperçu de l'extension et les fichiers exportés.
  */
-function humanize(text: string): string {
-  return text
-    .replace(/<a?:(\w+):\d+>/g, ':$1:')
-    .replace(/<@!?\d+>/g, '@membre')
-    .replace(/<@&\d+>/g, '@rôle')
-    .replace(/<#\d+>/g, '#salon');
+function humanize(text: string, mentions: MentionLabels): string {
+  return humanizeMentions(text, mentions);
 }
 
 /** Résumé d'une réaction : `:emoji: ×N`. */
@@ -134,7 +139,7 @@ export function toTxt(ctx: ExportContext, messages: RawMessage[]): string {
   ];
   for (const m of messages) {
     if (isSystem(m)) {
-      out.push(`--- [${L.systemLabel}] ${humanize(m.content) || L.systemMessage(m.type)} ---`, '');
+      out.push(`--- [${L.systemLabel}] ${humanize(m.content, L.mentions) || L.systemMessage(m.type)} ---`, '');
       continue;
     }
     const edited = isEdited(m) ? ` (${L.edited})` : '';
@@ -142,11 +147,11 @@ export function toTxt(ctx: ExportContext, messages: RawMessage[]): string {
     // Message cité en réponse.
     const ref = m.referenced_message;
     if (ref) {
-      const snippet = humanize(ref.content).split('\n')[0] ?? '';
+      const snippet = humanize(ref.content, L.mentions).split('\n')[0] ?? '';
       out.push(`  ↪ ${L.replyTo} ${authorName(ref)} : ${snippet.slice(0, 80)}`);
     }
     if (m.content.trim()) {
-      for (const line of humanize(m.content).split('\n')) out.push(line);
+      for (const line of humanize(m.content, L.mentions).split('\n')) out.push(line);
     }
     for (const a of m.attachments) {
       const local = mediaHref(a.url, ctx.urlToPath);
@@ -157,7 +162,7 @@ export function toTxt(ctx: ExportContext, messages: RawMessage[]): string {
     }
     for (const e of m.embeds) {
       if (e.title || e.description) {
-        out.push(`  [${L.embed} : ${humanize(e.title ?? e.description ?? '')}]`);
+        out.push(`  [${L.embed} : ${humanize(e.title ?? e.description ?? '', L.mentions)}]`);
       }
     }
     if (m.reactions && m.reactions.length > 0) {
@@ -199,7 +204,7 @@ export function toCsv(ctx: ExportContext, messages: RawMessage[]): string {
       csvCell(authorName(m)),
       csvCell(m.timestamp),
       csvCell(isEdited(m) ? 'yes' : ''),
-      csvCell(humanize(m.content)),
+      csvCell(humanize(m.content, ctx.labels.mentions)),
       csvCell(attachmentsCell(m, ctx.urlToPath)),
       csvCell((m.reactions ?? []).map(reactionText).join(' ')),
     ].join(','));
@@ -219,19 +224,11 @@ function esc(text: string): string {
 }
 
 /**
- * Rend le contenu d'un message en HTML : échappement d'abord, puis markdown
- * Discord minimal (gras, italique, barré, code, liens), enfin les sauts de
- * ligne. L'ordre échappement → markdown évite toute injection.
+ * Rend le contenu d'un message en HTML — délègue au module partagé
+ * `ui/markdown` pour rester aligné sur l'aperçu de l'extension.
  */
-function renderContent(raw: string): string {
-  let s = esc(humanize(raw));
-  s = s.replace(/```([\s\S]+?)```/g, (_m, c: string) => `<pre>${c.trim()}</pre>`);
-  s = s.replace(/`([^`]+?)`/g, '<code>$1</code>');
-  s = s.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/~~([^~]+?)~~/g, '<s>$1</s>');
-  s = s.replace(/(^|[^*])\*([^*]+?)\*(?!\*)/g, '$1<em>$2</em>');
-  s = s.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" rel="noopener">$1</a>');
-  return s.replace(/\n/g, '<br>');
+function renderContent(raw: string, mentions: MentionLabels): string {
+  return renderInlineHtml(raw, mentions);
 }
 
 /** Pastille d'avatar : initiale colorée — self-contained, pas de média externe. */
@@ -269,7 +266,11 @@ function renderSticker(
 }
 
 /** Carte d'embed complète : couleur, auteur, titre, description, champs, image, footer. */
-function renderEmbed(e: RawEmbed, urlToPath: Map<string, string>): string {
+function renderEmbed(
+  e: RawEmbed,
+  urlToPath: Map<string, string>,
+  mentions: MentionLabels,
+): string {
   const color = typeof e.color === 'number'
     ? `#${e.color.toString(16).padStart(6, '0')}`
     : '#6c5ce0';
@@ -285,14 +286,14 @@ function renderEmbed(e: RawEmbed, urlToPath: Map<string, string>): string {
     );
   }
   if (e.description) {
-    parts.push(`<div class="embed-desc">${renderContent(e.description)}</div>`);
+    parts.push(`<div class="embed-desc">${renderContent(e.description, mentions)}</div>`);
   }
   if (e.fields && e.fields.length > 0) {
     parts.push('<div class="embed-fields">');
     for (const f of e.fields) {
       parts.push(
         `<div class="embed-field"><div class="embed-fn">${esc(f.name)}</div>`
-        + `<div class="embed-fv">${renderContent(f.value)}</div></div>`,
+        + `<div class="embed-fv">${renderContent(f.value, mentions)}</div></div>`,
       );
     }
     parts.push('</div>');
@@ -309,8 +310,8 @@ function renderEmbed(e: RawEmbed, urlToPath: Map<string, string>): string {
 }
 
 /** Aperçu du message cité par une réponse. */
-function renderReply(ref: RawMessage): string {
-  const snippet = humanize(ref.content).replace(/\n/g, ' ').slice(0, 120);
+function renderReply(ref: RawMessage, mentions: MentionLabels): string {
+  const snippet = humanize(ref.content, mentions).replace(/\n/g, ' ').slice(0, 120);
   return (
     `<div class="reply"><span class="reply-author">${esc(authorName(ref))}</span>`
     + `<span class="reply-text">${esc(snippet)}</span></div>`
@@ -381,7 +382,7 @@ const HTML_STYLE = `
 
 /** Rend un message système : ligne centrée et discrète. */
 function renderSystemMessage(m: RawMessage, labels: ExportLabels): string {
-  const label = humanize(m.content).trim() || labels.systemMessage(m.type);
+  const label = humanize(m.content, labels.mentions).trim() || labels.systemMessage(m.type);
   return `<div class="sys">— ${esc(label)} · ${esc(fmtDate(m.timestamp))} —</div>`;
 }
 
@@ -391,7 +392,7 @@ function renderMessage(m: RawMessage, grouped: boolean, ctx: ExportContext): str
   const parts: string[] = [`<div class="msg${grouped ? ' grouped' : ''}">`];
   parts.push(grouped ? '<div class="av spacer"></div>' : avatarChip(m));
   parts.push('<div class="body">');
-  if (m.referenced_message) parts.push(renderReply(m.referenced_message));
+  if (m.referenced_message) parts.push(renderReply(m.referenced_message, L.mentions));
   if (!grouped) {
     const edited = isEdited(m) ? ` <span class="edited">(${esc(L.edited)})</span>` : '';
     parts.push(
@@ -400,13 +401,13 @@ function renderMessage(m: RawMessage, grouped: boolean, ctx: ExportContext): str
     );
   }
   if (m.content.trim()) {
-    parts.push(`<div class="content">${renderContent(m.content)}</div>`);
+    parts.push(`<div class="content">${renderContent(m.content, L.mentions)}</div>`);
   }
   for (const a of m.attachments) parts.push(renderAttachment(a, ctx.urlToPath));
   for (const s of m.sticker_items ?? []) parts.push(renderSticker(s, ctx.urlToPath, L));
   for (const e of m.embeds) {
     if (e.title || e.description || e.author?.name || e.image?.url) {
-      parts.push(renderEmbed(e, ctx.urlToPath));
+      parts.push(renderEmbed(e, ctx.urlToPath, L.mentions));
     }
   }
   if (m.reactions && m.reactions.length > 0) {

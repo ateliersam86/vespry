@@ -243,8 +243,33 @@
 .v-msg-time { font-size: 11px; color: var(--muted); }
 .v-msg-content {
   font-size: 14px; color: var(--text); line-height: 1.45;
-  white-space: pre-wrap; word-break: break-word;
+  word-break: break-word;
 }
+/* markdown rendu — gras, italique, code, blocs, liens */
+.v-msg-content strong { font-weight: 700; }
+.v-msg-content em { font-style: italic; }
+.v-msg-content code {
+  background: var(--bg3); padding: 1px 5px; border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+}
+.v-msg-content pre {
+  background: var(--bg3); padding: 8px 10px; border-radius: 6px;
+  margin: 4px 0; overflow-x: auto; font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.v-msg-content a { color: var(--link); }
+/* citation de réponse au-dessus du message */
+.v-msg-reply {
+  display: flex; gap: 6px; font-size: 12.5px; color: var(--muted);
+  margin-bottom: 2px; padding-left: 8px; border-left: 2px solid var(--border);
+  max-width: 100%; overflow: hidden;
+}
+.v-msg-reply-author { font-weight: 600; color: var(--link); flex: none; }
+.v-msg-reply-text {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* marqueur « modifié » dans le head */
+.v-msg-edited { font-size: 11px; color: var(--muted); font-style: italic; }
 .v-msg-atts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px; }
 .v-msg-img {
   max-width: 320px; max-height: 200px; border-radius: 6px;

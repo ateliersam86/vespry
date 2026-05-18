@@ -177,5 +177,8 @@
   "exp.system_label": "system",
   "exp.system_message": "wiadomość systemowa (typ {n})",
   "exp.exported_by": "wyeksportowane z Vespry",
-  "exp.part": "część {n}/{total}"
+  "exp.part": "część {n}/{total}",
+  "mention.user": "@członek",
+  "mention.role": "@rola",
+  "mention.channel": "#kanał"
 }

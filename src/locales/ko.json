@@ -177,5 +177,8 @@
   "exp.system_label": "시스템",
   "exp.system_message": "시스템 메시지 (유형 {n})",
   "exp.exported_by": "Vespry로 내보냄",
-  "exp.part": "파트 {n}/{total}"
+  "exp.part": "파트 {n}/{total}",
+  "mention.user": "@멤버",
+  "mention.role": "@역할",
+  "mention.channel": "#채널"
 }

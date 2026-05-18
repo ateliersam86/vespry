@@ -45,7 +45,7 @@ describe('toTxt', () => {
   });
 
   it('humanise les balises Discord brutes', () => {
-    expect(toTxt(ctx, [msg({ content: 'salut <@123> !' })])).toContain('@membre');
+    expect(toTxt(ctx, [msg({ content: 'salut <@123> !' })])).toContain('@member');
   });
 });
 

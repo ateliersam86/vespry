@@ -177,5 +177,8 @@
   "exp.system_label": "sistem",
   "exp.system_message": "sistem mesajı (tür {n})",
   "exp.exported_by": "Vespry ile dışa aktarıldı",
-  "exp.part": "bölüm {n}/{total}"
+  "exp.part": "bölüm {n}/{total}",
+  "mention.user": "@üye",
+  "mention.role": "@rol",
+  "mention.channel": "#kanal"
 }

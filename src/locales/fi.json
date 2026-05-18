@@ -177,5 +177,8 @@
   "exp.system_label": "järjestelmä",
   "exp.system_message": "järjestelmäviesti (tyyppi {n})",
   "exp.exported_by": "viety Vespryllä",
-  "exp.part": "osa {n}/{total}"
+  "exp.part": "osa {n}/{total}",
+  "mention.user": "@jäsen",
+  "mention.role": "@rooli",
+  "mention.channel": "#kanava"
 }

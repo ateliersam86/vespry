@@ -177,5 +177,8 @@
   "exp.system_label": "सिस्टम",
   "exp.system_message": "सिस्टम संदेश (प्रकार {n})",
   "exp.exported_by": "Vespry से निर्यात",
-  "exp.part": "भाग {n}/{total}"
+  "exp.part": "भाग {n}/{total}",
+  "mention.user": "@सदस्य",
+  "mention.role": "@भूमिका",
+  "mention.channel": "#चैनल"
 }

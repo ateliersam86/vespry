@@ -53,6 +53,9 @@ import {
 import type { EnqueueExtras, QueueItemView } from '../../messaging';
 import type { RemoteController } from '../../ui/remote-controller';
 import { t } from '../../ui/i18n';
+import {
+  humanize, renderInlineHtml, type MentionLabels,
+} from '../../ui/markdown';
 import { getVersion } from '../../version';
 import { reportProblem } from '../../diagnostics';
 import { loadCredits, type Credits } from '../../credits';
@@ -929,13 +932,16 @@ function formatTime(ts: string): string {
   });
 }
 
-/** Rend le contenu lisible : remplace les balises Discord brutes. */
+/** Étiquettes de mentions Discord, traduites dans la langue de l'utilisateur. */
+const MENTIONS: MentionLabels = {
+  user: t('mention.user'),
+  role: t('mention.role'),
+  channel: t('mention.channel'),
+};
+
+/** Texte brut humanisé — pour les zones où on ne veut pas de HTML (embed desc courte). */
 function cleanContent(text: string): string {
-  return text
-    .replace(/<a?:(\w+):\d+>/g, ':$1:')
-    .replace(/<@!?\d+>/g, '@membre')
-    .replace(/<@&\d+>/g, '@rôle')
-    .replace(/<#\d+>/g, '#salon');
+  return humanize(text, MENTIONS);
 }
 
 /** Classe une pièce jointe par type, d'après son content-type ou extension. */
@@ -1004,7 +1010,12 @@ function EmbedCard({ embed }: { embed: RawEmbed }): JSX.Element {
       {embed.author?.name && <div class="v-embed-author">{embed.author.name}</div>}
       {embed.title && <div class="v-embed-title">{embed.title}</div>}
       {embed.description && (
-        <div class="v-embed-desc">{cleanContent(embed.description)}</div>
+        <div
+          class="v-embed-desc"
+          dangerouslySetInnerHTML={{
+            __html: renderInlineHtml(embed.description, MENTIONS),
+          }}
+        />
       )}
       {img && <img class="v-embed-img" src={img} alt="" loading="lazy" />}
     </div>
@@ -1069,14 +1080,33 @@ function MessageRow({
         ? <div class="v-msg-gutter" />
         : <img class="v-msg-avatar" src={avatarUrl(m.author)} alt="" loading="lazy" />}
       <div class="v-msg-main">
+        {m.referenced_message && (
+          <div class="v-msg-reply">
+            <span class="v-msg-reply-author">
+              {m.referenced_message.author.global_name
+                ?? m.referenced_message.author.username}
+            </span>
+            <span class="v-msg-reply-text">
+              {cleanContent(m.referenced_message.content).slice(0, 120)}
+            </span>
+          </div>
+        )}
         {!grouped && (
           <div class="v-msg-head">
             <span class="v-msg-author">{name}</span>
-            {m.pinned && <span class="v-msg-pin">épinglé</span>}
+            {m.pinned && <span class="v-msg-pin">{t('zone.pinned')}</span>}
             <span class="v-msg-time">{formatTime(m.timestamp)}</span>
+            {m.edited_timestamp && (
+              <span class="v-msg-edited">({t('exp.edited')})</span>
+            )}
           </div>
         )}
-        {m.content && <div class="v-msg-content">{cleanContent(m.content)}</div>}
+        {m.content && (
+          <div
+            class="v-msg-content"
+            dangerouslySetInnerHTML={{ __html: renderInlineHtml(m.content, MENTIONS) }}
+          />
+        )}
         {m.attachments.length > 0 && (
           <div class="v-msg-atts">
             {m.attachments.map((a) => <Attachment key={a.id} att={a} />)}

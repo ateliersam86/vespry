@@ -177,5 +177,8 @@
   "exp.system_label": "systeem",
   "exp.system_message": "systeembericht (type {n})",
   "exp.exported_by": "geëxporteerd met Vespry",
-  "exp.part": "deel {n}/{total}"
+  "exp.part": "deel {n}/{total}",
+  "mention.user": "@lid",
+  "mention.role": "@rol",
+  "mention.channel": "#kanaal"
 }

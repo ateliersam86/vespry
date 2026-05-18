@@ -177,5 +177,8 @@
   "exp.system_label": "システム",
   "exp.system_message": "システムメッセージ (タイプ {n})",
   "exp.exported_by": "Vespry でエクスポート",
-  "exp.part": "パート {n}/{total}"
+  "exp.part": "パート {n}/{total}",
+  "mention.user": "@メンバー",
+  "mention.role": "@ロール",
+  "mention.channel": "#チャンネル"
 }

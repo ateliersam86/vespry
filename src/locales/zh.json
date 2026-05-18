@@ -177,5 +177,8 @@
   "exp.system_label": "系统",
   "exp.system_message": "系统消息(类型 {n})",
   "exp.exported_by": "由 Vespry 导出",
-  "exp.part": "第 {n}/{total} 部分"
+  "exp.part": "第 {n}/{total} 部分",
+  "mention.user": "@成员",
+  "mention.role": "@角色",
+  "mention.channel": "#频道"
 }

@@ -177,5 +177,8 @@
   "exp.system_label": "système",
   "exp.system_message": "message système (type {n})",
   "exp.exported_by": "exporté avec Vespry",
-  "exp.part": "partie {n}/{total}"
+  "exp.part": "partie {n}/{total}",
+  "mention.user": "@membre",
+  "mention.role": "@rôle",
+  "mention.channel": "#salon"
 }
