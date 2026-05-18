@@ -8,6 +8,71 @@ l'overlay et le popup vient de `package.json`.
 Première version fonctionnelle prête pour soumission Chrome Web Store,
 Microsoft Edge Add-ons et Mozilla AMO.
 
+### Polish UX (2026-05-18)
+
+- **Bouton CTA** : « Lancer l'exportation » par défaut, devient « + Ajouter
+  à la file » uniquement si un export tourne déjà — plus de mention
+  trompeuse d'une « file » qui n'existe pas encore.
+- **Barre de progression fluide** : pré-comptage des messages par salon
+  via l'API search Discord (`total_results`) au démarrage du run, puis
+  pondération `messages / estimatedTotal`. Fin du saut à 80 % suivi d'un
+  blocage. Fallback gracieux sur `channelsDone/channelsTotal` si search
+  API échoue.
+- **Overlay responsif** : largeur 70vw sur grand écran (15 % de marge à
+  gauche et à droite), repli à 94vw sous ~1100 px, plafond 1800×1200 px
+  pour les 4K/5K.
+- **Animation hibou** : le logo OwlMark fait un saut subtil toutes les 8 s
+  (squash+stretch CSS, 0,5 s). Désactivé sous `prefers-reduced-motion`.
+- **Format d'export par défaut** : HTML seul (au lieu de JSON+HTML cochés
+  ensemble). JSON/CSV/TXT à un clic.
+- **Avertissement ToS Discord** au premier export — modale explicite
+  (lien `https://discord.com/terms`, recommandation d'usage privé),
+  checkbox « ne plus afficher » persistée.
+- **Crédit éditeur** dans le footer overlay : « © {année} L'Atelier de
+  Sam — fait avec passion par Samuel Muselet », année calculée
+  dynamiquement.
+- **Cohérence patches** (audit UX) : zip pas encore prêt affiche
+  désormais « ⏳ Préparation de l'archive… » au lieu d'une barre 100 %
+  silencieuse ; export incrémental sans run précédent logge clairement
+  « premier export complet » au lieu de rester silencieux.
+
+### Exports — qualité (2026-05-18, suite audit comparatif vs DCE/Discrub)
+
+- **JSON enveloppe agent-ready** :
+  `$schema`, `vespryVersion`, `exportedAt`, `guild{id,name}`,
+  `channel{id,name,type,typeName}`, et `messages[].typeName` (enum
+  lisible : `"REPLY"`, `"CHANNEL_PINNED_MESSAGE"`…). Champs Discord
+  snake_case natifs préservés (forward-compat). Identique entre chemins
+  bulk et streaming.
+- **CSV BOM UTF-8** + colonnes `ChannelID,Channel,ChannelType` ajoutées
+  en tête → Excel Windows n'écrase plus les accents/emojis, CSV
+  concaténés multi-salons restent exploitables.
+- **HTML imprimable** : `@media print` ajouté — thème clair forcé, pas
+  de coupure de message entre pages, URL des liens imprimée. Vespry est
+  le premier (vs DCE/Discrub) à le gérer.
+- **Markdown URL fix** : la regex auto-linkifier absorbait la ponctuation
+  terminale (`https://x.com/foo.` → 404). Désormais relâchée hors du
+  `<a>`.
+
+### Légal (2026-05-18)
+
+- **LICENSE** : copyright à jour (« Samuel Muselet (L'Atelier de Sam)
+  and Vespry contributors », fin du nom « Vellum contributors »).
+- **PRIVACY.md** autonome (politique de confidentialité — éditeur,
+  données traitées, 3 sorties réseau opt-in, conformité RGPD, contact,
+  procédure de droits).
+- **package.json** : `author`, `homepage`, `repository`, `bugs` ajoutés.
+- **README** : sections Vie privée + Contact ajoutées, mention
+  non-affiliation Discord Inc., crédit éditeur en bas.
+
+### Firefox
+
+- `chrome.alarms` câblé dans `firefox/background.ts` — la planification
+  daily/weekly tire désormais réellement sur Firefox (auparavant l'UI
+  fonctionnait mais aucun déclenchement, bug silencieux découvert en
+  audit pré-publication).
+
+
 ### Moteur d'export
 
 - Capture du jeton de session Discord (interception fetch/XHR, monde MAIN).
