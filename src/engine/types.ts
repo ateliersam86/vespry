@@ -2,7 +2,14 @@
  * Types du domaine Discord + types internes Vespry.
  *
  * Les types `Raw*` reflètent la forme JSON renvoyée par l'API Discord v10
- * (snake_case). On ne type que les champs qu'on consomme.
+ * (snake_case). On ne type QUE les champs qu'on consomme à l'écran ou dans
+ * les rendus (HTML/TXT/CSV). Mais le runtime JS ne déclare rien : tous les
+ * champs reçus de Discord sont conservés tels quels jusque dans le JSON
+ * exporté — c'est la garantie de FORWARD-COMPATIBILITÉ. Si Discord ajoute
+ * un champ demain, on ne l'affichera pas (on ne sait pas comment), mais il
+ * sera intégralement préservé dans le JSON pour analyse a posteriori.
+ *
+ * Vérification : `packager.test.ts` → "préserve les champs Discord inconnus".
  */
 
 export type Snowflake = string;

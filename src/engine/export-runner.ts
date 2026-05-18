@@ -30,6 +30,7 @@ import {
   type Snowflake,
 } from './types';
 import { collectAssets } from './media';
+import { watchMessageSchema } from './schema-watch';
 
 /** Au-delà de ce ratio d'occupation IndexedDB, on met le run en pause. */
 const QUOTA_PAUSE_RATIO = 0.9;
@@ -277,6 +278,9 @@ export class ExportRunner {
     if (run.options.includeReactionUsers) {
       await this.enrichReactionUsers(channel.channelId, messages);
     }
+    // Sentinelle de schéma — détecte les champs Discord inconnus pour qu'on
+    // sache quand Vespry doit être mis à jour. Non bloquant.
+    for (const m of messages) watchMessageSchema(m);
 
     const stored: StoredMessage[] = messages.map((m) => ({
       runId: run.id,

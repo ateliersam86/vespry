@@ -107,4 +107,22 @@ describe('packageRun', () => {
   it('lève une erreur si le run est introuvable', async () => {
     await expect(packageRun(store, 'inexistant')).rejects.toThrow();
   });
+
+  it('préserve les champs Discord inconnus dans le JSON (forward-compat)', async () => {
+    await store.putRun(run('rfc'));
+    await store.putChannel(channel('rfc', 'c1', 'general'));
+    // simule un message contenant un champ Discord futur que Vespry ne type pas.
+    const enriched = message('rfc', 'c1', '1');
+    (enriched.message as unknown as Record<string, unknown>)['future_discord_field']
+      = { kind: 'voice_note_v2', secret: 42 };
+    await store.appendMessages([enriched]);
+
+    const { blob } = await packageRun(store, 'rfc');
+    const buf = await blob.arrayBuffer();
+    // le contenu du zip est binaire, mais la chaîne du JSON apparaît telle quelle
+    // dans le flux non compressé (nos JSON sont sans STORED compression).
+    const ascii = new TextDecoder().decode(new Uint8Array(buf));
+    expect(ascii).toContain('future_discord_field');
+    expect(ascii).toContain('voice_note_v2');
+  });
 });

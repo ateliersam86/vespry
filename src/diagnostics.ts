@@ -10,6 +10,7 @@
  * contenu des messages. Uniquement du contexte technique.
  */
 import { GITHUB_REPO, getVersion } from './version';
+import { getDetectedUnknowns } from './engine/schema-watch';
 
 const MAX_EVENTS = 60;
 const events: string[] = [];
@@ -54,6 +55,20 @@ export function buildReport(summary: string, extraLines: string[] = []): string 
   ];
   if (events.length > 0) {
     lines.push('', '### Erreurs captées', '```', ...events, '```');
+  }
+  // Champs Discord inconnus rencontrés — signal qu'une évolution de l'API
+  // a peut-être eu lieu et que Vespry pourrait avoir besoin d'une mise à jour.
+  const unknowns = getDetectedUnknowns();
+  if (unknowns.length > 0) {
+    lines.push(
+      '',
+      '### Champs Discord inconnus rencontrés',
+      'Ces champs ne sont pas rendus par Vespry mais restent préservés dans',
+      'le JSON exporté. Une nouvelle évolution de l\'API Discord est probable :',
+      '```',
+      ...unknowns,
+      '```',
+    );
   }
   lines.push(
     '',
