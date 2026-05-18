@@ -1,13 +1,29 @@
+<div align="center">
+
+<img src="src/assets/icon-128.png" alt="Logo Vespry" width="96" height="96" />
+
 # Vespry
+
+**Export increvable de l'historique Discord — Chrome, Edge, Firefox.**
+
+[![Licence : MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/ateliersam86/vespry/actions/workflows/ci.yml/badge.svg)](https://github.com/ateliersam86/vespry/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-0.1.0-informational)](package.json)
+[![Manifest V3](https://img.shields.io/badge/Manifest-V3-success)](https://developer.chrome.com/docs/extensions/develop/migrate)
+[![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
+[![Tests](https://img.shields.io/badge/tests-142%20passants-brightgreen)](src/engine)
+[![Crowdin](https://badges.crowdin.net/vespry/localized.svg)](https://crowdin.com/project/vespry)
+
+</div>
+
+---
 
 Vespry est une extension de navigateur qui exporte l'historique de tes
 conversations Discord — serveurs, salons, messages privés — dans un fichier,
-sur ton ordinateur. Chrome, Edge, Firefox.
+sur ton ordinateur.
 
 Un serveur que tu quittes, des messages privés à garder, une communauté qui
 ferme : Discord ne te laisse rien emporter. Vespry, si.
-
-![L'overlay Vespry sur Discord](docs/screenshots/overlay.png)
 
 ## Le problème
 
@@ -53,6 +69,11 @@ AES-256, et le seul traduit en 15 langues.
 
 ## Fonctionnalités
 
+> **Captures en cours de préparation.**
+> Les visuels seront générés sur un serveur Discord de démo dédié — pour
+> ne rien exposer du contenu privé d'un vrai serveur.
+> Seule la capture du popup est présente pour l'instant ([`popup.png`](docs/screenshots/popup.png)).
+
 ### Interface façon Discord
 
 L'extension s'ouvre par-dessus Discord. À gauche, tes serveurs et tes
@@ -72,16 +93,12 @@ Coche autant de salons que tu veux dans la colonne de gauche et fixe une
 fenêtre temporelle — la file traitera chaque salon, dans l'ordre, en
 respectant la période.
 
-![Multi-sélection de salons et plage de dates](docs/screenshots/multi-select.png)
-
 ### Sélection de messages un par un
 
 Dans l'aperçu central, coche les messages que tu veux garder. Ils s'ajoutent
 au panneau de droite sous forme d'étiquette « X messages — #salon » que tu
 peux retirer d'un clic. Tu peux combiner cette sélection manuelle avec les
 filtres : les deux s'ajoutent.
-
-![Sélection de messages individuels](docs/screenshots/message-select.png)
 
 ### Mode Avancé : filtres booléens, zones granulaires
 
@@ -91,8 +108,6 @@ avec une image, une vidéo, un son, un sticker, un embed ou un lien.
 
 Les zones se combinent en **ET** ou en **OU**, et chacune peut être **inversée**
 (NON). Tu peux dire « auteur Sora ET avec image », ou « tout sauf épinglés ».
-
-![Mode Avancé : zones, ET/OU, négation](docs/screenshots/advanced.png)
 
 ### Quatre formats d'export, plusieurs à la fois
 
@@ -104,8 +119,6 @@ passe :
   stickers, embeds, réponses citées, médias en local.
 - **CSV** — pour tableur (Excel, LibreOffice).
 - **TXT** — texte brut, le plus léger.
-
-![Le rendu de l'export HTML](docs/screenshots/html-export.png)
 
 ### Export incrémental
 
@@ -120,8 +133,6 @@ quotidien ou hebdomadaire, à une heure UTC fixe. Vespry se réveille tout seul
 via `chrome.alarms`, lance l'export en arrière-plan et te notifie quand le
 zip est prêt. Un planning actif à la fois — change-le quand tu veux.
 
-![Planification d'un export récurrent](docs/screenshots/schedule.png)
-
 ### Chiffrement zip AES-256
 
 Une option du mode Avancé. Tu saisis un mot de passe, Vespry chiffre l'archive
@@ -130,8 +141,6 @@ Le mot de passe ne quitte jamais la RAM — il n'est pas persisté, pas écrit d
 le manifest, pas envoyé. Si tu l'oublies, le zip est irrécupérable : Vespry te
 le dit clairement avant de chiffrer. Une jauge de force aide à choisir.
 
-![Chiffrement AES-256 du zip](docs/screenshots/password.png)
-
 ### Templates de nom de fichier
 
 Plutôt que `vespry-MonServeur.zip`, tu peux choisir un patron :
@@ -139,8 +148,6 @@ Plutôt que `vespry-MonServeur.zip`, tu peux choisir un patron :
 placeholders `{guildName}`, `{date}` (ISO `YYYY-MM-DD`) et `{datetime}`
 (`YYYY-MM-DDTHHMM`) sont remplacés à la volée. Un aperçu en direct te montre
 ce que sera le nom final. Persisté dans `chrome.storage.local`.
-
-![Template de nom de fichier](docs/screenshots/filename-template.png)
 
 ### Découpage des gros salons
 
@@ -163,8 +170,6 @@ qu'on quitte, ou nettoyer un DM avant archivage. Vespry n'édite pas les
 messages, ne purge pas un compte entier en un clic, ne supprime pas
 indistinctement — par sécurité.
 
-![Suppression de messages cochés](docs/screenshots/purge-modal.png)
-
 ### File d'export increvable
 
 Les exports s'enchaînent dans une file. Chaque tâche affiche son avancement,
@@ -173,14 +178,14 @@ badge de pourcentage s'affiche sur l'icône de l'extension — visible quel que
 soit l'onglet où tu es. Un export interrompu peut être repris ; c'est le cœur
 de Vespry, et c'est couvert par les tests automatiques.
 
-![File d'export — tâche terminée avec stats et console](docs/screenshots/export-done.png)
-
 ### Popup
 
 Un clic sur l'icône de l'extension : l'état de la session, les exports en
 cours, l'accès rapide à Discord.
 
-![Le popup de l'extension](docs/screenshots/popup.png)
+<p align="center">
+  <img src="docs/screenshots/popup.png" alt="Popup de l'extension Vespry" width="320" />
+</p>
 
 ## Confidentialité
 
@@ -267,7 +272,8 @@ code. Quand des chaînes sont validées, Crowdin pousse automatiquement une PR
 sur le dépôt.
 
 L'anglais est la langue source ; les 14 autres sont traduites par la
-communauté.
+communauté. La progression par langue est visible en temps réel sur
+[la page Crowdin du projet](https://crowdin.com/project/vespry).
 
 ## Soutenir le projet
 
@@ -305,5 +311,7 @@ propres données, à tes risques.
 
 ## Licence
 
-MIT. Le client API Discord (`src/engine/discord-api.ts`) dérive de Discrub
+[![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+
+Le client API Discord (`src/engine/discord-api.ts`) dérive de Discrub
 Classic (MIT). « Discrub » est une marque de prathercc, non utilisée ici.
