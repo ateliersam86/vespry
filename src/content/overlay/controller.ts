@@ -13,6 +13,7 @@ import {
   type RunnerLogEvent,
 } from '../../engine/export-runner';
 import { packageRun } from '../../engine/packager';
+import { detectPerfProfile } from '../../engine/perf-profile';
 import { maybeSendSchemaReport } from '../../engine/schema-report';
 import { loadCredits } from '../../credits';
 import type {
@@ -389,21 +390,31 @@ export class VespryController {
 
   private async runItem(item: QueueItem): Promise<void> {
     if (!this.api) return;
-    const runner = new ExportRunner(this.api, this.store, {
-      onProgress: (s) => {
-        item.channelsTotal = s.channelsTotal;
-        item.channelsDone = s.channelsDone;
-        item.messages = s.messagesTotal;
-        item.assetsByKind = s.assetsByKind;
-        item.reactions = s.reactions;
-        this.notify();
+    // Concurrence salons adaptative : `parallelChannels` est issu du profil
+    // de performance (Phase 1) — 3 sur machine puissante, 1 sur RAM faible.
+    // Capé en interne à 3 (rate-limit Discord). On le détecte par run pour
+    // refléter une éventuelle évolution (passage en mode économie d'énergie).
+    const profile = detectPerfProfile();
+    const runner = new ExportRunner(
+      this.api,
+      this.store,
+      {
+        onProgress: (s) => {
+          item.channelsTotal = s.channelsTotal;
+          item.channelsDone = s.channelsDone;
+          item.messages = s.messagesTotal;
+          item.assetsByKind = s.assetsByKind;
+          item.reactions = s.reactions;
+          this.notify();
+        },
+        onLog: (e) => {
+          item.log.push(formatLog(e));
+          if (item.log.length > MAX_LOG) item.log.shift();
+          this.notify();
+        },
       },
-      onLog: (e) => {
-        item.log.push(formatLog(e));
-        if (item.log.length > MAX_LOG) item.log.shift();
-        this.notify();
-      },
-    });
+      { channelConcurrency: profile.parallelChannels },
+    );
     let status: RunStatus;
     try {
       status = await runner.run(item.runId);

@@ -31,6 +31,16 @@ import {
 } from './types';
 import { collectAssets } from './media';
 import { watchMessageSchema } from './schema-watch';
+import { clampParallel } from './perf-profile';
+
+/**
+ * Sécurise la concurrence salons : non-numérique / NaN / ≤ 1 → 1, ≥ 3 → 3,
+ * sinon 2. Délègue à `perf-profile.clampParallel` pour la borne supérieure
+ * (rate-limit Discord = max 3).
+ */
+function clampChannelConcurrency(n: number): 1 | 2 | 3 {
+  return clampParallel(n);
+}
 
 /** Au-delà de ce ratio d'occupation IndexedDB, on met le run en pause. */
 const QUOTA_PAUSE_RATIO = 0.9;
@@ -63,6 +73,22 @@ export interface RunnerEvents {
   onLog?: (e: RunnerLogEvent) => void;
   onPaused?: (reason: string) => void;
   onDone?: (status: RunStatus) => void;
+}
+
+/**
+ * Options de l'exécution d'un run — concurrence salons typiquement.
+ */
+export interface RunnerOptions {
+  /**
+   * Nombre maximum de salons traités en parallèle dans un même run.
+   * Défaut 1 (comportement historique séquentiel). Capé à 3 par
+   * `perf-profile.clampParallel` (rate-limit Discord, cf. Phase 1).
+   *
+   * En profil `low` la concurrence vaut 1 (faible RAM = on évite la
+   * pression mémoire des batches en parallèle). En `balanced` 2, en
+   * `fast` 3 — c'est le contrôleur qui passe la valeur du profil.
+   */
+  channelConcurrency?: number;
 }
 
 /**
@@ -148,11 +174,19 @@ export class ExportRunner {
     private readonly api: DiscordApi,
     private readonly store: CheckpointStore,
     private readonly events: RunnerEvents = {},
+    private readonly options: RunnerOptions = {},
   ) {}
 
   /**
    * Exécute (ou reprend) un run. Les enregistrements de salon doivent déjà
    * exister (cf. `planGuildExport`). Renvoie le statut final.
+   *
+   * Concurrence salons (Phase 1) — quand `options.channelConcurrency > 1`,
+   * jusqu'à N salons sont traités en parallèle. Implémentation : sémaphore
+   * par run (workers permanents qui consomment une file partagée). Sur
+   * `paused` (quota / 401) on attend que les workers en cours terminent
+   * leur tour avant de revenir, pour ne pas laisser un salon à moitié écrit
+   * sans curseur cohérent.
    */
   async run(runId: string): Promise<RunStatus> {
     const run = await this.store.getRun(runId);
@@ -160,18 +194,49 @@ export class ExportRunner {
     await this.store.patchRun(runId, { status: 'in_progress' });
 
     const channels = await this.store.getChannels(runId);
+    const pending = channels.filter(
+      (ch) => ch.status !== 'done' && ch.status !== 'skipped',
+    );
+    const concurrency = clampChannelConcurrency(
+      this.options.channelConcurrency ?? 1,
+    );
+
     let anyPartial = false;
+    let paused = false;
+    let cursor = 0;
 
-    for (const ch of channels) {
-      if (ch.status === 'done' || ch.status === 'skipped') continue;
+    const takeNext = (): ChannelProgress | undefined => {
+      if (paused) return undefined;
+      const ch = pending[cursor];
+      cursor += 1;
+      return ch;
+    };
 
-      const outcome = await this.runChannel(run, ch);
-      if (outcome === 'paused') {
-        this.events.onPaused?.('quota ou session — run en pause');
-        this.events.onDone?.('paused');
-        return 'paused';
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const ch = takeNext();
+        if (!ch) return;
+        const outcome = await this.runChannel(run, ch);
+        if (outcome === 'paused') {
+          // Le premier `paused` arme le drapeau : les autres workers finiront
+          // leur salon en cours puis sortiront sans en commencer un nouveau.
+          paused = true;
+          return;
+        }
+        if (outcome === 'partial') anyPartial = true;
       }
-      if (outcome === 'partial') anyPartial = true;
+    };
+
+    const workers: Promise<void>[] = [];
+    for (let i = 0; i < Math.max(1, Math.min(concurrency, pending.length)); i += 1) {
+      workers.push(worker());
+    }
+    await Promise.all(workers);
+
+    if (paused) {
+      this.events.onPaused?.('quota ou session — run en pause');
+      this.events.onDone?.('paused');
+      return 'paused';
     }
 
     const finalStatus: RunStatus = anyPartial ? 'partial' : 'completed';

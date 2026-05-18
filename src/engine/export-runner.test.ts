@@ -229,6 +229,72 @@ describe('ExportRunner', () => {
     expect((await store.getChannel(runId, 'f1'))?.status).toBe('done');
   });
 
+  it('concurrence salons — traite N salons en parallèle quand concurrency > 1', async () => {
+    // 5 salons, concurrency=2 : à un instant T au moins 2 doivent être en
+    // cours simultanément. On instrumente `getMessages` pour mesurer le pic
+    // d'activité (entrée incrémente un compteur, sortie le décrémente).
+    const channels: RawChannel[] = [
+      { id: 'c1', type: 0, name: 'a' },
+      { id: 'c2', type: 0, name: 'b' },
+      { id: 'c3', type: 0, name: 'c' },
+      { id: 'c4', type: 0, name: 'd' },
+      { id: 'c5', type: 0, name: 'e' },
+    ];
+    const runId = await planGuildExport(store, { id: 'g1', name: 'G' }, channels, OPTS);
+
+    let inFlight = 0;
+    let peak = 0;
+    const api = {
+      getMessages: async (channelId: string): Promise<RawMessage[]> => {
+        inFlight += 1;
+        if (inFlight > peak) peak = inFlight;
+        // Yield à l'event loop pour laisser un autre worker démarrer son
+        // propre `getMessages` avant qu'on rende notre lot.
+        await new Promise<void>((r) => setTimeout(r, 5));
+        inFlight -= 1;
+        // Un lot puis vide : un seul appel par salon.
+        return [fakeMessage(`${channelId}-1`)];
+      },
+      downloadAsset: async (): Promise<Blob | null> => null,
+    } as unknown as DiscordApi;
+
+    const status = await new ExportRunner(api, store, {}, { channelConcurrency: 2 }).run(runId);
+
+    expect(status).toBe('completed');
+    expect(peak).toBeGreaterThanOrEqual(2);
+    // Cap rate-limit : on n'a JAMAIS dépassé la concurrence demandée.
+    expect(peak).toBeLessThanOrEqual(2);
+    for (const ch of channels) {
+      expect((await store.getChannel(runId, ch.id))?.status).toBe('done');
+    }
+  });
+
+  it('concurrence salons — fallback séquentiel quand concurrency=1', async () => {
+    const channels: RawChannel[] = [
+      { id: 'c1', type: 0, name: 'a' },
+      { id: 'c2', type: 0, name: 'b' },
+      { id: 'c3', type: 0, name: 'c' },
+    ];
+    const runId = await planGuildExport(store, { id: 'g1', name: 'G' }, channels, OPTS);
+
+    let inFlight = 0;
+    let peak = 0;
+    const api = {
+      getMessages: async (channelId: string): Promise<RawMessage[]> => {
+        inFlight += 1;
+        if (inFlight > peak) peak = inFlight;
+        await new Promise<void>((r) => setTimeout(r, 5));
+        inFlight -= 1;
+        return [fakeMessage(`${channelId}-1`)];
+      },
+      downloadAsset: async (): Promise<Blob | null> => null,
+    } as unknown as DiscordApi;
+
+    await new ExportRunner(api, store, {}, { channelConcurrency: 1 }).run(runId);
+
+    expect(peak).toBe(1);
+  });
+
   it('enrichit les réactions avec les utilisateurs si l\'option est activée', async () => {
     const reacted: RawMessage = {
       ...fakeMessage('1'),
