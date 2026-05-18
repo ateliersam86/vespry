@@ -132,6 +132,16 @@ L'export est une archive `.zip` autonome :
 - les médias téléchargés, rangés dans des dossiers ;
 - un `INDEX.md` qui récapitule le contenu.
 
+## Traductions
+
+Vespry est traduit dans 15 langues. Les chaînes vivent dans
+`src/locales/<lang>.json`. Pour proposer une amélioration ou ajouter
+une langue, passe par [Crowdin](https://crowdin.com/) — édition dans le
+navigateur, mémoire de traduction, suggestions, sans toucher au code.
+Crowdin ouvre automatiquement une PR sur le dépôt quand les chaînes
+sont validées. Le lien vers le projet Crowdin sera ici une fois la
+plateforme branchée.
+
 ## Soutenir le projet
 
 Vespry est gratuit et open source, sans publicité. Si l'outil t'a rendu

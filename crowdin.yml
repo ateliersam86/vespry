@@ -1,0 +1,16 @@
+# Configuration Crowdin — utilisée par l'app GitHub Crowdin.
+#
+# `en.json` est la source. Les autres langues sont synchronisées
+# automatiquement : Crowdin pousse une PR « New Crowdin updates »
+# chaque fois que des traducteurs valident des chaînes.
+#
+# project_id et API token sont fournis par l'app GitHub Crowdin
+# (pas besoin de les mettre ici).
+files:
+  - source: /src/locales/en.json
+    translation: /src/locales/%two_letters_code%.json
+    # Mappe les variantes Crowdin vers les codes utilisés par l'extension.
+    languages_mapping:
+      two_letters_code:
+        zh-CN: zh
+        zh-TW: zh
