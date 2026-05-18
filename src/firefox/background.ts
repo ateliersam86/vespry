@@ -104,6 +104,8 @@ async function exec(command: VespryCommand): Promise<CommandResponse> {
       };
       if (command.includeReactionUsers) extras.includeReactionUsers = true;
       if (command.incremental) extras.incremental = true;
+      // Phase 4 — propagation du mot de passe AES (cf. offscreen.ts).
+      if (command.zipPassword) extras.zipPassword = command.zipPassword;
       await controller.enqueue(command.guild, command.channels, command.media, extras);
       return { ok: true, state: controller.toState() };
     }

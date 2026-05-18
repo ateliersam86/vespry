@@ -49,6 +49,9 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
       };
       if (command.includeReactionUsers) extras.includeReactionUsers = true;
       if (command.incremental) extras.incremental = true;
+      // Phase 4 — propagation du mot de passe AES (jamais persisté côté UI ;
+      // copié dans ExportRun.options le temps du run uniquement).
+      if (command.zipPassword) extras.zipPassword = command.zipPassword;
       await controller.enqueue(command.guild, command.channels, command.media, extras);
       return { ok: true, state: controller.toState() };
     }
