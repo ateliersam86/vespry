@@ -50,7 +50,15 @@
   animation: v-fade-in .25s ease both;
 }
 .v-win {
-  width: min(1080px, 94vw); height: min(720px, 92vh);
+  /* Responsif : sur grand écran on garde 15 % de marge à gauche et à droite
+     (largeur = 70vw), sur écran serré on retombe à 94vw pour rester
+     utilisable. `max(70vw, 880px)` garantit qu'on ne passe pas en dessous
+     de 880 px sur écran moyen (sinon le panneau droit est cramé). Le
+     `min(94vw, …)` rabaisse à 94vw quand 880 px serait plus large que
+     l'écran (mobile / fenêtre étroite). Plafonds absolus pour 4K/5K. */
+  width: min(94vw, max(70vw, 880px));
+  height: min(92vh, max(80vh, 560px));
+  max-width: 1800px; max-height: 1200px;
   background: var(--bg); border-radius: 10px; overflow: hidden;
   display: flex; flex-direction: column;
   box-shadow: 0 18px 56px rgba(0,0,0,.6);
