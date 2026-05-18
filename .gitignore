@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-firefox/
+web-ext-artifacts/
 *.log
 .DS_Store
 .vite/

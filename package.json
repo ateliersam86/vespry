@@ -7,7 +7,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:firefox": "vite --config vite.firefox.config.ts",
     "build": "tsc --noEmit && vite build",
+    "build:firefox": "tsc --noEmit && vite build --config vite.firefox.config.ts",
+    "build:all": "npm run build && npm run build:firefox",
+    "firefox:run": "web-ext run --source-dir=dist-firefox --start-url=https://discord.com/channels/@me",
+    "firefox:lint": "web-ext lint --source-dir=dist-firefox",
+    "firefox:package": "web-ext build --source-dir=dist-firefox --artifacts-dir=web-ext-artifacts --overwrite-dest",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -25,10 +31,13 @@
     "@crxjs/vite-plugin": "^2.0.0",
     "@preact/preset-vite": "^2.10.1",
     "@types/chrome": "^0.0.287",
+    "@types/webextension-polyfill": "^0.12.5",
     "fake-indexeddb": "^6.0.0",
     "playwright": "^1.60.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.7",
-    "vitest": "^3.0.2"
+    "vitest": "^3.0.2",
+    "web-ext": "^10.1.0",
+    "webextension-polyfill": "^0.12.0"
   }
 }
