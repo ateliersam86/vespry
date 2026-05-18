@@ -299,9 +299,21 @@ export function Overlay({
   const [showSupport, setShowSupport] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
 
+  /**
+   * Acquittement de l'avertissement ToS Discord (cf. modale au premier
+   * export). Persisté dans `chrome.storage.local` clé `vespry.tosAcked` —
+   * une fois coché « ne plus afficher », on ne re-pose plus la question.
+   * Tant que `null` (chargement), on suppose acked=false par sécurité.
+   */
+  const [tosAcked, setTosAcked] = useState<boolean>(false);
+  const [showToS, setShowToS] = useState(false);
+
   useEffect(() => {
     void getThemePref().then(setTheme);
     void loadCredits().then(setCredits);
+    void chrome.storage.local.get('vespry.tosAcked').then((r) => {
+      setTosAcked(Boolean(r['vespry.tosAcked']));
+    });
   }, []);
 
   // Le mur des soutiens se charge dès que le moteur (offscreen) répond — c'est
@@ -439,7 +451,7 @@ export function Overlay({
     setSelected(next);
   }
 
-  function enqueue(): void {
+  function doEnqueue(): void {
     // Salons exportés : cochés OU porteurs d'une sélection manuelle.
     const picked = channels.filter(
       (c) => selected.has(c.id) || (manualSel.get(c.id)?.size ?? 0) > 0,
@@ -464,6 +476,21 @@ export function Overlay({
     // (UN run = UN ciblage). On le vide ; si l'utilisateur enchaîne un
     // second export il devra le retaper.
     setZipPassword('');
+  }
+
+  /**
+   * Wrapper de `doEnqueue` qui gate sur l'acquittement ToS Discord. Au
+   * premier export (et tant que l'utilisateur n'a pas coché « ne plus
+   * afficher »), ouvre la modale d'avertissement. Quand l'utilisateur
+   * confirme, exécute `doEnqueue` ; s'il annule, on ne touche pas à la
+   * sélection — il peut juste réessayer.
+   */
+  function enqueue(): void {
+    if (!tosAcked) {
+      setShowToS(true);
+      return;
+    }
+    doEnqueue();
   }
 
   /** Bascule un drapeau de critère (pinned, image, sticker…). */
@@ -955,6 +982,7 @@ export function Overlay({
         credits={credits}
         onSupport={() => setShowSupport(true)}
       />
+      <Credit />
       </>
       )}
     </Shell>
@@ -969,6 +997,21 @@ export function Overlay({
           setView('credits');
         }}
       />
+    )}
+    {showToS && (
+      <div class="v-root" data-theme={resolvedTheme}>
+        <ToSModal
+          onCancel={() => setShowToS(false)}
+          onConfirm={(remember) => {
+            setShowToS(false);
+            if (remember) {
+              void chrome.storage.local.set({ 'vespry.tosAcked': true });
+              setTosAcked(true);
+            }
+            doEnqueue();
+          }}
+        />
+      </div>
     )}
     {celebrate && (
       <div class="v-root" data-theme={resolvedTheme}>
@@ -1715,6 +1758,99 @@ function DonorWall({
         >
           <IconHeart /> {t('wall.cta')}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Crédit éditeur en pied d'overlay. Discret, monoligne, à droite, sous le
+ * mur des soutiens. L'année est dynamique : `new Date().getFullYear()` →
+ * pas de date périmée si on oublie de bumper en janvier. Texte fixe pour
+ * éviter de masquer l'attribution sous une clé i18n traduite (les mentions
+ * d'éditeur restent généralement non traduites, comme le copyright).
+ */
+function Credit(): JSX.Element {
+  return (
+    <div class="v-credit">
+      © {new Date().getFullYear()} L'Atelier de Sam — fait avec passion par Samuel Muselet.
+    </div>
+  );
+}
+
+/**
+ * Modale d'avertissement ToS Discord — affichée au **premier export**,
+ * puis facultative ensuite si l'utilisateur a coché « ne plus afficher ».
+ *
+ * Rationale : Vespry utilise l'API Discord avec un compte utilisateur
+ * (le seul moyen d'accéder à ses propres DMs), ce qui sort des
+ * conditions d'utilisation de Discord. Aucun concurrent ne le mentionne
+ * dans l'app — on en fait un argument de transparence pro-utilisateur,
+ * sobre, sans paniquer.
+ *
+ * Texte volontairement non-i18n (FR fixe) pour deux raisons :
+ *   1. Les disclaimers légaux gagnent à rester dans la langue de
+ *      l'éditeur — l'utilisateur peut le copier-coller, le comparer.
+ *   2. La traduction approximative d'un texte légal porte un risque
+ *      sémantique. Une traduction CrowdIn validée arrivera plus tard.
+ */
+function ToSModal({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: (remember: boolean) => void;
+}): JSX.Element {
+  const [remember, setRemember] = useState(true);
+  return (
+    <div class="v-modal-bd" onClick={onCancel}>
+      <div class="v-modal v-modal--tos" onClick={(e) => e.stopPropagation()}>
+        <div class="v-tos-title">Avant ton premier export — à lire</div>
+        <div class="v-tos-body">
+          <p>
+            Vespry utilise l'API officielle de Discord avec
+            <b> ton compte personnel </b>
+            pour récupérer ton historique. Discord interdit techniquement
+            l'automatisation des comptes utilisateurs dans ses
+            <a
+              href="https://discord.com/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {' '}conditions d'utilisation
+            </a>.
+          </p>
+          <p>
+            En pratique, exporter ton propre historique est rarement sanctionné —
+            c'est ce que font des outils similaires depuis des années. Mais la
+            décision revient à Discord, pas à nous.
+          </p>
+          <p>
+            <b>Vespry est conçu pour un usage privé</b> : tes propres serveurs,
+            tes propres DMs, tes propres archives. Pas pour scraper massivement
+            les conversations d'autres personnes.
+          </p>
+          <p>
+            En continuant, tu reconnais utiliser Vespry sur
+            <b> tes propres données</b>, à tes risques.
+          </p>
+        </div>
+        <label class="v-tos-remember">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember((e.target as HTMLInputElement).checked)}
+          />
+          <span>Ne plus afficher cet avertissement</span>
+        </label>
+        <div class="v-tos-actions">
+          <button class="v-btn v-btn--ghost" onClick={onCancel}>
+            Annuler
+          </button>
+          <button class="v-btn" onClick={() => onConfirm(remember)}>
+            J'ai compris, je lance l'export
+          </button>
+        </div>
       </div>
     </div>
   );

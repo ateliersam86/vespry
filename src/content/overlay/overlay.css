@@ -574,6 +574,57 @@
 }
 .v-thanks:hover { filter: brightness(1.12); }
 
+/* ============ modale d'avertissement ToS Discord (premier export) ============ */
+.v-modal--tos {
+  width: 520px; max-width: 92vw;
+}
+.v-tos-title {
+  font-size: 17px; font-weight: 800; color: var(--text);
+  margin: 0 0 2px;
+}
+.v-tos-body {
+  font-size: 13px; color: var(--muted); line-height: 1.55;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.v-tos-body p { margin: 0; }
+.v-tos-body b { color: var(--text); font-weight: 700; }
+.v-tos-body a {
+  color: var(--accent); text-decoration: underline; text-underline-offset: 2px;
+}
+.v-tos-remember {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12.5px; color: var(--muted); cursor: pointer;
+}
+.v-tos-remember input { accent-color: var(--accent); }
+.v-tos-actions {
+  display: flex; justify-content: flex-end; gap: 10px;
+  margin-top: 4px;
+}
+.v-btn--ghost {
+  background: transparent !important;
+  border: 1px solid var(--border) !important;
+  color: var(--muted) !important;
+}
+.v-btn--ghost:hover {
+  background: var(--bg3) !important;
+  color: var(--text) !important;
+}
+
+/* ============ crédit éditeur (sous le mur des soutiens) ============ */
+.v-credit {
+  /* Discret : police petite, opacité réduite, marge interne minimale.
+     Sert d'attribution éditeur (« © Atelier de Sam — Samuel Muselet »)
+     sans peser visuellement sur le mur des soutiens. */
+  flex: none;
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--bg3);
+  border-top: 1px solid var(--border);
+  text-align: right;
+  user-select: text; /* l'utilisateur peut copier la mention si besoin */
+}
+
 /* ============ footer — mur des soutiens ============ */
 .v-wall {
   position: relative;

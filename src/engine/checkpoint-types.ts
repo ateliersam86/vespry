@@ -198,8 +198,14 @@ export type ExportFormat = 'json' | 'html' | 'csv' | 'txt';
 /** Tous les formats, dans l'ordre d'affichage. */
 export const ALL_FORMATS: ExportFormat[] = ['json', 'html', 'csv', 'txt'];
 
-/** Défaut : JSON (archivage) + HTML (lecture). */
-export const DEFAULT_FORMATS: ExportFormat[] = ['json', 'html'];
+/**
+ * Défaut : **HTML seul**. La majorité des utilisateurs ouvrent l'archive
+ * pour relire — ils veulent une page lisible façon Discord, pas trois
+ * fichiers en JSON/HTML/CSV cochés d'office « au cas où ». JSON/CSV/TXT
+ * restent à un clic dans le mode Simple, sans friction pour ceux qui en
+ * ont besoin (archivage, agent IA, tableur).
+ */
+export const DEFAULT_FORMATS: ExportFormat[] = ['html'];
 
 /** Ce que l'utilisateur a choisi d'exporter (modes simple/avancé). */
 export interface ExportOptions {
