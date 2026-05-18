@@ -42,11 +42,14 @@ export default defineManifest({
   // event pages + content scripts world MAIN — minimum pour Vespry.
   browser_specific_settings: {
     gecko: {
+      // Firefox 142 = première version où `data_collection_permissions` est
+      // supporté à la fois sur Desktop ET Android (140 = Desktop seulement).
+      // Champ exigé par AMO pour publier en MV3 depuis la mise en conformité
+      // EU AI Act. Couvre > 99 % des utilisateurs Firefox actifs.
       id: 'vespry@ateliersam86.github.io',
-      strict_min_version: '115.0',
-      // Manifest V3 sur AMO depuis fin 2024 exige `data_collection_permissions`
-      // (réglementation EU AI Act). Vespry ne collecte aucune donnée
-      // utilisateur tierce : tout reste local (IndexedDB → zip).
+      strict_min_version: '142.0',
+      // Vespry ne collecte aucune donnée utilisateur tierce : tout reste
+      // local (IndexedDB → zip).
       // - `authenticationInfo` : le jeton de session Discord est lu et utilisé
       //   pour appeler l'API Discord (rien d'autre).
       // - `personalCommunications` : on lit les messages Discord pour les
