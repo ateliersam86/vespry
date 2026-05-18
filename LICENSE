@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 Vellum contributors
+Copyright (c) 2026 Samuel Muselet (L'Atelier de Sam) and Vespry contributors
 
 Portions of this software (the Discord API client in src/engine/discord-api.ts)
 are derived from Discrub Classic (https://github.com/prathercc/discrub-ext),

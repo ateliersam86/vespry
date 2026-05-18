@@ -307,7 +307,22 @@ interrompu, le streaming AES-256, et la suppression idempotente.
 
 Automatiser un compte utilisateur Discord est contraire aux conditions
 d'utilisation de Discord. Cet outil est fourni tel quel ; utilise-le sur tes
-propres données, à tes risques.
+propres données, à tes risques. Vespry n'est pas affilié à Discord Inc.
+« Discord » et son logo sont des marques de Discord Inc.
+
+Au premier lancement d'export, Vespry affiche un avertissement explicite
+que tu dois valider — c'est un rappel, pas un substitut à ta propre
+appréciation.
+
+## Vie privée
+
+Tout reste local. Détail complet dans [`PRIVACY.md`](PRIVACY.md).
+
+## Contact
+
+- 🐛 Bugs / suggestions : [issues GitHub](https://github.com/ateliersam86/vespry/issues)
+- 💬 Discussions : [discussions GitHub](https://github.com/ateliersam86/vespry/discussions)
+- ✉️ Privé : via le profil GitHub [@ateliersam86](https://github.com/ateliersam86)
 
 ## Licence
 
@@ -315,3 +330,5 @@ propres données, à tes risques.
 
 Le client API Discord (`src/engine/discord-api.ts`) dérive de Discrub
 Classic (MIT). « Discrub » est une marque de prathercc, non utilisée ici.
+
+© 2026 Samuel Muselet (L'Atelier de Sam) — fait avec passion.

@@ -2,8 +2,20 @@
   "name": "vespry-discord-export",
   "private": true,
   "version": "0.1.0",
-  "description": "Vespry — crash-proof, AI-ready Discord chat exporter (Chrome extension).",
+  "description": "Vespry — crash-proof, AI-ready Discord chat exporter (Chrome, Edge, Firefox).",
   "license": "MIT",
+  "author": {
+    "name": "Samuel Muselet",
+    "url": "https://atelier-sam.fr"
+  },
+  "homepage": "https://github.com/ateliersam86/vespry#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ateliersam86/vespry.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ateliersam86/vespry/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
