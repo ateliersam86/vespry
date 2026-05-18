@@ -13,6 +13,8 @@ import {
   type RunnerLogEvent,
 } from '../../engine/export-runner';
 import { packageRun } from '../../engine/packager';
+import { maybeSendSchemaReport } from '../../engine/schema-report';
+import { loadCredits } from '../../credits';
 import type {
   AssetKind,
   ExportOptions,
@@ -272,6 +274,11 @@ export class VespryController {
     return [...channels, ...threads.values()];
   }
 
+  /** Lit l'URL du Worker depuis credits.json — pour les fetchs tiers. */
+  private async donorApiUrl(): Promise<string> {
+    return (await loadCredits()).donorApiUrl;
+  }
+
   /**
    * Date de début du dernier export abouti d'un serveur — sert de plancher
    * à l'export incrémental. `undefined` si le serveur n'a jamais été exporté.
@@ -410,6 +417,10 @@ export class VespryController {
       item.zip = blob;
       item.log.push(`${clock()}  📦 Paquet prêt — ${(blob.size / 1e6).toFixed(1)} Mo`);
     }
+    // Si l'utilisateur a opt-in à la télémétrie de schéma, on envoie un
+    // rapport minimal (version + locale + champs Discord inconnus). Sans
+    // contenu de message ni id ; idempotent par signature locale.
+    void maybeSendSchemaReport(await this.donorApiUrl());
     this.notify();
   }
 

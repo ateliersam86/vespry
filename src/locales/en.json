@@ -182,5 +182,6 @@
   "mention.role": "@role",
   "mention.channel": "#channel",
   "exp.poll": "poll",
-  "exp.poll_votes": "{n} votes"
+  "exp.poll_votes": "{n} votes",
+  "filter.schema_optin": "Help improve Vespry — anonymously report new Discord fields (no message content)"
 }

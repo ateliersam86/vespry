@@ -182,5 +182,6 @@
   "mention.role": "@rol",
   "mention.channel": "#kanaal",
   "exp.poll": "peiling",
-  "exp.poll_votes": "{n} stemmen"
+  "exp.poll_votes": "{n} stemmen",
+  "filter.schema_optin": "Help Vespry — meld anoniem nieuwe Discord-velden (geen berichtinhoud)"
 }

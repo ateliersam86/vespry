@@ -182,5 +182,6 @@
   "mention.role": "@rola",
   "mention.channel": "#kanał",
   "exp.poll": "ankieta",
-  "exp.poll_votes": "{n} głosów"
+  "exp.poll_votes": "{n} głosów",
+  "filter.schema_optin": "Pomóż Vespry — zgłaszaj anonimowo nowe pola Discord (bez treści wiadomości)"
 }

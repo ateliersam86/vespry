@@ -182,5 +182,6 @@
   "mention.role": "@角色",
   "mention.channel": "#频道",
   "exp.poll": "投票",
-  "exp.poll_votes": "{n} 票"
+  "exp.poll_votes": "{n} 票",
+  "filter.schema_optin": "帮助 Vespry — 匿名报告 Discord 新字段(不含消息内容)"
 }

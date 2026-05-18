@@ -182,5 +182,6 @@
   "mention.role": "@भूमिका",
   "mention.channel": "#चैनल",
   "exp.poll": "मतदान",
-  "exp.poll_votes": "{n} वोट"
+  "exp.poll_votes": "{n} वोट",
+  "filter.schema_optin": "Vespry की मदद करें — Discord के नए फ़ील्ड्स गुमनाम रूप से रिपोर्ट करें (संदेश की सामग्री नहीं)"
 }

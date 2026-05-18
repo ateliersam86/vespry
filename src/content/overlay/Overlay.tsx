@@ -61,6 +61,9 @@ import {
 } from '../../ui/markdown';
 import { getVersion } from '../../version';
 import { reportProblem } from '../../diagnostics';
+import {
+  isSchemaReportEnabled, setSchemaReportEnabled,
+} from '../../engine/schema-report';
 import { loadCredits, type Credits } from '../../credits';
 import type { Donor, DonorFeed } from '../../donors';
 import {
@@ -235,6 +238,11 @@ export function Overlay({
   const [reactionUsers, setReactionUsers] = useState(false);
   /** Export incrémental — seulement les messages depuis le dernier export. */
   const [incremental, setIncremental] = useState(false);
+  /** Opt-in à l'envoi de rapports de schéma anonymes (aide la détection). */
+  const [schemaOptIn, setSchemaOptIn] = useState(false);
+  useEffect(() => {
+    void isSchemaReportEnabled().then(setSchemaOptIn);
+  }, []);
   /** Découpage des gros salons : messages/fichier (0 = pas de découpage). */
   const [partitionSize, setPartitionSize] = useState(0);
   /** Panneau d'export : mode avancé (options pointues visibles) ou simple. */
@@ -841,6 +849,15 @@ export function Overlay({
                 on={incremental}
                 onToggle={() => setIncremental(!incremental)}
                 label={t('filter.incremental')}
+              />
+              <CheckRow
+                on={schemaOptIn}
+                onToggle={() => {
+                  const next = !schemaOptIn;
+                  setSchemaOptIn(next);
+                  void setSchemaReportEnabled(next);
+                }}
+                label={t('filter.schema_optin')}
               />
             </div>
             </>

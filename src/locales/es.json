@@ -182,5 +182,6 @@
   "mention.role": "@rol",
   "mention.channel": "#canal",
   "exp.poll": "encuesta",
-  "exp.poll_votes": "{n} votos"
+  "exp.poll_votes": "{n} votos",
+  "filter.schema_optin": "Ayuda a Vespry — informa de forma anónima los nuevos campos de Discord (sin contenido de mensajes)"
 }

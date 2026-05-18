@@ -182,5 +182,6 @@
   "mention.role": "@Rolle",
   "mention.channel": "#Kanal",
   "exp.poll": "Umfrage",
-  "exp.poll_votes": "{n} Stimmen"
+  "exp.poll_votes": "{n} Stimmen",
+  "filter.schema_optin": "Vespry helfen — neue Discord-Felder anonym melden (kein Nachrichteninhalt)"
 }

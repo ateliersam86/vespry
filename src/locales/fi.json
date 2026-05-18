@@ -182,5 +182,6 @@
   "mention.role": "@rooli",
   "mention.channel": "#kanava",
   "exp.poll": "kysely",
-  "exp.poll_votes": "{n} ääntä"
+  "exp.poll_votes": "{n} ääntä",
+  "filter.schema_optin": "Auta Vespryä — ilmoita anonyymisti uusista Discord-kentistä (ei viestien sisältöä)"
 }

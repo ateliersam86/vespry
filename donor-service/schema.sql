@@ -23,3 +23,17 @@ CREATE TABLE IF NOT EXISTS donors (
 );
 
 CREATE INDEX IF NOT EXISTS idx_donors_created ON donors (created_at DESC);
+
+-- Rapports de schéma automatiques (télémétrie opt-in) : on n'ouvre une issue
+-- GitHub qu'une seule fois par signature (version Vespry + ensemble de champs
+-- Discord inconnus), pour éviter les doublons.
+CREATE TABLE IF NOT EXISTS schema_reports (
+  signature   TEXT PRIMARY KEY,
+  version     TEXT NOT NULL,
+  locale      TEXT NOT NULL,
+  fields      TEXT NOT NULL, -- JSON array
+  issue_url   TEXT,
+  count       INTEGER NOT NULL DEFAULT 1,
+  created_at  INTEGER NOT NULL,
+  last_seen   INTEGER NOT NULL
+);

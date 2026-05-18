@@ -182,5 +182,6 @@
   "mention.role": "@rôle",
   "mention.channel": "#salon",
   "exp.poll": "sondage",
-  "exp.poll_votes": "{n} votes"
+  "exp.poll_votes": "{n} votes",
+  "filter.schema_optin": "Aider Vespry — signaler anonymement les nouveaux champs Discord (sans contenu de messages)"
 }

@@ -20,6 +20,7 @@ import { parseGithub, verifyGithubSignature } from './github';
 import { parseKofi } from './kofi';
 import { cleanText, MAX_MESSAGE, MAX_NAME } from './moderation';
 import { cancelPage, successPage } from './pages';
+import { handleSchemaReport } from './schema-reports';
 import {
   createCheckoutSession,
   parseStripeEvent,
@@ -39,6 +40,12 @@ export interface Env {
   STRIPE_SECRET_KEY: string;
   /** Secret de signature du webhook Stripe (`whsec_…`). */
   STRIPE_WEBHOOK_SECRET: string;
+  /** PAT GitHub avec `issues:write` — pour la création auto d'issues
+   *  depuis les rapports de schéma. Optionnel : si absent, on stocke
+   *  la signature en base mais on n'ouvre pas d'issue. */
+  GITHUB_TOKEN?: string;
+  /** `owner/repo` cible des issues automatiques. Défaut : ateliersam86/vespry. */
+  GITHUB_REPO?: string;
 }
 
 const CORS: Record<string, string> = {
@@ -205,6 +212,12 @@ export default {
     }
     if (req.method === 'POST' && pathname === '/github/webhook') {
       return handleGithub(req, env);
+    }
+    if (req.method === 'POST' && pathname === '/schema-report') {
+      const res = await handleSchemaReport(req, env);
+      // CORS pour permettre l'envoi depuis l'offscreen de l'extension.
+      Object.entries(CORS).forEach(([k, v]) => res.headers.set(k, v));
+      return res;
     }
     if (req.method === 'POST' && pathname === '/checkout') {
       return handleCheckout(req, env);

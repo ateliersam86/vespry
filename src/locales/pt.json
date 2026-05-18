@@ -182,5 +182,6 @@
   "mention.role": "@cargo",
   "mention.channel": "#canal",
   "exp.poll": "enquete",
-  "exp.poll_votes": "{n} votos"
+  "exp.poll_votes": "{n} votos",
+  "filter.schema_optin": "Ajude o Vespry — reporte anonimamente novos campos do Discord (sem conteúdo de mensagens)"
 }

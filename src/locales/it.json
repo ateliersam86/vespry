@@ -182,5 +182,6 @@
   "mention.role": "@ruolo",
   "mention.channel": "#canale",
   "exp.poll": "sondaggio",
-  "exp.poll_votes": "{n} voti"
+  "exp.poll_votes": "{n} voti",
+  "filter.schema_optin": "Aiuta Vespry — segnala anonimamente i nuovi campi Discord (nessun contenuto di messaggi)"
 }

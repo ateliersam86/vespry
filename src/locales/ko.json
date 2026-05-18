@@ -182,5 +182,6 @@
   "mention.role": "@역할",
   "mention.channel": "#채널",
   "exp.poll": "투표",
-  "exp.poll_votes": "{n} 표"
+  "exp.poll_votes": "{n} 표",
+  "filter.schema_optin": "Vespry 돕기 — Discord 새 필드를 익명으로 보고 (메시지 내용 없음)"
 }

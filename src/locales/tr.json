@@ -182,5 +182,6 @@
   "mention.role": "@rol",
   "mention.channel": "#kanal",
   "exp.poll": "anket",
-  "exp.poll_votes": "{n} oy"
+  "exp.poll_votes": "{n} oy",
+  "filter.schema_optin": "Vespry'ye yardım et — yeni Discord alanlarını anonim olarak bildir (mesaj içeriği yok)"
 }

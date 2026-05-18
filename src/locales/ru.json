@@ -182,5 +182,6 @@
   "mention.role": "@роль",
   "mention.channel": "#канал",
   "exp.poll": "опрос",
-  "exp.poll_votes": "{n} голосов"
+  "exp.poll_votes": "{n} голосов",
+  "filter.schema_optin": "Помогите Vespry — анонимно сообщайте о новых полях Discord (без содержимого сообщений)"
 }

@@ -182,5 +182,6 @@
   "mention.role": "@ロール",
   "mention.channel": "#チャンネル",
   "exp.poll": "投票",
-  "exp.poll_votes": "{n} 票"
+  "exp.poll_votes": "{n} 票",
+  "filter.schema_optin": "Vespry を支援 — Discord の新しいフィールドを匿名で報告 (メッセージ内容なし)"
 }
