@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@transcend-io/conflux": "^4.1.0",
+    "@zip.js/zip.js": "^2.8.26",
     "idb": "^8.0.0",
     "preact": "^10.25.4"
   },
