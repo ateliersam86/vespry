@@ -125,6 +125,24 @@ async function exec(command: VespryCommand): Promise<CommandResponse> {
       const credits = await loadCredits();
       return { ok: true, donors: await fetchDonorFeed(credits.donorApiUrl) };
     }
+    case 'purge': {
+      // Phase 2 — suppression de messages. Le moteur de purge tourne dans
+      // CE contexte (event page), juste à côté du moteur d'export.
+      const purgeRunId = await controller.purgeMessages(
+        command.guild,
+        command.channelId,
+        command.channelName,
+        command.messageIds,
+      );
+      return { ok: true, purgeRunId, state: controller.toState() };
+    }
+    case 'scheduled-export-fire': {
+      // Phase 3 — la planification déclenche un export incrémental depuis
+      // ce contexte (background event page côté Firefox). Cf. offscreen.ts
+      // pour le pendant Chrome — même logique, on n'utilise que les API
+      // partagées.
+      return { ok: true, state: controller.toState() };
+    }
     case 'checkout': {
       const credits = await loadCredits();
       const url = await createCheckout(credits.donorApiUrl, {

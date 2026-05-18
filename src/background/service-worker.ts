@@ -19,6 +19,13 @@ import {
   type VespryState,
 } from '../messaging';
 import { getToken } from '../engine/auth';
+import {
+  SCHEDULE_STORAGE_KEY,
+  SCHEDULED_EXPORT_ALARM_NAME,
+  installAlarmFor,
+  isScheduledExport,
+  loadSchedule,
+} from '../engine/scheduler';
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
 const DISCORD_URL = 'https://discord.com/channels/@me';
@@ -47,7 +54,67 @@ async function ensureOffscreen(): Promise<void> {
 // Au démarrage de Chrome : réveille l'offscreen pour reprendre les exports.
 chrome.runtime.onStartup.addListener(() => {
   void ensureOffscreen();
+  void syncScheduledAlarm();
 });
+
+// Installation / mise à jour de l'extension : ré-aligne l'alarme planifiée
+// avec le storage. Sans ça, après une mise à jour Chrome efface les alarmes.
+chrome.runtime.onInstalled.addListener(() => {
+  void syncScheduledAlarm();
+});
+
+// --- planificateur d'export (Phase 3) ---
+
+/**
+ * Aligne l'alarme `chrome.alarms` sur l'état stocké dans
+ * `chrome.storage.local`. Idempotent : sûr à appeler plusieurs fois.
+ * Pas de planning enregistré → l'alarme est nettoyée.
+ */
+async function syncScheduledAlarm(): Promise<void> {
+  try {
+    const schedule = await loadSchedule(chrome.storage.local);
+    await installAlarmFor(chrome.alarms, schedule);
+  } catch (e) {
+    console.warn('[Vespry] sync alarm a échoué :', e);
+  }
+}
+
+// Recharge l'alarme dès que la UI modifie le planning dans storage.
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local') return;
+  if (!(SCHEDULE_STORAGE_KEY in changes)) return;
+  void syncScheduledAlarm();
+});
+
+// Réveil sur l'alarme planifiée : pousse une commande à l'offscreen pour
+// qu'il enqueue un export incrémental du guild ciblé.
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== SCHEDULED_EXPORT_ALARM_NAME) return;
+  void onScheduledAlarmFire();
+});
+
+async function onScheduledAlarmFire(): Promise<void> {
+  const schedule = await loadSchedule(chrome.storage.local);
+  if (!isScheduledExport(schedule)) {
+    // Storage vidé entre-temps — on désinstalle l'alarme par sécurité.
+    await chrome.alarms.clear(SCHEDULED_EXPORT_ALARM_NAME);
+    return;
+  }
+  const result = await forwardCommand({
+    cmd: 'scheduled-export-fire',
+    guildId: schedule.guildId,
+    guildName: schedule.guildName,
+  });
+  if (!result.ok) {
+    // Échec non bloquant : la prochaine occurrence (24h / 7j) retentera.
+    // Une notification informe l'utilisateur — il peut avoir besoin de se
+    // reconnecter à Discord.
+    notify(
+      'Export planifié — impossible',
+      `${schedule.guildName} : ${result.error ?? 'erreur inconnue'}. Ouvre Discord pour réessayer.`,
+    );
+  }
+}
 
 // --- relais de commandes ---
 

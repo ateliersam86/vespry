@@ -54,6 +54,7 @@ import {
 } from '../../engine/types';
 import type { EnqueueExtras, QueueItemView } from '../../messaging';
 import type { RemoteController } from '../../ui/remote-controller';
+import { ScheduleSection } from './ScheduleSection';
 import { t } from '../../ui/i18n';
 import {
   humanize, renderInlineHtml,
@@ -860,6 +861,7 @@ export function Overlay({
                 label={t('filter.schema_optin')}
               />
             </div>
+            <ScheduleSection guilds={controller.guilds} />
             </>
             )}
           </div>

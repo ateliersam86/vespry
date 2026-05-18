@@ -69,6 +69,7 @@ export default defineManifest({
     'offscreen', // document offscreen qui héberge le moteur d'export
     'notifications', // notifier fin d'export / session expirée
     'downloads', // déclencher le téléchargement du zip
+    'alarms', // planificateur d'export récurrent (Phase 3)
   ],
 
   host_permissions: [
