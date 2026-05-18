@@ -115,6 +115,54 @@ async function requestToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Vrai si le salon est une conversation privée (DM) ou un groupe DM.
+ * Discord type 1 = DM, type 3 = group DM. On ne dépend pas de l'enum
+ * `ChannelType` ici pour éviter un import circulaire avec checkpoint-types.
+ */
+function isDmLike(c: RawChannel): boolean {
+  return c.type === 1 || c.type === 3;
+}
+
+/**
+ * Minimum d'API requis pour découvrir les threads dans des DMs. Sous-ensemble
+ * de `DiscordApi` qu'on injecte dans `collectDmThreads()` — permet aux tests
+ * de fournir un faux sans construire un client complet.
+ */
+export interface DmThreadProbe {
+  getMessages: (channelId: string, before?: string) => Promise<RawMessage[]>;
+}
+
+/**
+ * Étend une liste de DMs / group DMs avec leurs threads. Fonction pure
+ * paramétrée par une `DmThreadProbe` — extraite pour être directement
+ * testable sans construire un VespryController complet.
+ *
+ * Algorithme : pour chaque salon DM/group DM, on lit les ~100 messages
+ * les plus récents et on collecte tout `message.thread` rencontré.
+ * Dédupliqué par id de thread. Voir le commentaire de `withDmThreads`
+ * pour la limite assumée (threads ancrés plus loin que la première page
+ * ne sont pas détectés).
+ */
+export async function collectDmThreads(
+  api: DmThreadProbe,
+  channels: RawChannel[],
+): Promise<RawChannel[]> {
+  const threads = new Map<string, RawChannel>();
+  for (const ch of channels) {
+    if (!isDmLike(ch)) continue;
+    try {
+      const recent = await api.getMessages(ch.id);
+      for (const m of recent) {
+        if (m.thread) threads.set(m.thread.id, m.thread);
+      }
+    } catch {
+      /* DM inaccessible (révoqué, vidé) — ignoré */
+    }
+  }
+  return [...channels, ...threads.values()];
+}
+
 /** Nom d'affichage d'une conversation privée, dérivé de ses destinataires. */
 function dmName(c: RawChannel): string {
   const names = (c.recipients ?? []).map((r) => r.global_name ?? r.username);
@@ -326,6 +374,30 @@ export class VespryController {
     return [...channels, ...threads.values()];
   }
 
+  /**
+   * Étend une liste de DMs / group DMs avec leurs threads.
+   *
+   * Pourquoi un chemin séparé. Discord expose `GET /guilds/{id}/threads/active`
+   * et `GET /channels/{id}/threads/archived/{public|private}` UNIQUEMENT pour
+   * les guilds — il n'y a pas d'équivalent pour les DMs (cf. dev portal,
+   * 2025). Les threads de DM ne sont découvrables qu'à travers le champ
+   * `message.thread` quand un message a ouvert un fil. On parcourt donc
+   * la page la plus récente de messages de chaque conversation (~100) et
+   * on collecte chaque thread non nul, dédupliqué par id.
+   *
+   * Limite assumée et documentée : les threads dont le message d'origine
+   * est plus ancien que les 100 derniers messages d'un DM ne sont PAS
+   * détectés. Une exploration plus profonde (paginer avant) serait coûteuse
+   * pour un gain marginal — les utilisateurs ouvrant un thread dans un DM
+   * y restent généralement actifs, donc le message d'ancrage reste récent.
+   * Si Sam veut couvrir le cas inverse, on ajoutera un mode « profond »
+   * paginé en arrière, opt-in pour ne pas tripler le temps d'extension.
+   */
+  private async withDmThreads(channels: RawChannel[]): Promise<RawChannel[]> {
+    if (!this.api) return channels;
+    return collectDmThreads(this.api, channels);
+  }
+
   /** Lit l'URL du Worker depuis credits.json — pour les fetchs tiers. */
   private async donorApiUrl(): Promise<string> {
     return (await loadCredits()).donorApiUrl;
@@ -358,9 +430,16 @@ export class VespryController {
       const since = await this.lastExportTime(guild.id);
       if (since !== undefined) options.sinceMs = since;
     }
-    const expanded = extras.includeThreads && guild.id !== '@me'
-      ? await this.withThreads(guild.id, channels)
-      : channels;
+    // `includeThreads` est désormais respecté aussi pour les DMs : on
+    // utilise un chemin séparé (`withDmThreads`) qui découvre les fils
+    // via `message.thread` plutôt que via les endpoints `/threads/active`
+    // (réservés aux guilds). Cf. commentaire sur la méthode.
+    let expanded = channels;
+    if (extras.includeThreads) {
+      expanded = guild.id === '@me'
+        ? await this.withDmThreads(channels)
+        : await this.withThreads(guild.id, channels);
+    }
     const runId = await planGuildExport(this.store, guild, expanded, options);
     this.queue.push({
       runId,
