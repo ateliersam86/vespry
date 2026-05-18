@@ -110,7 +110,17 @@ export type VespryCommand =
       formats: ExportFormat[];
     }
   | { cmd: 'resume'; runId: string }
-  | { cmd: 'download'; runId: string }
+  | {
+      cmd: 'download';
+      runId: string;
+      /**
+       * Nom de fichier final (avec extension). Calculé côté UI à partir du
+       * template configuré par l'utilisateur (Phase 3 — templates de zip).
+       * Quand absent, le contrôleur retombe sur son défaut historique
+       * `vespry-${safe(guildName)}.zip`.
+       */
+      filename?: string;
+    }
   | { cmd: 'preview'; channelId: string; before?: string }
   | { cmd: 'get-donors' }
   | {
