@@ -44,6 +44,7 @@ import {
   ChannelType,
   type RawAttachment,
   type RawChannel,
+  type RawComponent,
   type RawEmbed,
   type RawGuild,
   type RawMessage,
@@ -1034,6 +1035,49 @@ function EmbedCard({ embed }: { embed: RawEmbed }): JSX.Element {
   );
 }
 
+/** Aplatit récursivement les composants — boutons et menus utiles. */
+function flatComponents(components: RawComponent[]): RawComponent[] {
+  const out: RawComponent[] = [];
+  const walk = (list: RawComponent[]): void => {
+    for (const c of list) {
+      if (c.type === 1 && c.components) walk(c.components);
+      else if (c.type === 2 || (c.type >= 3 && c.type <= 8)) out.push(c);
+    }
+  };
+  walk(components);
+  return out;
+}
+
+/** Composants Discord (boutons, menus) — rendu visuel non interactif. */
+function Components({ components }: { components: RawComponent[] }): JSX.Element | null {
+  const flat = flatComponents(components);
+  if (flat.length === 0) return null;
+  return (
+    <div class="v-components">
+      {flat.map((c, i) => {
+        if (c.type === 2) {
+          const label = (c.emoji?.name ? `${c.emoji.name} ` : '') + (c.label ?? '—');
+          if (c.style === 5 && c.url) {
+            return (
+              <a key={i} class="v-comp-btn link" href={c.url} target="_blank" rel="noopener">
+                {label}
+              </a>
+            );
+          }
+          return (
+            <span key={i} class={`v-comp-btn ${c.disabled ? 'disabled' : ''}`}>
+              {label}
+            </span>
+          );
+        }
+        return (
+          <span key={i} class="v-comp-menu-label">▾ {c.placeholder ?? '—'}</span>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Sondage Discord — titre, options, votes. */
 function Poll({ poll }: { poll: RawPoll }): JSX.Element {
   const counts = new Map<number, number>();
@@ -1120,17 +1164,21 @@ function MessageRow({
         ? <div class="v-msg-gutter" />
         : <img class="v-msg-avatar" src={avatarUrl(m.author)} alt="" loading="lazy" />}
       <div class="v-msg-main">
-        {m.referenced_message && (
-          <div class="v-msg-reply">
-            <span class="v-msg-reply-author">
-              {m.referenced_message.author.global_name
-                ?? m.referenced_message.author.username}
-            </span>
-            <span class="v-msg-reply-text">
-              {cleanContent(m.referenced_message.content).slice(0, 120)}
-            </span>
-          </div>
-        )}
+        {m.referenced_message && (() => {
+          const forwarded = m.message_reference?.type === 1;
+          return (
+            <div class={`v-msg-reply ${forwarded ? 'v-msg-reply--fwd' : ''}`}>
+              <span class="v-msg-reply-arrow">{forwarded ? '↗' : '↪'}</span>
+              <span class="v-msg-reply-author">
+                {m.referenced_message.author.global_name
+                  ?? m.referenced_message.author.username}
+              </span>
+              <span class="v-msg-reply-text">
+                {cleanContent(m.referenced_message.content).slice(0, 120)}
+              </span>
+            </div>
+          );
+        })()}
         {!grouped && (
           <div class="v-msg-head">
             <span class="v-msg-author">{name}</span>
@@ -1170,6 +1218,7 @@ function MessageRow({
         )}
         {embeds.map((e, i) => <EmbedCard key={i} embed={e} />)}
         {m.poll && <Poll poll={m.poll} />}
+        {m.components && <Components components={m.components} />}
         {m.reactions && m.reactions.length > 0 && <Reactions reactions={m.reactions} />}
       </div>
     </div>

@@ -115,6 +115,8 @@ export interface RawEmbed {
 }
 
 export interface RawMessageReference {
+  /** 0 = Reply (défaut), 1 = Forward. */
+  type?: number;
   message_id?: Snowflake;
   channel_id?: Snowflake;
   guild_id?: Snowflake;
@@ -137,6 +139,29 @@ export interface RawReaction {
    * un appel API par emoji).
    */
   users?: RawUser[];
+}
+
+/**
+ * Composant interactif Discord (bouton, menu, etc.). Forme générique :
+ * Discord ajoute régulièrement de nouveaux types, on type ce qu'on rend.
+ *  - 1  = ActionRow (conteneur d'enfants)
+ *  - 2  = Button (label, url, style)
+ *  - 3..8 = Select / String / User / Role / Mentionable / Channel
+ *  - 4  = TextInput (rare, dans des modales)
+ */
+export interface RawComponent {
+  type: number;
+  /** ActionRow : enfants ; SelectMenu : options ; bouton/menu : ignoré. */
+  components?: RawComponent[];
+  label?: string;
+  url?: string;
+  /** 5 = lien externe, autres = bouton applicatif. */
+  style?: number;
+  disabled?: boolean;
+  placeholder?: string;
+  emoji?: { name?: string };
+  /** Options pour les select menus statiques. */
+  options?: { label: string; description?: string }[];
 }
 
 /** Une réponse à un sondage Discord (option proposée). */
@@ -185,7 +210,7 @@ export interface RawMessage {
   /** Thread démarré depuis ce message — sert à découvrir les fils. */
   thread?: RawChannel;
   /** Composants interactifs (boutons, menus). Forme libre, conservée telle quelle. */
-  components?: unknown[];
+  components?: RawComponent[];
   /** Sondage Discord attaché. */
   poll?: RawPoll;
   /** Données d'appel (DM vocaux). */

@@ -11,6 +11,7 @@
  */
 import type {
   RawAttachment,
+  RawComponent,
   RawEmbed,
   RawMessage,
   RawPoll,
@@ -188,6 +189,13 @@ export function toTxt(ctx: ExportContext, messages: RawMessage[]): string {
         out.push(`    - ${a.poll_media.text ?? ''}${v}`);
       }
     }
+    for (const c of flattenComponents(m.components ?? [])) {
+      if (c.type === 2) {
+        out.push(`  [bouton: ${(c.emoji?.name ? c.emoji.name + ' ' : '') + (c.label ?? '')}]`);
+      } else {
+        out.push(`  [menu: ${c.placeholder ?? ''}]`);
+      }
+    }
     if (m.reactions && m.reactions.length > 0) {
       out.push(`  [${L.reactions} : ${m.reactions.map(reactionText).join('  ')}]`);
     }
@@ -336,13 +344,25 @@ function renderEmbed(
   return parts.join('');
 }
 
-/** Aperçu du message cité par une réponse. */
-function renderReply(ref: RawMessage, mentions: MentionLabels): string {
-  const snippet = humanize(ref.content, mentions).replace(/\n/g, ' ').slice(0, 120);
+/** Aperçu du message cité par une réponse ou un transfert. */
+function renderReply(
+  ref: RawMessage,
+  mentions: MentionLabels,
+  forwarded: boolean,
+): string {
+  const snippet = humanize(ref.content, mentions).replace(/\n/g, ' ').slice(0, 200);
+  const cls = forwarded ? 'reply forward' : 'reply';
+  const arrow = forwarded ? '↗' : '↪';
   return (
-    `<div class="reply"><span class="reply-author">${esc(authorName(ref))}</span>`
+    `<div class="${cls}"><span class="reply-arrow">${arrow}</span>`
+    + `<span class="reply-author">${esc(authorName(ref))}</span>`
     + `<span class="reply-text">${esc(snippet)}</span></div>`
   );
+}
+
+/** Vrai si ce message est un transfert (Discord `message_reference.type = 1`). */
+function isForwarded(m: RawMessage): boolean {
+  return m.message_reference?.type === 1;
 }
 
 /** Compteur de votes d'une option de sondage (id → count). */
@@ -373,6 +393,47 @@ function renderPoll(poll: RawPoll, labels: ExportLabels): string {
   );
 }
 
+/** Aplatit récursivement les composants : on extrait boutons et menus utiles. */
+function flattenComponents(components: RawComponent[]): RawComponent[] {
+  const out: RawComponent[] = [];
+  const walk = (list: RawComponent[]): void => {
+    for (const c of list) {
+      if (c.type === 1 && c.components) walk(c.components);
+      else if (c.type === 2 || (c.type >= 3 && c.type <= 8)) out.push(c);
+    }
+  };
+  walk(components);
+  return out;
+}
+
+/** Rend un bouton ou un menu en HTML — visuel uniquement, non interactif. */
+function renderComponent(c: RawComponent): string {
+  if (c.type === 2) {
+    // Bouton : style 5 = lien externe → balise <a>, sinon <span> visuel.
+    const label = esc((c.emoji?.name ? `${c.emoji.name} ` : '') + (c.label ?? ''));
+    if (c.style === 5 && c.url) {
+      return `<a class="comp-btn link" href="${esc(c.url)}" rel="noopener">${label}</a>`;
+    }
+    return `<span class="comp-btn${c.disabled ? ' disabled' : ''}">${label || '—'}</span>`;
+  }
+  // Menu déroulant : on liste les options si présentes.
+  const ph = esc(c.placeholder ?? '');
+  if (c.options && c.options.length > 0) {
+    const opts = c.options
+      .map((o) => `<li>${esc(o.label)}</li>`).join('');
+    return `<div class="comp-menu"><span class="comp-menu-label">▾ ${ph || '—'}</span><ul>${opts}</ul></div>`;
+  }
+  return `<span class="comp-menu-label">▾ ${ph || '—'}</span>`;
+}
+
+/** Rend l'ensemble des composants d'un message. Null si vide. */
+function renderComponents(components: RawComponent[] | undefined): string | null {
+  if (!components || components.length === 0) return null;
+  const flat = flattenComponents(components);
+  if (flat.length === 0) return null;
+  return `<div class="components">${flat.map(renderComponent).join('')}</div>`;
+}
+
 /** Bandeau des réactions d'un message. */
 function renderReactions(reactions: RawReaction[]): string {
   const chips = reactions
@@ -398,6 +459,17 @@ const HTML_STYLE_POLL = `
   .spoiler { background: #2a2536; color: transparent; border-radius: 4px;
     padding: 0 4px; cursor: pointer; transition: color .2s ease, background .2s ease; }
   .spoiler:hover { color: inherit; background: transparent; }
+  .components { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .comp-btn { display: inline-block; padding: 6px 12px; border-radius: 4px;
+    background: #4f46c5; color: #fff; font-size: 13px; font-weight: 600;
+    text-decoration: none; }
+  .comp-btn.link { background: #2a2536; }
+  .comp-btn.disabled { opacity: .5; }
+  .comp-menu { background: #221d2e; border: 1px solid #2a2536; border-radius: 6px;
+    padding: 6px 10px; font-size: 13px; }
+  .comp-menu-label { color: #9991b3; font-weight: 600; }
+  .comp-menu ul { list-style: none; padding: 4px 0 0; margin: 0; font-size: 12.5px; }
+  .comp-menu li { padding: 2px 0; color: #c8c2da; }
 `;
 
 const HTML_STYLE = HTML_STYLE_POLL + `
@@ -465,7 +537,7 @@ function renderMessage(m: RawMessage, grouped: boolean, ctx: ExportContext): str
   const parts: string[] = [`<div class="msg${grouped ? ' grouped' : ''}">`];
   parts.push(grouped ? '<div class="av spacer"></div>' : avatarChip(m));
   parts.push('<div class="body">');
-  if (m.referenced_message) parts.push(renderReply(m.referenced_message, L.mentions));
+  if (m.referenced_message) parts.push(renderReply(m.referenced_message, L.mentions, isForwarded(m)));
   if (!grouped) {
     const edited = isEdited(m) ? ` <span class="edited">(${esc(L.edited)})</span>` : '';
     parts.push(
@@ -484,6 +556,8 @@ function renderMessage(m: RawMessage, grouped: boolean, ctx: ExportContext): str
     }
   }
   if (m.poll) parts.push(renderPoll(m.poll, L));
+  const components = renderComponents(m.components);
+  if (components) parts.push(components);
   if (m.reactions && m.reactions.length > 0) {
     parts.push(renderReactions(m.reactions));
   }

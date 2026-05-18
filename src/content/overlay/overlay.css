@@ -299,6 +299,20 @@
 }
 .v-poll-votes { color: var(--muted); font-size: 12px; }
 .v-poll-emoji { margin-right: 4px; }
+
+/* composants Discord (boutons, menus) — visuels, non interactifs */
+.v-components { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.v-comp-btn {
+  display: inline-block; padding: 5px 11px; border-radius: 4px;
+  background: var(--accent); color: #fff; font-size: 12.5px; font-weight: 600;
+  text-decoration: none;
+}
+.v-comp-btn.link { background: var(--bg3); color: var(--text); }
+.v-comp-btn.disabled { opacity: .5; }
+.v-comp-menu-label {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 11px; font-size: 12.5px; color: var(--muted); font-weight: 600;
+}
 /* citation de réponse au-dessus du message */
 .v-msg-reply {
   display: flex; gap: 6px; font-size: 12.5px; color: var(--muted);
@@ -309,6 +323,9 @@
 .v-msg-reply-text {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.v-msg-reply-arrow { color: var(--muted); font-weight: 700; flex: none; }
+.v-msg-reply--fwd { border-left-color: var(--accent); }
+.v-msg-reply--fwd .v-msg-reply-arrow { color: var(--accent); }
 /* marqueur « modifié » dans le head */
 .v-msg-edited { font-size: 11px; color: var(--muted); font-style: italic; }
 .v-msg-atts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px; }
