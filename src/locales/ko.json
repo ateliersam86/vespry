@@ -11,6 +11,7 @@
   "overlay.choose_server": "서버 선택",
   "overlay.channels_summary": "{n} / {total} 채널",
   "overlay.add_to_queue": "+ 대기열에 추가",
+  "overlay.launch_export": "▶ Launch export",
   "overlay.minimize": "최소화",
   "overlay.close": "닫기",
   "overlay.select_all": "전체",

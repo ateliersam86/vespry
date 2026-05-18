@@ -11,6 +11,7 @@
   "overlay.choose_server": "Valitse palvelin",
   "overlay.channels_summary": "{n} / {total} kanavaa",
   "overlay.add_to_queue": "+ Lisää jonoon",
+  "overlay.launch_export": "▶ Launch export",
   "overlay.minimize": "Pienennä",
   "overlay.close": "Sulje",
   "overlay.select_all": "Kaikki",

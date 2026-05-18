@@ -11,6 +11,7 @@
   "overlay.choose_server": "Escolha um servidor",
   "overlay.channels_summary": "{n} / {total} canais",
   "overlay.add_to_queue": "+ Adicionar à fila",
+  "overlay.launch_export": "▶ Launch export",
   "overlay.minimize": "Minimizar",
   "overlay.close": "Fechar",
   "overlay.select_all": "Todos",

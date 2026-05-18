@@ -936,7 +936,14 @@ export function Overlay({
               disabled={selected.size === 0 && manualSel.size === 0}
               onClick={enqueue}
             >
-              {t('overlay.add_to_queue')}
+              {/* Libellé dynamique : par défaut « Lancer l'exportation »
+                  parce qu'il n'y a pas de file visible. Si un export tourne
+                  déjà, le clic AJOUTE à la file — on bascule alors sur le
+                  libellé « + Ajouter à la file » pour rester honnête sur
+                  ce qui va se passer. Cf. feedback Sam (2026-05-18). */}
+              {controller.queue.some((q) => q.status === 'in_progress')
+                ? t('overlay.add_to_queue')
+                : t('overlay.launch_export')}
             </button>
           </div>
         </div>

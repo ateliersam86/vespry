@@ -11,6 +11,7 @@
   "overlay.choose_server": "एक सर्वर चुनें",
   "overlay.channels_summary": "{n} / {total} चैनल",
   "overlay.add_to_queue": "+ कतार में जोड़ें",
+  "overlay.launch_export": "▶ Launch export",
   "overlay.minimize": "छोटा करें",
   "overlay.close": "बंद करें",
   "overlay.select_all": "सभी",

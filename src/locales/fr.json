@@ -11,6 +11,7 @@
   "overlay.choose_server": "Choisis un serveur",
   "overlay.channels_summary": "{n} / {total} salons",
   "overlay.add_to_queue": "+ Ajouter à la file",
+  "overlay.launch_export": "▶ Lancer l'exportation",
   "overlay.minimize": "Réduire",
   "overlay.close": "Fermer",
   "overlay.select_all": "Tout",

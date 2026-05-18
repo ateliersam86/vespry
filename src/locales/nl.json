@@ -11,6 +11,7 @@
   "overlay.choose_server": "Kies een server",
   "overlay.channels_summary": "{n} / {total} kanalen",
   "overlay.add_to_queue": "+ Toevoegen aan wachtrij",
+  "overlay.launch_export": "▶ Launch export",
   "overlay.minimize": "Minimaliseren",
   "overlay.close": "Sluiten",
   "overlay.select_all": "Alle",

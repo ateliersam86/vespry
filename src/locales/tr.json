@@ -11,6 +11,7 @@
   "overlay.choose_server": "Bir sunucu seç",
   "overlay.channels_summary": "{n} / {total} kanal",
   "overlay.add_to_queue": "+ Kuyruğa ekle",
+  "overlay.launch_export": "▶ Launch export",
   "overlay.minimize": "Küçült",
   "overlay.close": "Kapat",
   "overlay.select_all": "Tümü",

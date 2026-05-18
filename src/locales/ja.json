@@ -11,6 +11,7 @@
   "overlay.choose_server": "サーバーを選択",
   "overlay.channels_summary": "{n} / {total} チャンネル",
   "overlay.add_to_queue": "+ キューに追加",
+  "overlay.launch_export": "▶ Launch export",
   "overlay.minimize": "最小化",
   "overlay.close": "閉じる",
   "overlay.select_all": "すべて",
