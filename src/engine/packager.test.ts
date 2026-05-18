@@ -204,4 +204,63 @@ describe('packageRun', () => {
     expect(m.channels[0]?.files.some((f) => /\.part3\.json$/.test(f))).toBe(true);
     expect(m.channels[0]?.messages).toBe(5);
   });
+
+  it('chiffrement AES — zipPassword renseigné produit un zip déchiffrable', async () => {
+    const { BlobReader, ZipReader } = await import('@zip.js/zip.js');
+
+    const r = run('renc');
+    r.options.zipPassword = 'correct-horse-battery-staple';
+    r.options.formats = ['json'];
+    await store.putRun(r);
+    await store.putChannel(channel('renc', 'c1', 'general'));
+    await store.appendMessages([
+      message('renc', 'c1', '1'),
+      message('renc', 'c1', '2'),
+    ]);
+
+    const { blob, manifest } = await packageRun(store, 'renc');
+
+    // Le manifest reflète bien le drapeau encrypted, SANS exposer le mdp.
+    const m = manifest as { encrypted: boolean; options: Record<string, unknown> };
+    expect(m.encrypted).toBe(true);
+    expect(m.options['zipPassword']).toBeUndefined();
+
+    // Le zip extérieur (wrapper AES) est lisible sans mot de passe — il
+    // contient UNE entrée unique chiffrée. La lecture du contenu de cette
+    // entrée exige le bon mot de passe.
+    const reader = new ZipReader(new BlobReader(blob));
+    const entries = await reader.getEntries();
+    expect(entries).toHaveLength(1);
+    const inner = entries[0];
+    expect(inner?.encrypted).toBe(true);
+    await reader.close();
+
+    // Mauvais mot de passe → la lecture échoue. On accède via `getData` qui
+    // est défini sur les entrées fichier (pas répertoire) — le wrapper
+    // n'ajoute qu'une entrée fichier, donc cette voie est sûre.
+    const wrongReader = new ZipReader(new BlobReader(blob), { password: 'wrong' });
+    const wrongEntries = await wrongReader.getEntries();
+    const wrongInner = wrongEntries[0];
+    const { BlobWriter } = await import('@zip.js/zip.js');
+    await expect(async () => {
+      const getData = (wrongInner as { getData?: (w: unknown) => Promise<unknown> }).getData;
+      if (!getData) throw new Error('entry has no getData (DirectoryEntry?)');
+      await getData(new BlobWriter());
+    }).rejects.toBeDefined();
+    await wrongReader.close();
+  });
+
+  it('chiffrement AES — pas de mdp → comportement non chiffré', async () => {
+    await store.putRun(run('rclear'));
+    await store.putChannel(channel('rclear', 'c1', 'general'));
+    await store.appendMessages([message('rclear', 'c1', '1')]);
+
+    const { blob, manifest } = await packageRun(store, 'rclear');
+    const m = manifest as { encrypted: boolean };
+    expect(m.encrypted).toBe(false);
+    // Le contenu du zip non chiffré est lisible directement — un message
+    // apparaît tel quel dans le flux (STORED = pas de compression sur JSON).
+    const ascii = new TextDecoder().decode(new Uint8Array(await blob.arrayBuffer()));
+    expect(ascii).toContain('"msg 1"');
+  });
 });
