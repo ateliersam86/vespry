@@ -9,12 +9,13 @@ import {
   isStateBroadcast,
   type CommandResponse,
   type EnqueueExtras,
+  type PurgeItemView,
   type QueueItemView,
   type VespryCommand,
   type VespryState,
 } from '../messaging';
 import type { MediaSelection } from '../engine/checkpoint-types';
-import type { RawChannel, RawGuild, RawMessage } from '../engine/types';
+import type { RawChannel, RawGuild, RawMessage, Snowflake } from '../engine/types';
 import type { DonorFeed } from '../donors';
 
 const EMPTY: VespryState = {
@@ -48,6 +49,8 @@ export class RemoteController {
   get error(): string | null { return this.state.error; }
   get guilds(): RawGuild[] { return this.state.guilds; }
   get queue(): QueueItemView[] { return this.state.queue; }
+  /** File des opérations de purge (Phase 2). */
+  get purgeQueue(): PurgeItemView[] { return this.state.purgeQueue; }
 
   subscribe(cb: () => void): () => void {
     this.listeners.add(cb);
@@ -143,6 +146,28 @@ export class RemoteController {
 
   downloadZip(runId: string): void {
     void this.send({ cmd: 'download', runId });
+  }
+
+  /**
+   * Lance une purge (suppression série) des messages dont les ids sont
+   * fournis dans le salon ciblé. Retourne l'id local de la `PurgeItem`
+   * créée — l'avancement se suit ensuite via `purgeQueue` (broadcast d'état).
+   * Renvoie `null` si l'offscreen n'a pas pu prendre la commande.
+   */
+  async purge(
+    guild: RawGuild,
+    channelId: Snowflake,
+    channelName: string,
+    messageIds: Snowflake[],
+  ): Promise<string | null> {
+    const r = await this.send({
+      cmd: 'purge',
+      guild,
+      channelId,
+      channelName,
+      messageIds,
+    });
+    return r.purgeRunId ?? null;
   }
 
   private async send(command: VespryCommand): Promise<CommandResponse> {

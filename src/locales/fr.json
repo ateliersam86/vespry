@@ -183,5 +183,17 @@
   "mention.channel": "#salon",
   "exp.poll": "sondage",
   "exp.poll_votes": "{n} votes",
-  "filter.schema_optin": "Aider Vespry — signaler anonymement les nouveaux champs Discord (sans contenu de messages)"
+  "filter.schema_optin": "Aider Vespry — signaler anonymement les nouveaux champs Discord (sans contenu de messages)",
+  "purge.section": "Supprimer des messages",
+  "purge.section_help": "Action destructive — coche des messages dans l’aperçu ci-dessous pour activer.",
+  "purge.button": "Supprimer la sélection ({n} messages)",
+  "purge.modal_title": "Supprimer des messages",
+  "purge.body": "Tu vas supprimer définitivement {n} message(s) dans #{channel}. Action irréversible.",
+  "purge.confirm_word": "SUPPRIMER",
+  "purge.confirm_help": "Tape {word} pour activer le bouton rouge.",
+  "purge.cancel": "Annuler",
+  "purge.close": "Fermer",
+  "purge.in_progress": "Suppression… {done} / {total} faits · {failed} refus",
+  "purge.done": "{n} messages supprimés.",
+  "purge.partial": "Terminé avec erreurs — {done} supprimés, {failed} refus."
 }

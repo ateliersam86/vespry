@@ -55,6 +55,7 @@ import {
 import type { EnqueueExtras, QueueItemView } from '../../messaging';
 import type { RemoteController } from '../../ui/remote-controller';
 import { ScheduleSection } from './ScheduleSection';
+import { PurgeModal } from './PurgeModal';
 import { t } from '../../ui/i18n';
 import {
   humanize, renderInlineHtml,
@@ -221,6 +222,11 @@ export function Overlay({
   const [focus, setFocus] = useState<RawChannel | null>(null);
   /** Sélection manuelle de messages, par salon (salonId → ids de messages). */
   const [manualSel, setManualSel] = useState<Map<string, Set<string>>>(new Map());
+  /**
+   * Modale de purge ouverte (Phase 2). Pointe sur le salon dont la sélection
+   * manuelle est en cours de validation. `null` = modale fermée.
+   */
+  const [purgeTarget, setPurgeTarget] = useState<RawChannel | null>(null);
   const [afterDate, setAfterDate] = useState('');
   const [beforeDate, setBeforeDate] = useState('');
   const [search, setSearch] = useState('');
@@ -861,6 +867,20 @@ export function Overlay({
                 label={t('filter.schema_optin')}
               />
             </div>
+            {focus && activeGuild && (manualSel.get(focus.id)?.size ?? 0) > 0 && (
+              <div class="v-field">
+                <label>{t('purge.section')}</label>
+                <button
+                  class="v-btn v-btn-danger"
+                  onClick={() => setPurgeTarget(focus)}
+                >
+                  {t('purge.button', {
+                    n: String(manualSel.get(focus.id)?.size ?? 0),
+                  })}
+                </button>
+                <div class="v-help">{t('purge.section_help')}</div>
+              </div>
+            )}
             <ScheduleSection guilds={controller.guilds} />
             </>
             )}
@@ -902,6 +922,24 @@ export function Overlay({
       <div class="v-root" data-theme={resolvedTheme}>
         <Confetti />
         <Toast text={t('wall.thank_toast')} />
+      </div>
+    )}
+    {purgeTarget && activeGuild && (
+      <div class="v-root" data-theme={resolvedTheme}>
+        <PurgeModal
+          controller={controller}
+          guild={activeGuild}
+          channel={purgeTarget}
+          messageIds={[...(manualSel.get(purgeTarget.id) ?? new Set<string>())]}
+          onClose={() => setPurgeTarget(null)}
+          onConfirmed={() => {
+            // Vide la sélection manuelle pour le salon ciblé — éviter de
+            // re-cibler des messages que la purge va supprimer.
+            const next = new Map(manualSel);
+            next.delete(purgeTarget.id);
+            setManualSel(next);
+          }}
+        />
       </div>
     )}
     </>
