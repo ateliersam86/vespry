@@ -207,5 +207,13 @@
   "password.strength_empty": "No encryption",
   "password.strength_weak": "Weak — at least 8 chars",
   "password.strength_medium": "Medium",
-  "password.strength_strong": "Strong"
+  "password.strength_strong": "Strong",
+  "schedule.label": "Schedule a recurring export",
+  "schedule.frequency_none": "Off",
+  "schedule.frequency_daily": "Daily",
+  "schedule.frequency_weekly": "Weekly",
+  "schedule.choose_server": "Choose a server…",
+  "schedule.hour": "{h}:00 UTC",
+  "schedule.save": "Save schedule",
+  "schedule.current": "Active: {guild} · {freq} at {hour}:00 UTC"
 }

@@ -207,5 +207,13 @@
   "password.strength_empty": "Pas de chiffrement",
   "password.strength_weak": "Faible — au moins 8 caractères",
   "password.strength_medium": "Moyen",
-  "password.strength_strong": "Fort"
+  "password.strength_strong": "Fort",
+  "schedule.label": "Planifier un export récurrent",
+  "schedule.frequency_none": "Désactivé",
+  "schedule.frequency_daily": "Quotidien",
+  "schedule.frequency_weekly": "Hebdomadaire",
+  "schedule.choose_server": "Choisis un serveur…",
+  "schedule.hour": "{h}:00 UTC",
+  "schedule.save": "Enregistrer",
+  "schedule.current": "Actif : {guild} · {freq} à {hour}:00 UTC"
 }
