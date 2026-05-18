@@ -144,8 +144,14 @@ export class RemoteController {
     void this.send({ cmd: 'resume', runId });
   }
 
-  downloadZip(runId: string): void {
-    void this.send({ cmd: 'download', runId });
+  /**
+   * `filename` est calculé côté UI à partir du template utilisateur
+   * (Phase 3 — templates de zip). Absent → le moteur applique son défaut.
+   */
+  downloadZip(runId: string, filename?: string): void {
+    void this.send(filename
+      ? { cmd: 'download', runId, filename }
+      : { cmd: 'download', runId });
   }
 
   /**

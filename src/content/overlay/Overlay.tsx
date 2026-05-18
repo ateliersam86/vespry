@@ -56,6 +56,12 @@ import type { EnqueueExtras, QueueItemView } from '../../messaging';
 import type { RemoteController } from '../../ui/remote-controller';
 import { ScheduleSection } from './ScheduleSection';
 import { PurgeModal } from './PurgeModal';
+import { FilenameTemplateField } from './FilenameTemplateField';
+import {
+  DEFAULT_ZIP_TEMPLATE,
+  loadZipTemplate,
+  renderZipFilename,
+} from '../../ui/zip-filename';
 import { t } from '../../ui/i18n';
 import {
   humanize, renderInlineHtml,
@@ -202,6 +208,31 @@ function groupChannels(all: RawChannel[], dmZone: boolean): CategoryGroup[] {
 function useControllerTick(controller: RemoteController): void {
   const [, force] = useReducer((n: number) => n + 1, 0);
   useEffect(() => controller.subscribe(force as () => void), [controller]);
+}
+
+/**
+ * Télécharge un zip en appliquant le template de nom de fichier configuré
+ * par l'utilisateur (Phase 3). Lecture du template au moment du clic plutôt
+ * qu'en amont — l'utilisateur peut l'avoir modifié entre la fin de l'export
+ * et le téléchargement. Si la lecture échoue ou que rien n'est défini, on
+ * laisse le contrôleur appliquer son défaut historique.
+ */
+async function downloadWithTemplate(
+  controller: RemoteController,
+  item: QueueItemView,
+): Promise<void> {
+  try {
+    const stored = await loadZipTemplate(chrome.storage.local);
+    const template = stored ?? DEFAULT_ZIP_TEMPLATE;
+    const filename = renderZipFilename(template, {
+      guildName: item.guildName,
+      now: new Date(),
+    });
+    controller.downloadZip(item.runId, filename);
+  } catch {
+    // Storage indisponible — on délègue au comportement par défaut.
+    controller.downloadZip(item.runId);
+  }
 }
 
 export function Overlay({
@@ -881,6 +912,7 @@ export function Overlay({
                 <div class="v-help">{t('purge.section_help')}</div>
               </div>
             )}
+            <FilenameTemplateField activeGuild={activeGuild} />
             <ScheduleSection guilds={controller.guilds} />
             </>
             )}
@@ -2001,7 +2033,7 @@ function ExportQueue({
               item={item}
               expanded={expanded.has(item.runId)}
               onToggle={() => toggle(item.runId)}
-              onDownload={() => controller.downloadZip(item.runId)}
+              onDownload={() => void downloadWithTemplate(controller, item)}
               onResume={() => controller.resume(item.runId)}
               onSupport={onSupport}
             />

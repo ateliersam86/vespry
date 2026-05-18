@@ -648,12 +648,17 @@ export class VespryController {
    * Télécharge le zip d'une tâche terminée. Le contrôleur tourne dans
    * l'offscreen document : on crée l'URL du blob et on délègue le
    * téléchargement au service worker (chrome.downloads).
+   *
+   * `filenameOverride` est calculé côté UI à partir du template utilisateur
+   * (Phase 3 — templates de zip). Sans override on retombe sur le défaut
+   * historique `vespry-${safe(guildName)}.zip`.
    */
-  downloadZip(runId: string): void {
+  downloadZip(runId: string, filenameOverride?: string): void {
     const item = this.queue.find((q) => q.runId === runId);
     if (!item?.zip) return;
     const url = URL.createObjectURL(item.zip);
-    const filename = `vespry-${item.guildName.replace(/[^\w-]/gu, '_')}.zip`;
+    const filename = filenameOverride
+      ?? `vespry-${item.guildName.replace(/[^\w-]/gu, '_')}.zip`;
     void chrome.runtime.sendMessage({ kind: 'do-download', url, filename });
   }
 

@@ -195,5 +195,8 @@
   "purge.close": "Fermer",
   "purge.in_progress": "Suppression… {done} / {total} faits · {failed} refus",
   "purge.done": "{n} messages supprimés.",
-  "purge.partial": "Terminé avec erreurs — {done} supprimés, {failed} refus."
+  "purge.partial": "Terminé avec erreurs — {done} supprimés, {failed} refus.",
+  "overlay.filename_label": "Nom du fichier zip",
+  "overlay.filename_help": "Variables : {guildName}, {date}, {datetime}. Par défaut : vespry-{guildName}",
+  "overlay.filename_preview": "Aperçu : {name}"
 }

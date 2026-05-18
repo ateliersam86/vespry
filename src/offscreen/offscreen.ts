@@ -56,7 +56,7 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
       controller.resume(command.runId);
       return { ok: true };
     case 'download':
-      controller.downloadZip(command.runId);
+      controller.downloadZip(command.runId, command.filename);
       return { ok: true };
     case 'preview':
       return {

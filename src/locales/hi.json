@@ -195,5 +195,8 @@
   "purge.close": "Close",
   "purge.in_progress": "Deleting… {done} / {total} done · {failed} refused",
   "purge.done": "{n} messages deleted.",
-  "purge.partial": "Done with errors — {done} deleted, {failed} refused."
+  "purge.partial": "Done with errors — {done} deleted, {failed} refused.",
+  "overlay.filename_label": "Zip file name",
+  "overlay.filename_help": "Placeholders: {guildName}, {date}, {datetime}. Default: vespry-{guildName}",
+  "overlay.filename_preview": "Preview: {name}"
 }
