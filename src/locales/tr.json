@@ -166,5 +166,16 @@
   "support.error": "Ödeme başlatılamadı. Tekrar dene.",
   "support.secured": "Ödeme Stripe ile güvende",
   "support.or": "veya",
-  "support.wall_link": "Destekçiler duvarını gör"
+  "support.wall_link": "Destekçiler duvarını gör",
+  "exp.messages": "mesaj",
+  "exp.edited": "düzenlendi",
+  "exp.reply_to": "yanıt verdi",
+  "exp.attachment": "ek",
+  "exp.sticker": "çıkartma",
+  "exp.embed": "embed",
+  "exp.reactions": "tepkiler",
+  "exp.system_label": "sistem",
+  "exp.system_message": "sistem mesajı (tür {n})",
+  "exp.exported_by": "Vespry ile dışa aktarıldı",
+  "exp.part": "bölüm {n}/{total}"
 }

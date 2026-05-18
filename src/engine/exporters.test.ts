@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { toCsv, toHtml, toTxt, type ExportContext } from './exporters';
+import {
+  ENGLISH_LABELS, toCsv, toHtml, toTxt, type ExportContext,
+} from './exporters';
 import type { RawMessage } from './types';
 
 const ctx: ExportContext = {
   guildName: 'Groupe avec Sora',
   channelName: 'questions-sam',
   urlToPath: new Map([['https://cdn/x.png', 'media/questions-sam/x.png']]),
+  labels: ENGLISH_LABELS,
 };
 
 function msg(over: Partial<RawMessage> = {}): RawMessage {
@@ -26,7 +29,7 @@ describe('toTxt', () => {
   it('inclut en-tête, auteur, date et contenu', () => {
     const out = toTxt(ctx, [msg()]);
     expect(out).toContain('Groupe avec Sora — #questions-sam');
-    expect(out).toContain('1 message(s)');
+    expect(out).toContain('1 messages');
     expect(out).toContain('Sam');
     expect(out).toContain('bonjour');
   });
@@ -143,7 +146,7 @@ describe('toHtml', () => {
 
   it('marque les messages modifiés', () => {
     const out = toHtml(ctx, [msg({ edited_timestamp: '2026-01-02T10:00:00.000Z' })]);
-    expect(out).toContain('(modifié)');
+    expect(out).toContain('(edited)');
   });
 
   it('rend les messages système sur une ligne à part', () => {

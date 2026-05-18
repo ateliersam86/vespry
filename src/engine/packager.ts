@@ -20,8 +20,28 @@ import { Writer } from '@transcend-io/conflux';
 import type { CheckpointStore } from './checkpoint-store';
 import type { AssetKind, ExportFormat } from './checkpoint-types';
 import { DEFAULT_FORMATS } from './checkpoint-types';
-import { toCsv, toHtml, toTxt, type ExportContext } from './exporters';
+import {
+  toCsv, toHtml, toTxt,
+  type ExportContext, type ExportLabels,
+} from './exporters';
+import { t } from '../ui/i18n';
 import type { RawMessage } from './types';
+
+/** Construit le jeu de libellés traduits injectés dans les fichiers exportés. */
+function buildLabels(): ExportLabels {
+  return {
+    messages: t('exp.messages'),
+    edited: t('exp.edited'),
+    replyTo: t('exp.reply_to'),
+    attachment: t('exp.attachment'),
+    sticker: t('exp.sticker'),
+    embed: t('exp.embed'),
+    reactions: t('exp.reactions'),
+    systemLabel: t('exp.system_label'),
+    systemMessage: (type) => t('exp.system_message', { n: type }),
+    exportedBy: t('exp.exported_by'),
+  };
+}
 
 /** Sous-dossier et extension de chaque format. */
 const FORMAT_DIR: Record<ExportFormat, string> = {
@@ -144,6 +164,8 @@ export async function packageRun(
 
   // Découpe en partitions de `partitionSize` messages (0 = pas de découpage).
   const partSize = run.options.partitionSize ?? 0;
+  // Libellés traduits — capturés une fois pour tout le run.
+  const labels = buildLabels();
 
   for (const ch of channels) {
     const slug = channelSlug.get(ch.channelId) ?? 'unknown';
@@ -162,9 +184,10 @@ export async function packageRun(
       const ctx: ExportContext = {
         guildName: run.guildName,
         channelName: parts.length > 1
-          ? `${ch.name} (partie ${p + 1}/${parts.length})`
+          ? `${ch.name} (${t('exp.part', { n: p + 1, total: parts.length })})`
           : ch.name,
         urlToPath,
+        labels,
       };
       for (const format of formats) {
         const file = `${FORMAT_DIR[format]}/${slug}${suffix}.${format}`;

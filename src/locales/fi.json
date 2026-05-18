@@ -166,5 +166,16 @@
   "support.error": "Maksua ei voitu aloittaa. Yritä uudelleen.",
   "support.secured": "Maksun suojaa Stripe",
   "support.or": "tai",
-  "support.wall_link": "Katso tukijoiden seinä"
+  "support.wall_link": "Katso tukijoiden seinä",
+  "exp.messages": "viestiä",
+  "exp.edited": "muokattu",
+  "exp.reply_to": "vastauksena käyttäjälle",
+  "exp.attachment": "liite",
+  "exp.sticker": "tarra",
+  "exp.embed": "upotus",
+  "exp.reactions": "reaktiot",
+  "exp.system_label": "järjestelmä",
+  "exp.system_message": "järjestelmäviesti (tyyppi {n})",
+  "exp.exported_by": "viety Vespryllä",
+  "exp.part": "osa {n}/{total}"
 }

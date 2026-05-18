@@ -166,5 +166,16 @@
   "support.error": "Payment could not start. Please try again.",
   "support.secured": "Payment secured by Stripe",
   "support.or": "or",
-  "support.wall_link": "See the wall of supporters"
+  "support.wall_link": "See the wall of supporters",
+  "exp.messages": "messages",
+  "exp.edited": "edited",
+  "exp.reply_to": "in reply to",
+  "exp.attachment": "attachment",
+  "exp.sticker": "sticker",
+  "exp.embed": "embed",
+  "exp.reactions": "reactions",
+  "exp.system_label": "system",
+  "exp.system_message": "system message (type {n})",
+  "exp.exported_by": "exported with Vespry",
+  "exp.part": "part {n}/{total}"
 }

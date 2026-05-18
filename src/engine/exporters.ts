@@ -16,13 +16,47 @@ import type {
   RawReaction,
 } from './types';
 
+/**
+ * Libellés traduits injectés dans les fichiers exportés. Construits par le
+ * packager via `t()` — c'est la langue de l'utilisateur qui produit l'export
+ * qui s'applique (les fichiers générés sont lus par lui-même).
+ */
+export interface ExportLabels {
+  messages: string;
+  edited: string;
+  replyTo: string;
+  attachment: string;
+  sticker: string;
+  embed: string;
+  reactions: string;
+  systemLabel: string;
+  /** Libellé d'un message système sans contenu, p.ex. « message système (type 7) ». */
+  systemMessage: (type: number) => string;
+  exportedBy: string;
+}
+
 /** Contexte passé à chaque exporteur. */
 export interface ExportContext {
   guildName: string;
   channelName: string;
   /** url d'origine → chemin du média dans le zip (`media/slug/fichier`). */
   urlToPath: Map<string, string>;
+  labels: ExportLabels;
 }
+
+/** Libellés anglais — fallback minimal pour les tests qui n'instancient pas `t()`. */
+export const ENGLISH_LABELS: ExportLabels = {
+  messages: 'messages',
+  edited: 'edited',
+  replyTo: 'in reply to',
+  attachment: 'attachment',
+  sticker: 'sticker',
+  embed: 'embed',
+  reactions: 'reactions',
+  systemLabel: 'system',
+  systemMessage: (type) => `system message (type ${type})`,
+  exportedBy: 'exported with Vespry',
+};
 
 /** Chemin d'un média relatif à un fichier d'export (dans `html/`, `txt/`…). */
 function mediaHref(url: string, urlToPath: Map<string, string>): string | null {
@@ -91,42 +125,43 @@ function stickerUrl(id: string, formatType: number): string | null {
 
 /** Exporte un salon en texte brut. */
 export function toTxt(ctx: ExportContext, messages: RawMessage[]): string {
+  const L = ctx.labels;
   const out: string[] = [
     `${ctx.guildName} — #${ctx.channelName}`,
-    `${messages.length} message(s)`,
+    `${messages.length} ${L.messages}`,
     '='.repeat(60),
     '',
   ];
   for (const m of messages) {
     if (isSystem(m)) {
-      out.push(`--- [système] ${humanize(m.content) || `type ${m.type}`} ---`, '');
+      out.push(`--- [${L.systemLabel}] ${humanize(m.content) || L.systemMessage(m.type)} ---`, '');
       continue;
     }
-    const edited = isEdited(m) ? ' (modifié)' : '';
+    const edited = isEdited(m) ? ` (${L.edited})` : '';
     out.push(`[${fmtDate(m.timestamp)}] ${authorName(m)}${edited}`);
     // Message cité en réponse.
     const ref = m.referenced_message;
     if (ref) {
       const snippet = humanize(ref.content).split('\n')[0] ?? '';
-      out.push(`  ↪ en réponse à ${authorName(ref)} : ${snippet.slice(0, 80)}`);
+      out.push(`  ↪ ${L.replyTo} ${authorName(ref)} : ${snippet.slice(0, 80)}`);
     }
     if (m.content.trim()) {
       for (const line of humanize(m.content).split('\n')) out.push(line);
     }
     for (const a of m.attachments) {
       const local = mediaHref(a.url, ctx.urlToPath);
-      out.push(`  [pièce jointe : ${a.filename}${local ? ` → ${local}` : ''}]`);
+      out.push(`  [${L.attachment} : ${a.filename}${local ? ` → ${local}` : ''}]`);
     }
     for (const s of m.sticker_items ?? []) {
-      out.push(`  [sticker : ${s.name}]`);
+      out.push(`  [${L.sticker} : ${s.name}]`);
     }
     for (const e of m.embeds) {
       if (e.title || e.description) {
-        out.push(`  [embed : ${humanize(e.title ?? e.description ?? '')}]`);
+        out.push(`  [${L.embed} : ${humanize(e.title ?? e.description ?? '')}]`);
       }
     }
     if (m.reactions && m.reactions.length > 0) {
-      out.push(`  [réactions : ${m.reactions.map(reactionText).join('  ')}]`);
+      out.push(`  [${L.reactions} : ${m.reactions.map(reactionText).join('  ')}]`);
     }
     out.push('');
   }
@@ -224,9 +259,12 @@ function renderAttachment(a: RawAttachment, urlToPath: Map<string, string>): str
 function renderSticker(
   s: { id: string; name: string; format_type: number },
   urlToPath: Map<string, string>,
+  labels: ExportLabels,
 ): string {
   const cdn = stickerUrl(s.id, s.format_type);
-  if (!cdn) return `<span class="sticker-name">[sticker : ${esc(s.name)}]</span>`;
+  if (!cdn) {
+    return `<span class="sticker-name">[${esc(labels.sticker)} : ${esc(s.name)}]</span>`;
+  }
   return `<img class="sticker" src="${esc(mediaOrCdn(cdn, urlToPath))}" alt="${esc(s.name)}" title="${esc(s.name)}" loading="lazy">`;
 }
 
@@ -342,19 +380,20 @@ const HTML_STYLE = `
 `;
 
 /** Rend un message système : ligne centrée et discrète. */
-function renderSystemMessage(m: RawMessage): string {
-  const label = humanize(m.content).trim() || `message système (type ${m.type})`;
+function renderSystemMessage(m: RawMessage, labels: ExportLabels): string {
+  const label = humanize(m.content).trim() || labels.systemMessage(m.type);
   return `<div class="sys">— ${esc(label)} · ${esc(fmtDate(m.timestamp))} —</div>`;
 }
 
 /** Rend un message normal (par défaut ou réponse). */
 function renderMessage(m: RawMessage, grouped: boolean, ctx: ExportContext): string {
+  const L = ctx.labels;
   const parts: string[] = [`<div class="msg${grouped ? ' grouped' : ''}">`];
   parts.push(grouped ? '<div class="av spacer"></div>' : avatarChip(m));
   parts.push('<div class="body">');
   if (m.referenced_message) parts.push(renderReply(m.referenced_message));
   if (!grouped) {
-    const edited = isEdited(m) ? ' <span class="edited">(modifié)</span>' : '';
+    const edited = isEdited(m) ? ` <span class="edited">(${esc(L.edited)})</span>` : '';
     parts.push(
       `<div class="head"><span class="author">${esc(authorName(m))}</span>`
       + `<span class="time">${esc(fmtDate(m.timestamp))}</span>${edited}</div>`,
@@ -364,7 +403,7 @@ function renderMessage(m: RawMessage, grouped: boolean, ctx: ExportContext): str
     parts.push(`<div class="content">${renderContent(m.content)}</div>`);
   }
   for (const a of m.attachments) parts.push(renderAttachment(a, ctx.urlToPath));
-  for (const s of m.sticker_items ?? []) parts.push(renderSticker(s, ctx.urlToPath));
+  for (const s of m.sticker_items ?? []) parts.push(renderSticker(s, ctx.urlToPath, L));
   for (const e of m.embeds) {
     if (e.title || e.description || e.author?.name || e.image?.url) {
       parts.push(renderEmbed(e, ctx.urlToPath));
@@ -388,7 +427,7 @@ export function toHtml(ctx: ExportContext, messages: RawMessage[]): string {
     const m = messages[i];
     if (!m) continue;
     if (isSystem(m)) {
-      blocks.push(renderSystemMessage(m));
+      blocks.push(renderSystemMessage(m, ctx.labels));
       continue;
     }
     const prev = messages[i - 1];
@@ -412,7 +451,7 @@ export function toHtml(ctx: ExportContext, messages: RawMessage[]): string {
 <body>
 <div class="wrap">
 <h1>#${esc(ctx.channelName)}</h1>
-<div class="sub">${esc(ctx.guildName)} · ${messages.length} message(s) · exporté avec Vespry</div>
+<div class="sub">${esc(ctx.guildName)} · ${messages.length} ${esc(ctx.labels.messages)} · ${esc(ctx.labels.exportedBy)}</div>
 ${blocks.join('\n')}
 </div>
 </body>

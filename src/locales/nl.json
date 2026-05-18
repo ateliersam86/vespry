@@ -166,5 +166,16 @@
   "support.error": "Betaling kon niet starten. Probeer opnieuw.",
   "support.secured": "Betaling beveiligd door Stripe",
   "support.or": "of",
-  "support.wall_link": "Bekijk de muur van steunbetuigers"
+  "support.wall_link": "Bekijk de muur van steunbetuigers",
+  "exp.messages": "berichten",
+  "exp.edited": "bewerkt",
+  "exp.reply_to": "als antwoord aan",
+  "exp.attachment": "bijlage",
+  "exp.sticker": "sticker",
+  "exp.embed": "embed",
+  "exp.reactions": "reacties",
+  "exp.system_label": "systeem",
+  "exp.system_message": "systeembericht (type {n})",
+  "exp.exported_by": "geëxporteerd met Vespry",
+  "exp.part": "deel {n}/{total}"
 }

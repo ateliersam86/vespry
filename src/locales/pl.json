@@ -166,5 +166,16 @@
   "support.error": "Płatność się nie uruchomiła. Spróbuj ponownie.",
   "support.secured": "Płatność zabezpieczona przez Stripe",
   "support.or": "lub",
-  "support.wall_link": "Zobacz ścianę wspierających"
+  "support.wall_link": "Zobacz ścianę wspierających",
+  "exp.messages": "wiadomości",
+  "exp.edited": "edytowane",
+  "exp.reply_to": "w odpowiedzi do",
+  "exp.attachment": "załącznik",
+  "exp.sticker": "naklejka",
+  "exp.embed": "embed",
+  "exp.reactions": "reakcje",
+  "exp.system_label": "system",
+  "exp.system_message": "wiadomość systemowa (typ {n})",
+  "exp.exported_by": "wyeksportowane z Vespry",
+  "exp.part": "część {n}/{total}"
 }

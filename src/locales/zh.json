@@ -166,5 +166,16 @@
   "support.error": "支付未能启动,请重试。",
   "support.secured": "由 Stripe 安全处理",
   "support.or": "或",
-  "support.wall_link": "查看支持者之墙"
+  "support.wall_link": "查看支持者之墙",
+  "exp.messages": "条消息",
+  "exp.edited": "已编辑",
+  "exp.reply_to": "回复",
+  "exp.attachment": "附件",
+  "exp.sticker": "贴纸",
+  "exp.embed": "嵌入卡片",
+  "exp.reactions": "反应",
+  "exp.system_label": "系统",
+  "exp.system_message": "系统消息(类型 {n})",
+  "exp.exported_by": "由 Vespry 导出",
+  "exp.part": "第 {n}/{total} 部分"
 }

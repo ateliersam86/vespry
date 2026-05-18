@@ -213,12 +213,12 @@ export default {
       return handleStripeWebhook(req, env);
     }
     if (req.method === 'GET' && pathname === '/checkout/success') {
-      return new Response(successPage(), {
+      return new Response(successPage(req), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
     if (req.method === 'GET' && pathname === '/checkout/cancel') {
-      return new Response(cancelPage(), {
+      return new Response(cancelPage(req), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }

@@ -166,5 +166,16 @@
   "support.error": "Оплата не запустилась. Попробуйте ещё раз.",
   "support.secured": "Платёж защищён Stripe",
   "support.or": "или",
-  "support.wall_link": "Открыть стену поддержавших"
+  "support.wall_link": "Открыть стену поддержавших",
+  "exp.messages": "сообщений",
+  "exp.edited": "изменено",
+  "exp.reply_to": "в ответ",
+  "exp.attachment": "вложение",
+  "exp.sticker": "стикер",
+  "exp.embed": "embed",
+  "exp.reactions": "реакции",
+  "exp.system_label": "система",
+  "exp.system_message": "системное сообщение (тип {n})",
+  "exp.exported_by": "экспортировано Vespry",
+  "exp.part": "часть {n}/{total}"
 }

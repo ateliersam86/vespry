@@ -166,5 +166,16 @@
   "support.error": "भुगतान शुरू नहीं हुआ। फिर से कोशिश करें।",
   "support.secured": "भुगतान Stripe द्वारा सुरक्षित",
   "support.or": "या",
-  "support.wall_link": "समर्थकों की दीवार देखें"
+  "support.wall_link": "समर्थकों की दीवार देखें",
+  "exp.messages": "संदेश",
+  "exp.edited": "संपादित",
+  "exp.reply_to": "का उत्तर",
+  "exp.attachment": "अनुलग्नक",
+  "exp.sticker": "स्टिकर",
+  "exp.embed": "एम्बेड",
+  "exp.reactions": "प्रतिक्रियाएं",
+  "exp.system_label": "सिस्टम",
+  "exp.system_message": "सिस्टम संदेश (प्रकार {n})",
+  "exp.exported_by": "Vespry से निर्यात",
+  "exp.part": "भाग {n}/{total}"
 }

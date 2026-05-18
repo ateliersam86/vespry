@@ -166,5 +166,16 @@
   "support.error": "Le paiement n’a pas pu démarrer. Réessaie.",
   "support.secured": "Paiement sécurisé par Stripe",
   "support.or": "ou",
-  "support.wall_link": "Voir le mur des soutiens"
+  "support.wall_link": "Voir le mur des soutiens",
+  "exp.messages": "messages",
+  "exp.edited": "modifié",
+  "exp.reply_to": "en réponse à",
+  "exp.attachment": "pièce jointe",
+  "exp.sticker": "sticker",
+  "exp.embed": "embed",
+  "exp.reactions": "réactions",
+  "exp.system_label": "système",
+  "exp.system_message": "message système (type {n})",
+  "exp.exported_by": "exporté avec Vespry",
+  "exp.part": "partie {n}/{total}"
 }

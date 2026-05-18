@@ -4,15 +4,22 @@
  * La popup de paiement est rouverte sur ces pages par Stripe (`success_url` /
  * `cancel_url`). Elles préviennent l'overlay Vespry par `postMessage`, puis se
  * referment seules. Aux couleurs crépuscule de Vespry.
+ *
+ * La langue vient du navigateur (`Accept-Language`) — voir `i18n.ts`.
  */
+import { pickLocale, strings, type Locale } from './i18n';
 
-function shell(title: string, inner: string, script: string): string {
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function shell(locale: Locale, title: string, inner: string, script: string): string {
   return `<!doctype html>
-<html lang="fr">
+<html lang="${escapeAttr(locale)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title}</title>
+<title>${escapeAttr(title)}</title>
 <style>
   :root { color-scheme: dark; }
   * { margin: 0; box-sizing: border-box; }
@@ -47,25 +54,36 @@ function shell(title: string, inner: string, script: string): string {
 </html>`;
 }
 
-/** Page de retour après un don réussi. */
-export function successPage(): string {
+/** Échappe le contenu texte d'un nœud HTML (pas pour les attributs). */
+function escapeText(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Page de retour après un don réussi, traduite selon `Accept-Language`. */
+export function successPage(req: Request): string {
+  const locale = pickLocale(req.headers.get('Accept-Language'));
+  const s = strings(locale);
   return shell(
-    'Merci — Vespry',
+    locale,
+    s.successTitle,
     `<div class="glyph beat">💜</div>
-     <h1>Merci !</h1>
-     <p>Ton soutien rejoint le mur de Vespry. Cette fenêtre se ferme toute seule…</p>`,
+     <h1>${escapeText(s.successHeading)}</h1>
+     <p>${escapeText(s.successBody)}</p>`,
     `try { if (window.opener) window.opener.postMessage('vespry-donation-ok', '*'); } catch (e) {}
      setTimeout(function () { window.close(); }, 2800);`,
   );
 }
 
-/** Page de retour après un don annulé. */
-export function cancelPage(): string {
+/** Page de retour après un don annulé, traduite selon `Accept-Language`. */
+export function cancelPage(req: Request): string {
+  const locale = pickLocale(req.headers.get('Accept-Language'));
+  const s = strings(locale);
   return shell(
-    'Don annulé — Vespry',
+    locale,
+    s.cancelTitle,
     `<div class="glyph">🌙</div>
-     <h1>Don annulé</h1>
-     <p>Aucun souci, rien n'a été débité. Tu peux fermer cette fenêtre.</p>`,
+     <h1>${escapeText(s.cancelHeading)}</h1>
+     <p>${escapeText(s.cancelBody)}</p>`,
     `try { if (window.opener) window.opener.postMessage('vespry-donation-cancel', '*'); } catch (e) {}
      setTimeout(function () { window.close(); }, 2400);`,
   );

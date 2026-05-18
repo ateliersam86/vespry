@@ -166,5 +166,16 @@
   "support.error": "Il pagamento non è partito. Riprova.",
   "support.secured": "Pagamento protetto da Stripe",
   "support.or": "oppure",
-  "support.wall_link": "Vedi il muro dei sostenitori"
+  "support.wall_link": "Vedi il muro dei sostenitori",
+  "exp.messages": "messaggi",
+  "exp.edited": "modificato",
+  "exp.reply_to": "in risposta a",
+  "exp.attachment": "allegato",
+  "exp.sticker": "sticker",
+  "exp.embed": "embed",
+  "exp.reactions": "reazioni",
+  "exp.system_label": "sistema",
+  "exp.system_message": "messaggio di sistema (tipo {n})",
+  "exp.exported_by": "esportato con Vespry",
+  "exp.part": "parte {n}/{total}"
 }

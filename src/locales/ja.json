@@ -166,5 +166,16 @@
   "support.error": "決済を開始できませんでした。もう一度試してください。",
   "support.secured": "決済は Stripe により保護されています",
   "support.or": "または",
-  "support.wall_link": "支援者の壁を見る"
+  "support.wall_link": "支援者の壁を見る",
+  "exp.messages": "メッセージ",
+  "exp.edited": "編集済み",
+  "exp.reply_to": "への返信",
+  "exp.attachment": "添付ファイル",
+  "exp.sticker": "スタンプ",
+  "exp.embed": "埋め込み",
+  "exp.reactions": "リアクション",
+  "exp.system_label": "システム",
+  "exp.system_message": "システムメッセージ (タイプ {n})",
+  "exp.exported_by": "Vespry でエクスポート",
+  "exp.part": "パート {n}/{total}"
 }

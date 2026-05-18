@@ -166,5 +166,16 @@
   "support.error": "El pago no pudo iniciarse. Inténtalo de nuevo.",
   "support.secured": "Pago protegido por Stripe",
   "support.or": "o",
-  "support.wall_link": "Ver el muro de apoyos"
+  "support.wall_link": "Ver el muro de apoyos",
+  "exp.messages": "mensajes",
+  "exp.edited": "editado",
+  "exp.reply_to": "en respuesta a",
+  "exp.attachment": "adjunto",
+  "exp.sticker": "sticker",
+  "exp.embed": "embed",
+  "exp.reactions": "reacciones",
+  "exp.system_label": "sistema",
+  "exp.system_message": "mensaje del sistema (tipo {n})",
+  "exp.exported_by": "exportado con Vespry",
+  "exp.part": "parte {n}/{total}"
 }
