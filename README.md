@@ -50,25 +50,42 @@ pas de messages : c'est un outil d'export, pas de modération — volontairement
 ### Interface façon Discord
 
 L'extension s'ouvre par-dessus Discord. À gauche, tes serveurs et tes
-conversations privées ; au centre, l'aperçu des messages ; à droite, les
+conversations privées ; au centre, l'aperçu des messages — markdown rendu,
+réponses citées, réactions, stickers, embeds, médias inline ; à droite, les
 réglages de l'export. Rien à apprendre — c'est la disposition que tu connais
 déjà. Thème sombre ou clair, au choix.
 
-Le panneau de réglages a deux modes : **Simple** (l'essentiel — période,
-médias, format) et **Avancé** (filtres, découpage, options). Pas de fouillis
-par défaut.
+Le panneau de réglages a deux modes : **Simple** par défaut (période, médias,
+format, l'essentiel) et **Avancé** sur un clic (filtres, découpage, options).
+Pas de fouillis par défaut.
 
-### Zones de sélection
+### Multi-sélection de salons et plage de dates
 
-Tu n'es pas obligé de tout exporter. Une zone de sélection cible une partie
-précise de l'historique : une période, un auteur, un mot-clé, une mention, les
-messages épinglés, ceux avec une image, une vidéo, un son, un sticker, un
-embed ou un lien. Tu peux aussi cocher des messages un par un dans l'aperçu.
+Coche autant de salons que tu veux dans la colonne de gauche et fixe une
+fenêtre temporelle — la file traitera chaque salon, dans l'ordre, en
+respectant la période.
+
+![Multi-sélection de salons et plage de dates](docs/screenshots/multi-select.png)
+
+### Sélection de messages un par un
+
+Dans l'aperçu central, coche les messages que tu veux garder. Ils s'ajoutent
+au panneau de droite sous forme d'étiquette « X messages — #salon » que tu
+peux retirer d'un clic. Tu peux combiner cette sélection manuelle avec les
+filtres : les deux s'ajoutent.
+
+![Sélection de messages individuels](docs/screenshots/message-select.png)
+
+### Mode Avancé : filtres booléens, zones granulaires
+
+En mode Avancé, une zone de sélection cible une partie précise de
+l'historique : période, auteur, mot-clé, mention, messages épinglés, ceux
+avec une image, une vidéo, un son, un sticker, un embed ou un lien.
 
 Les zones se combinent en **ET** ou en **OU**, et chacune peut être **inversée**
-(NON). Sans aucune zone, le salon entier est exporté.
+(NON). Tu peux dire « auteur Sora ET avec image », ou « tout sauf épinglés ».
 
-![Zones de sélection — filtre par auteur](docs/screenshots/zones.png)
+![Mode Avancé : zones, ET/OU, négation](docs/screenshots/advanced.png)
 
 ### Quatre formats d'export
 
@@ -92,13 +109,8 @@ re-télécharger.
 ### Découpage des gros salons
 
 Un salon de centaines de milliers de messages peut être découpé en fichiers
-de taille bornée, plutôt qu'un seul fichier ingérable.
-
-### Aperçu des messages
-
-Avant d'exporter, tu vois le contenu réel du salon : messages, réactions,
-images, audio, vidéo, stickers, embeds. L'aperçu défile à l'infini — remonte
-aussi loin que tu veux dans l'historique.
+de taille bornée (5 000, 10 000 ou 25 000 messages par fichier), plutôt qu'un
+seul fichier ingérable.
 
 ### File d'export increvable
 
@@ -107,6 +119,8 @@ une console en temps réel, le détail par type de média. Pendant un export, un
 badge de pourcentage s'affiche sur l'icône de l'extension — visible quel que
 soit l'onglet où tu es. Un export interrompu peut être repris ; c'est le cœur
 de Vespry, et c'est couvert par les tests automatiques.
+
+![File d'export — tâche terminée avec stats et console](docs/screenshots/export-done.png)
 
 ### Popup
 
