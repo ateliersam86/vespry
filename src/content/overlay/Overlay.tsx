@@ -1211,7 +1211,7 @@ function Components({ components }: { components: RawComponent[] }): JSX.Element
           const label = (c.emoji?.name ? `${c.emoji.name} ` : '') + (c.label ?? '—');
           if (c.style === 5 && c.url) {
             return (
-              <a key={i} class="v-comp-btn link" href={c.url} target="_blank" rel="noopener">
+              <a key={i} class="v-comp-btn link" href={c.url} target="_blank" rel="noopener noreferrer">
                 {label}
               </a>
             );

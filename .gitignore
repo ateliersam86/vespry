@@ -8,7 +8,7 @@ web-ext-artifacts/
 coverage/
 .test-profile/
 .test-profile-*/
-vespry-*.zip
+*.zip
 debug-*.mjs
 debug-*.png
 .dev-build-n

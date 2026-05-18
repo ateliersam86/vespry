@@ -554,7 +554,12 @@ export class ExportRunner {
       this.estimatedMessagesTotal = 0;
       return;
     }
-    const CONCURRENCY = 5;
+    // Concurrence baissée de 5 → 3 (audit ship-readiness 2026-05-18) :
+    // sur un compte avec 50 salons, 5 workers + retry-after exponentiel
+    // pouvaient déclencher une cascade 429 sur le run lui-même qui suit
+    // immédiatement. 3 workers gardent le pré-comptage rapide (~3-4 s
+    // sur 50 salons) sans saturer l'API search Discord.
+    const CONCURRENCY = 3;
     const counts: (number | null)[] = new Array(pending.length).fill(null);
     let cursor = 0;
     const next = (): number | null => {

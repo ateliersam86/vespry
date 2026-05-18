@@ -221,6 +221,26 @@ async function relayToDiscordTabs(message: unknown): Promise<void> {
 
 // --- routeur de messages ---
 
+/**
+ * Le port `vespry-keepalive` est utilisé par Firefox pour garder l'event
+ * page vivante pendant un export long (cf. `firefox/background.ts`). Côté
+ * Chrome il n'a aucun effet (service worker = pas d'event page), mais
+ * `RemoteController` l'ouvre dans les deux cas — sans listener côté SW,
+ * Chrome déconnecterait immédiatement le port et déclencherait une boucle
+ * de reconnexion. On enregistre donc un handler vide qui garde la
+ * référence le temps que l'overlay vit.
+ */
+const KEEPALIVE_NAME = 'vespry-keepalive';
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== KEEPALIVE_NAME) return;
+  // Noop : on garde la référence dans le closure le temps que le port
+  // vit. Pas besoin de listener message — Chrome diffuse l'état via
+  // chrome.runtime.sendMessage broadcast comme avant.
+  port.onDisconnect.addListener(() => {
+    /* port fermé côté UI — sans gravité */
+  });
+});
+
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
   if (isCommandEnvelope(message)) {
     forwardCommand(message.command).then(sendResponse).catch((e: unknown) => {

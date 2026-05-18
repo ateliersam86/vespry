@@ -37,7 +37,10 @@ analytique, aucun cookie tiers. Le code est public et auditable.
 
 ## Sorties réseau (les seules)
 
-Trois sorties réseau, toutes explicites et nécessaires :
+Cinq sorties réseau, toutes explicites. Les deux dernières sont liées au
+mur des soutiens et à la mise à jour des crédits — elles ne véhiculent
+aucune donnée utilisateur autre que l'IP/User-Agent inhérents à toute
+requête HTTP.
 
 ### 1. API Discord
 
@@ -83,6 +86,39 @@ une issue GitHub publique pour priorisation des futurs développements.
 Cette télémétrie est **désactivée par défaut**. L'utilisateur peut
 l'activer ou la désactiver à tout moment dans le mode Avancé.
 
+### 4. GitHub Raw — fichier `credits.json`
+
+Au démarrage de l'overlay, Vespry fait un GET sur
+`https://raw.githubusercontent.com/ateliersam86/vespry/main/credits.json`
+pour récupérer la liste à jour des plateformes de soutien (Ko-fi, GitHub
+Sponsors, URL du Worker des dons) sans nécessiter une mise à jour de
+l'extension elle-même. Le fichier `credits.json` est public, statique,
+versionné dans le dépôt.
+
+**Que voit GitHub ?** L'IP et l'User-Agent du navigateur, classique pour
+toute requête HTTP. GitHub n'a aucune donnée Discord, aucun jeton, aucun
+identifiant utilisateur Vespry.
+
+Si la requête échoue (hors-ligne, dépôt indisponible), l'extension
+retombe sur une copie embarquée dans le bundle. Pas de panne UX.
+
+### 5. Worker Cloudflare `vespry-donors`
+
+Au démarrage de l'overlay (et après un don validé), Vespry fait un GET
+sur `https://vespry-donors.sam-muselet.workers.dev/donors` pour afficher
+le compteur de soutiens et le bandeau défilant.
+
+**Que voit le Worker ?** L'IP, l'User-Agent et le `Referer`
+(`https://discord.com/...`) — données par défaut de toute requête HTTP
+qui passent par Cloudflare. Le Worker ne logue **pas** d'identifiant
+utilisateur Vespry, pas de jeton Discord, pas de contenu, et n'écrit
+rien dans D1 sur cette route GET. La D1 ne contient que les soutiens
+publics agrégés (pseudonyme + message + date), pas d'IPs.
+
+**À venir (v0.2)** : option « afficher le mur des soutiens » désactivée
+par défaut pour les utilisateurs qui veulent zéro requête sortante hors
+Discord.
+
 ## Conformité RGPD
 
 Vespry ne traite aucune donnée à caractère personnel sur ses propres
@@ -100,7 +136,12 @@ la demande). Les exports restent locaux à la machine de l'utilisateur.
 
 ## Cookies
 
-Vespry ne dépose **aucun cookie**.
+Vespry ne dépose **aucun cookie de son côté**. Cloudflare (devant le
+Worker `vespry-donors`) et GitHub (raw.githubusercontent.com) peuvent
+poser des cookies de protection anti-DDoS (`__cf_bm`, par exemple) lors
+des deux requêtes auxiliaires (cf. § Sorties réseau 4 et 5). Ces
+cookies sont du ressort de ces tiers et indispensables au routage de
+la requête — ils ne sont pas lus par Vespry.
 
 ## Sécurité
 

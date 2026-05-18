@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CheckpointStore } from './checkpoint-store';
-import { packageRun } from './packager';
+import { buildJsonEnvelope, packageRun } from './packager';
 import { profileForTier } from './perf-profile';
 import { ALL_MEDIA } from './checkpoint-types';
 import type { ChannelProgress, ExportRun, StoredAsset, StoredMessage } from './checkpoint-types';
@@ -262,5 +262,96 @@ describe('packageRun', () => {
     // apparaît tel quel dans le flux (STORED = pas de compression sur JSON).
     const ascii = new TextDecoder().decode(new Uint8Array(await blob.arrayBuffer()));
     expect(ascii).toContain('"msg 1"');
+  });
+});
+
+describe('buildJsonEnvelope', () => {
+  /**
+   * Couvre le shape de l'enveloppe JSON agent-ready (audit B+C 2026-05-18).
+   * On vérifie que tous les champs promis dans PRIVACY.md / CHANGELOG sont
+   * présents, que le typeName est résolu depuis l'enum, et que les champs
+   * Discord d'origine sont conservés (forward-compat).
+   */
+  it('produit l\'enveloppe complète avec $schema, vespryVersion, guild, channel, typeName', () => {
+    const env = buildJsonEnvelope({
+      guildId: 'g1',
+      guildName: 'Mon Serveur',
+      channel: { id: 'c1', name: 'général', type: 0 },
+      messages: [{ id: 'm1', type: 19, content: 'hello' }],
+    });
+    expect(env['$schema']).toBeTypeOf('string');
+    expect(env['vespryVersion']).toBeTypeOf('string');
+    expect(env['exportedAt']).toBeTypeOf('string');
+    expect(env['guild']).toEqual({ id: 'g1', name: 'Mon Serveur' });
+    expect(env['channel']).toEqual({
+      id: 'c1', name: 'général', type: 0, typeName: 'GUILD_TEXT',
+    });
+    expect(env['messageCount']).toBe(1);
+  });
+
+  it('résout typeName depuis MESSAGE_TYPE_NAMES (19 → REPLY)', () => {
+    const env = buildJsonEnvelope({
+      guildId: 'g1', guildName: 'G',
+      channel: { id: 'c1', name: 'c', type: 0 },
+      messages: [
+        { type: 0, id: 'm1' },
+        { type: 19, id: 'm2' },
+        { type: 21, id: 'm3' },
+      ],
+    });
+    const msgs = env['messages'] as { typeName: string }[];
+    expect(msgs[0]!.typeName).toBe('DEFAULT');
+    expect(msgs[1]!.typeName).toBe('REPLY');
+    expect(msgs[2]!.typeName).toBe('THREAD_STARTER_MESSAGE');
+  });
+
+  it('annote typeName UNKNOWN_X pour un type Discord inconnu (forward-compat)', () => {
+    const env = buildJsonEnvelope({
+      guildId: 'g1', guildName: 'G',
+      channel: { id: 'c1', name: 'c', type: 999 },
+      messages: [{ type: 9999, id: 'm1' }],
+    });
+    const ch = env['channel'] as { typeName: string };
+    const msg = (env['messages'] as { typeName: string }[])[0]!;
+    expect(ch.typeName).toBe('UNKNOWN_999');
+    expect(msg.typeName).toBe('UNKNOWN_9999');
+  });
+
+  it('inclut `part` quand l\'export est partitionné, l\'omet sinon', () => {
+    const partitioned = buildJsonEnvelope({
+      guildId: 'g1', guildName: 'G',
+      channel: { id: 'c1', name: 'c', type: 0 },
+      part: { index: 1, total: 3 },
+      messages: [],
+    });
+    expect(partitioned['part']).toEqual({ index: 1, total: 3 });
+    const monolith = buildJsonEnvelope({
+      guildId: 'g1', guildName: 'G',
+      channel: { id: 'c1', name: 'c', type: 0 },
+      messages: [],
+    });
+    expect('part' in monolith).toBe(false);
+  });
+
+  it('préserve les champs Discord d\'origine (forward-compat, on AJOUTE typeName)', () => {
+    const env = buildJsonEnvelope({
+      guildId: 'g1', guildName: 'G',
+      channel: { id: 'c1', name: 'c', type: 0 },
+      messages: [{
+        id: 'm1',
+        type: 0,
+        content: 'hello',
+        // Champs Discord arbitraires — doivent traverser intacts.
+        edited_timestamp: '2026-01-02T00:00:00Z',
+        pinned: true,
+        future_discord_field: 'unknown',
+      }],
+    });
+    const msg = (env['messages'] as Record<string, unknown>[])[0]!;
+    expect(msg['content']).toBe('hello');
+    expect(msg['edited_timestamp']).toBe('2026-01-02T00:00:00Z');
+    expect(msg['pinned']).toBe(true);
+    expect(msg['future_discord_field']).toBe('unknown');
+    expect(msg['typeName']).toBe('DEFAULT'); // ajouté en plus
   });
 });

@@ -204,7 +204,7 @@ function vespryVersion(): string {
  * Les champs Discord originaux (snake_case, `type` numérique, etc.) sont
  * conservés intacts — forward-compat sur les futurs champs API.
  */
-function buildJsonEnvelope(args: {
+export function buildJsonEnvelope(args: {
   guildId: string;
   guildName: string;
   channel: { id: string; name: string; type: number };

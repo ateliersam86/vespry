@@ -34,6 +34,21 @@ export class RemoteController {
   private state: VespryState = EMPTY;
   private lastError: string | null = null;
   private readonly listeners = new Set<() => void>();
+  /**
+   * Port persistant nommé `vespry-keepalive` (Firefox uniquement, mais
+   * inoffensif sur Chrome — le SW broker l'ignore). Empêche l'event page
+   * Firefox de s'endormir entre deux batchs API pendant un export long.
+   *
+   * Sans ce port côté UI, l'event page peut être tuée par le scheduler
+   * Firefox dans les fenêtres `await sleep(700)` du back-off Discord, et
+   * l'export se fige silencieusement à mi-parcours (checkpoint IndexedDB
+   * sauvé mais run jamais relancé sans intervention utilisateur).
+   *
+   * Découvert lors de l'audit ship-readiness pré-publication
+   * (2026-05-18) — code mort jusque-là malgré les commentaires dans
+   * `firefox/background.ts` qui en parlaient.
+   */
+  private keepalivePort: chrome.runtime.Port | null = null;
 
   constructor() {
     chrome.runtime.onMessage.addListener((m: unknown) => {
@@ -43,6 +58,49 @@ export class RemoteController {
       }
       return undefined;
     });
+    this.openKeepalive();
+  }
+
+  /**
+   * Ouvre le port `vespry-keepalive` vers le background. Si le background
+   * n'écoute pas (cas Chrome service-worker pur, ou erreur de chargement),
+   * `chrome.runtime.connect` ne lève pas mais le port émettra `onDisconnect`
+   * immédiatement — on l'absorbe en silence (`undefined` côté Chrome SW).
+   * Le port reçoit aussi un push d'état initial depuis l'event page Firefox
+   * (cf. `firefox/background.ts:387` `port.postMessage`).
+   */
+  private openKeepalive(): void {
+    try {
+      this.keepalivePort = chrome.runtime.connect({ name: 'vespry-keepalive' });
+      this.keepalivePort.onMessage.addListener((m: unknown) => {
+        if (isStateBroadcast(m)) {
+          this.state = m.state;
+          this.notify();
+        }
+      });
+      this.keepalivePort.onDisconnect.addListener(() => {
+        // Reconnecte après un court délai — Firefox peut couper le port
+        // si l'event page redémarre (mise à jour de l'extension, etc.).
+        // On évite la boucle serrée par un sleep modéré.
+        this.keepalivePort = null;
+        setTimeout(() => this.openKeepalive(), 2000);
+      });
+    } catch {
+      this.keepalivePort = null;
+    }
+  }
+
+  /**
+   * Ferme le port keepalive — appelé par les vues qui ont un cycle de
+   * vie défini (overlay au démontage). Sur popup, on laisse Chrome
+   * faire le GC ; sur content-script l'overlay peut être démonté/remonté
+   * (toggle), et on évite alors d'empiler les ports.
+   */
+  destroy(): void {
+    if (this.keepalivePort) {
+      try { this.keepalivePort.disconnect(); } catch { /* déjà fermé */ }
+      this.keepalivePort = null;
+    }
   }
 
   get ready(): boolean { return this.state.ready; }

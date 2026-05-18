@@ -104,7 +104,11 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .v-bokeh i, .v-backdrop, .v-win, .v-msg, .v-credits, .v-task, .v-mini,
-  .v-wall, .v-ticker-track, .v-chip-spark, .v-confetti i, .v-toast {
+  .v-wall, .v-ticker-track, .v-chip-spark, .v-confetti i, .v-toast,
+  /* Audit a11y (2026-05-18) — l'animation `v-float` du hibou des écrans
+     vides et `v-owl-hop` du logo header n'étaient pas désactivées par
+     le bloc global. Un utilisateur reduce-motion voyait toujours bouger. */
+  .v-empty .v-mark, .v-logo .v-mark {
     animation: none !important;
   }
 }
@@ -159,10 +163,8 @@
   93%   { transform: translateY(-4px) scale(0.98, 1.02); /* stretch up */ }
   96%   { transform: translateY(0) scale(1.04, 0.96); /* squash back */ }
 }
-/* Accessibilité : pas de mouvement si l'utilisateur a `prefers-reduced-motion`. */
-@media (prefers-reduced-motion: reduce) {
-  .v-logo .v-mark { animation: none; }
-}
+/* Le bloc `prefers-reduced-motion` plus haut (l. 105) couvre déjà
+   `.v-logo .v-mark` désormais — pas de doublon ici. */
 .v-sum {
   font-size: 13px; color: var(--muted);
   flex: 1 1 auto; min-width: 30px; overflow: hidden; text-overflow: ellipsis;

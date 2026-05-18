@@ -80,7 +80,7 @@ function inlineMd(s: string): string {
   // Audit B+C (2026-05-18).
   r = r.replace(
     /(https?:\/\/[^\s<]*?)([.,)!?;:]*)(?=\s|$|[<])/g,
-    '<a href="$1" rel="noopener">$1</a>$2',
+    '<a href="$1" rel="noopener noreferrer">$1</a>$2',
   );
   return r;
 }
