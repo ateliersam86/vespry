@@ -89,6 +89,7 @@
   "queue.details_show": "详情 ▾",
   "queue.details_hide": "详情 ▴",
   "queue.resume": "继续",
+  "queue.zipping": "Preparing the archive…",
   "queue.download": "下载 .zip",
   "queue.waiting": "等待中…",
   "status.in_progress": "进行中",

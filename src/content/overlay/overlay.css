@@ -143,7 +143,26 @@
 }
 .v-top > * { white-space: nowrap; flex: none; }
 .v-logo { font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 7px; }
-.v-logo .v-mark { width: 22px; height: 22px; flex: none; }
+.v-logo .v-mark {
+  width: 22px; height: 22px; flex: none;
+  /* Petit saut subtil (1 cycle / 8 s) — donne un signe de vie sans
+     distraire. Délai aléatoire visuellement décorrélé d'éventuelles
+     animations parallèles (le mur des soutiens en a déjà). */
+  animation: v-owl-hop 8s ease-in-out infinite;
+  transform-origin: 50% 80%;
+}
+@keyframes v-owl-hop {
+  /* La majorité du cycle (0-90%) reste au repos. La séquence de saut
+     prend 0,5 s — un petit décollage, un atterrissage léger. */
+  0%, 88%, 100% { transform: translateY(0) scale(1, 1); }
+  90%   { transform: translateY(0) scale(1.04, 0.96); /* squash */ }
+  93%   { transform: translateY(-4px) scale(0.98, 1.02); /* stretch up */ }
+  96%   { transform: translateY(0) scale(1.04, 0.96); /* squash back */ }
+}
+/* Accessibilité : pas de mouvement si l'utilisateur a `prefers-reduced-motion`. */
+@media (prefers-reduced-motion: reduce) {
+  .v-logo .v-mark { animation: none; }
+}
 .v-sum {
   font-size: 13px; color: var(--muted);
   flex: 1 1 auto; min-width: 30px; overflow: hidden; text-overflow: ellipsis;
@@ -517,6 +536,9 @@
 .v-exp { color: var(--muted); cursor: pointer; font: 600 12px var(--font); white-space: nowrap;
   display: flex; align-items: center; gap: 4px; }
 .v-exp:hover { color: var(--text); }
+/* Variante non-cliquable (indicateur d'attente : « préparation de l'archive »). */
+.v-exp--ghost { cursor: default; opacity: 0.8; }
+.v-exp--ghost:hover { color: var(--muted); }
 
 .v-details { border-top: 1px solid var(--border); padding: 10px 12px; display: flex; gap: 12px; }
 .v-stats { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-content: start; }

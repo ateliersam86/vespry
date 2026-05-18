@@ -89,6 +89,7 @@
   "queue.details_show": "Ayrıntılar ▾",
   "queue.details_hide": "Ayrıntılar ▴",
   "queue.resume": "Sürdür",
+  "queue.zipping": "Preparing the archive…",
   "queue.download": ".zip indir",
   "queue.waiting": "bekliyor…",
   "status.in_progress": "ÇALIŞIYOR",

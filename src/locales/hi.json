@@ -89,6 +89,7 @@
   "queue.details_show": "विवरण ▾",
   "queue.details_hide": "विवरण ▴",
   "queue.resume": "फिर से शुरू करें",
+  "queue.zipping": "Preparing the archive…",
   "queue.download": ".zip डाउनलोड करें",
   "queue.waiting": "प्रतीक्षा में…",
   "status.in_progress": "चल रहा है",

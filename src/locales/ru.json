@@ -89,6 +89,7 @@
   "queue.details_show": "Подробнее ▾",
   "queue.details_hide": "Подробнее ▴",
   "queue.resume": "Возобновить",
+  "queue.zipping": "Preparing the archive…",
   "queue.download": "Скачать .zip",
   "queue.waiting": "ожидание…",
   "status.in_progress": "ВЫПОЛНЯЕТСЯ",

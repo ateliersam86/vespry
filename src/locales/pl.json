@@ -89,6 +89,7 @@
   "queue.details_show": "Szczegóły ▾",
   "queue.details_hide": "Szczegóły ▴",
   "queue.resume": "Wznów",
+  "queue.zipping": "Preparing the archive…",
   "queue.download": "Pobierz .zip",
   "queue.waiting": "oczekiwanie…",
   "status.in_progress": "W TOKU",

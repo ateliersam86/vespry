@@ -89,6 +89,7 @@
   "queue.details_show": "Details ▾",
   "queue.details_hide": "Details ▴",
   "queue.resume": "Hervatten",
+  "queue.zipping": "Preparing the archive…",
   "queue.download": ".zip downloaden",
   "queue.waiting": "wachten…",
   "status.in_progress": "BEZIG",

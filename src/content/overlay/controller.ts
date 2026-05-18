@@ -428,9 +428,20 @@ export class VespryController {
     const { incremental, ...rest } = extras;
     const options: ExportOptions = { media, ...rest };
     // Export incrémental : plancher temporel = début du dernier export abouti.
+    // Quand l'utilisateur coche « incrémental » mais n'a jamais exporté ce
+    // serveur, le `sinceMs` reste indéfini et le run est en fait un export
+    // complet — c'était silencieux et trompeur. On garde l'export complet
+    // (c'est le bon comportement), mais on signale clairement dans le log.
+    let incrementalNote: string | null = null;
     if (incremental) {
       const since = await this.lastExportTime(guild.id);
-      if (since !== undefined) options.sinceMs = since;
+      if (since !== undefined) {
+        options.sinceMs = since;
+        const d = new Date(since).toISOString().replace('T', ' ').slice(0, 16);
+        incrementalNote = `↻ Export incrémental — messages postés depuis ${d} UTC.`;
+      } else {
+        incrementalNote = '↻ Incrémental coché mais aucun export précédent pour ce serveur — premier export complet.';
+      }
     }
     // `includeThreads` est désormais respecté aussi pour les DMs : on
     // utilise un chemin séparé (`withDmThreads`) qui découvre les fils
@@ -443,6 +454,8 @@ export class VespryController {
         : await this.withThreads(guild.id, channels);
     }
     const runId = await planGuildExport(this.store, guild, expanded, options);
+    const initialLog: string[] = [];
+    if (incrementalNote) initialLog.push(`${clock()}  ${incrementalNote}`);
     this.queue.push({
       runId,
       guildId: guild.id,
@@ -458,7 +471,7 @@ export class VespryController {
       estimatedMessages: null,
       assetsByKind: { ...ZERO_KINDS },
       reactions: 0,
-      log: [],
+      log: initialLog,
       zip: null,
     });
     this.notify();

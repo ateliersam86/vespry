@@ -89,6 +89,7 @@
   "queue.details_show": "Detalhes ▾",
   "queue.details_hide": "Detalhes ▴",
   "queue.resume": "Retomar",
+  "queue.zipping": "Preparing the archive…",
   "queue.download": "Baixar .zip",
   "queue.waiting": "aguardando…",
   "status.in_progress": "EM ANDAMENTO",

@@ -89,6 +89,7 @@
   "queue.details_show": "Tiedot ▾",
   "queue.details_hide": "Tiedot ▴",
   "queue.resume": "Jatka",
+  "queue.zipping": "Preparing the archive…",
   "queue.download": "Lataa .zip",
   "queue.waiting": "odottaa…",
   "status.in_progress": "KÄYNNISSÄ",

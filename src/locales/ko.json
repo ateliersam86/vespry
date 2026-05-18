@@ -89,6 +89,7 @@
   "queue.details_show": "상세 정보 ▾",
   "queue.details_hide": "상세 정보 ▴",
   "queue.resume": "재개",
+  "queue.zipping": "Preparing the archive…",
   "queue.download": ".zip 다운로드",
   "queue.waiting": "대기 중…",
   "status.in_progress": "진행 중",

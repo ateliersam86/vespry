@@ -2254,6 +2254,15 @@ function TaskCard({
             <IconDownload />{t('queue.download')}
           </span>
         )}
+        {done && !item.zipReady && (
+          /* Audit UX (commit suivant) : entre `status===completed` et
+             le moment où le packager a fini de zipper, l'utilisateur
+             voyait une barre verte 100 % SANS bouton télécharger — il
+             pensait que ça avait planté. On rend l'attente explicite. */
+          <span class="v-exp v-exp--ghost" title={t('queue.zipping')}>
+            ⏳ {t('queue.zipping')}
+          </span>
+        )}
         <span class="v-exp" onClick={onToggle}>
           {expanded ? t('queue.details_hide') : t('queue.details_show')}
         </span>
