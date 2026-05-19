@@ -212,14 +212,14 @@
   "password.strength_weak": "Weak — at least 8 chars",
   "password.strength_medium": "Medium",
   "password.strength_strong": "Strong",
-  "schedule.label": "Schedule a recurring export",
-  "schedule.frequency_none": "Off",
+  "schedule.label": "Automatic backup of this server",
+  "schedule.frequency_none": "No backup",
   "schedule.frequency_daily": "Daily",
   "schedule.frequency_weekly": "Weekly",
   "schedule.choose_server": "Choose a server…",
   "schedule.hour": "{h}:00 UTC",
-  "schedule.save": "Save schedule",
-  "schedule.current": "Active: {guild} · {freq} at {hour}:00 UTC",
+  "schedule.save": "Save backup",
+  "schedule.current": "Active backup: {guild} · {freq} at {hour}:00 UTC",
   "popup.schedule_active": "Active schedule",
   "popup.schedule_next": "Next run",
   "popup.schedule_last": "Last run",
@@ -230,5 +230,6 @@
   "time.ago_seconds": "{n}s ago",
   "time.ago_minutes": "{n} min ago",
   "time.ago_hours": "{n}h ago",
-  "time.ago_days": "{n}d ago"
+  "time.ago_days": "{n}d ago",
+  "schedule.help": "Vespry will silently re-export this server on the chosen schedule — only the new messages since the last successful run, all accessible channels."
 }

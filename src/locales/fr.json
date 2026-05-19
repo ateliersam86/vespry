@@ -212,14 +212,14 @@
   "password.strength_weak": "Faible — au moins 8 caractères",
   "password.strength_medium": "Moyen",
   "password.strength_strong": "Fort",
-  "schedule.label": "Planifier un export récurrent",
-  "schedule.frequency_none": "Désactivé",
+  "schedule.label": "Backup automatique de ce serveur",
+  "schedule.frequency_none": "Pas de backup",
   "schedule.frequency_daily": "Quotidien",
   "schedule.frequency_weekly": "Hebdomadaire",
   "schedule.choose_server": "Choisis un serveur…",
   "schedule.hour": "{h}:00 UTC",
-  "schedule.save": "Enregistrer",
-  "schedule.current": "Actif : {guild} · {freq} à {hour}:00 UTC",
+  "schedule.save": "Enregistrer le backup",
+  "schedule.current": "Backup actif : {guild} · {freq} à {hour}:00 UTC",
   "popup.schedule_active": "Planning actif",
   "popup.schedule_next": "Prochaine exécution",
   "popup.schedule_last": "Dernière exécution",
@@ -230,5 +230,6 @@
   "time.ago_seconds": "il y a {n}s",
   "time.ago_minutes": "il y a {n} min",
   "time.ago_hours": "il y a {n}h",
-  "time.ago_days": "il y a {n}j"
+  "time.ago_days": "il y a {n}j",
+  "schedule.help": "Vespry ré-exportera ce serveur automatiquement à l'horaire choisi — uniquement les nouveaux messages depuis le dernier backup, sur tous les salons accessibles."
 }

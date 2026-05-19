@@ -82,6 +82,14 @@ export function ScheduleSection({ guilds }: Props): preact.JSX.Element {
   return (
     <div class="v-field">
       <label>{t('schedule.label')}</label>
+      {/* Texte d'aide explicite : on lève l'illusion que la planification
+          fige la sélection ad hoc affichée à droite. Sam (2026-05-19) :
+          « si on exporte à chaque fois la même liste de messages que l'on
+          a sélectionnée, c'est complètement bête ». Réalité : le backup
+          ré-exporte TOUT le serveur en incrémental. */}
+      <div class="v-help" style="margin-bottom:8px">
+        {t('schedule.help')}
+      </div>
       <div class="v-mchips">
         {(['none', 'daily', 'weekly'] as const).map((f) => (
           <span
