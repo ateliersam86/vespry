@@ -373,6 +373,29 @@ export function Overlay({
     setManualSel(next);
   }
 
+  /**
+   * Sélectionne ou désélectionne un INTERVALLE de messages — utilisé par
+   * le Shift+clic dans l'aperçu central. Cohérent avec le pattern macOS
+   * Finder / Gmail : si l'ancre est cochée, on COCHE l'intervalle ; si
+   * l'ancre est décochée, on DÉCOCHE l'intervalle. Un seul setState pour
+   * tout le lot — pas N appels au toggle.
+   */
+  function setMessageRange(
+    channelId: string,
+    rangeIds: string[],
+    select: boolean,
+  ): void {
+    const next = new Map(manualSel);
+    const set = new Set(next.get(channelId) ?? []);
+    for (const id of rangeIds) {
+      if (select) set.add(id);
+      else set.delete(id);
+    }
+    if (set.size > 0) next.set(channelId, set);
+    else next.delete(channelId);
+    setManualSel(next);
+  }
+
   /** Zones de sélection actives — dérivées des filtres + sélection manuelle. */
   const zones = useMemo<SelectionZone[]>(() => {
     const z: SelectionZone[] = [];
@@ -730,6 +753,8 @@ export function Overlay({
             zoneMode={zoneMode}
             manualIds={(focus && manualSel.get(focus.id)) || undefined}
             onToggleMessage={(id) => focus && toggleMessage(focus.id, id)}
+            onSelectRange={(ids, select) =>
+              focus && setMessageRange(focus.id, ids, select)}
           />
         </div>
 
@@ -1297,7 +1322,12 @@ function MessageRow({
   highlighted: boolean;
   /** Coché manuellement. */
   checked: boolean;
-  onToggle: () => void;
+  /**
+   * Cliqué. `shiftKey` indique si l'utilisateur a tenu Shift — le parent
+   * (MessagePreview) interprète : toggle simple ou sélection d'intervalle
+   * depuis l'ancre. Cf. feedback Sam (2026-05-19).
+   */
+  onToggle: (shiftKey: boolean) => void;
 }): JSX.Element {
   const m = message;
   const name = m.author.global_name ?? m.author.username;
@@ -1307,7 +1337,13 @@ function MessageRow({
     <div
       class={`v-msg ${grouped ? 'v-msg--grouped' : ''} ${highlighted ? 'v-msg--on' : ''}`}
       style={`animation-delay:${Math.min(index, 18) * 22}ms`}
-      onClick={onToggle}
+      onClick={(e: MouseEvent) => {
+        // Shift+clic au milieu d'un sélection HTML produit aussi un
+        // `e.shiftKey` — on désélectionne d'abord le texte pour ne pas
+        // surligner par accident à la place de cocher.
+        if (e.shiftKey) window.getSelection()?.removeAllRanges();
+        onToggle(e.shiftKey);
+      }}
     >
       <span class={`v-cbx v-msg-cbx ${checked ? 'on' : ''}`}>
         {checked ? <IconCheck /> : null}
@@ -1389,6 +1425,7 @@ function MessagePreview({
   zoneMode,
   manualIds,
   onToggleMessage,
+  onSelectRange,
 }: {
   controller: RemoteController;
   channel: RawChannel | null;
@@ -1396,6 +1433,13 @@ function MessagePreview({
   zoneMode: ZoneMode;
   manualIds: Set<string> | undefined;
   onToggleMessage: (id: string) => void;
+  /**
+   * Sélection en intervalle (Shift+clic) — appelé avec la liste des ids
+   * entre l'ancre et le message cliqué, et un drapeau `select` qui
+   * indique si on coche (true) ou décoche (false) tout le lot. Géré en
+   * un seul setState côté parent.
+   */
+  onSelectRange: (ids: string[], select: boolean) => void;
 }): JSX.Element {
   const [messages, setMessages] = useState<RawMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1404,12 +1448,21 @@ function MessagePreview({
   const listRef = useRef<HTMLDivElement>(null);
   const prependFrom = useRef<number | null>(null);
   const toBottom = useRef(false);
+  /**
+   * Ancre du Shift+clic : id du dernier message coché/décoché par un clic
+   * SIMPLE. Le prochain clic avec Shift sélectionne l'intervalle entre
+   * cette ancre et le message cliqué. Réinitialisée au changement de
+   * salon (sinon l'ancre pointerait vers un message du salon précédent).
+   * Cf. feedback Sam (2026-05-19 — Shift+clic ne fonctionnait pas).
+   */
+  const rangeAnchor = useRef<string | null>(null);
 
   // (re)charge l'aperçu au changement de salon.
   useEffect(() => {
     if (!channel) { setMessages([]); setDone(false); return undefined; }
     let cancelled = false;
     setMessages([]); setDone(false); setLoading(true);
+    rangeAnchor.current = null;
     void controller.preview(channel.id).then((raw) => {
       if (cancelled) return;
       // API : récent → ancien ; affichage : ancien → récent.
@@ -1464,6 +1517,40 @@ function MessagePreview({
     return <div class="v-empty" style="flex:1"><span>{t('preview.empty')}</span></div>;
   }
   const picked = manualIds ?? new Set<string>();
+
+  /**
+   * Handler unifié de clic sur une ligne. Sans Shift = toggle classique
+   * (et l'id devient la nouvelle ancre). Avec Shift = sélection en
+   * intervalle entre l'ancre et le clic — `select=true` si l'ancre était
+   * cochée (on coche tout l'intervalle), `false` sinon (on décoche).
+   *
+   * Si Shift est tenu mais qu'aucune ancre n'existe (premier clic du
+   * salon), on retombe sur un toggle simple — comme macOS Finder. Pas
+   * d'erreur.
+   */
+  function handleClick(msgId: string, shiftKey: boolean): void {
+    if (shiftKey && rangeAnchor.current && rangeAnchor.current !== msgId) {
+      const anchorIdx = messages.findIndex((m) => m.id === rangeAnchor.current);
+      const targetIdx = messages.findIndex((m) => m.id === msgId);
+      if (anchorIdx >= 0 && targetIdx >= 0) {
+        const [from, to] = anchorIdx <= targetIdx
+          ? [anchorIdx, targetIdx]
+          : [targetIdx, anchorIdx];
+        const ids = messages.slice(from, to + 1).map((m) => m.id);
+        // Le mode (coche / décoche) est dicté par l'état de l'ancre :
+        // si l'ancre est cochée → on étend la sélection, sinon → on
+        // étend la désélection. Cohérent avec macOS / Gmail.
+        const select = picked.has(rangeAnchor.current);
+        onSelectRange(ids, select);
+        // L'ancre reste sur le PREMIER clic — c'est elle qui détermine
+        // l'origine de l'intervalle même après un Shift+clic successif.
+        return;
+      }
+    }
+    onToggleMessage(msgId);
+    rangeAnchor.current = msgId;
+  }
+
   return (
     <div
       class="v-msglist"
@@ -1492,7 +1579,7 @@ function MessagePreview({
               && messageMatchesZones(m, zones, channel.id, zoneMode)
             }
             checked={picked.has(m.id)}
-            onToggle={() => onToggleMessage(m.id)}
+            onToggle={(shiftKey) => handleClick(m.id, shiftKey)}
           />
         );
       })}
