@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CheckpointStore } from './checkpoint-store';
-import { ExportRunner, planGuildExport } from './export-runner';
+import {
+  ExportRunner, planGuildExport,
+  type ProgressSnapshot,
+} from './export-runner';
 import type { DiscordApi } from './discord-api';
 import {
   ChannelType,
@@ -450,5 +453,118 @@ describe('messageMatchesZones', () => {
     ];
     // le critère échoue, mais le message est coché → passe quand même
     expect(messageMatchesZones(m, zones, CH, 'all')).toBe(true);
+  });
+});
+
+/**
+ * Tests du pré-comptage avec dichotomie (Sam 2026-05-19) :
+ * - Si `searchMessageCount` retourne < 8000 → estimation directe.
+ * - Si retourne exactement 8000 → on suspecte plafonné, on split via
+ *   `last_message_id` et on relance 2 searches bornées (max_id + min_id).
+ *   Estimation = somme.
+ * - Si pas de last_message_id → on garde 8000 brut (pas de fallback).
+ */
+describe('ExportRunner — pré-comptage avec dichotomie', () => {
+  const CH: RawChannel = { id: 'c1', type: 0, name: 'big' };
+
+  function bigSearchApi(plan: {
+    /** Valeur retournée pour chaque appel séquentiel à searchMessageCount. */
+    sequence: (number | null)[];
+    /** last_message_id retourné par getChannel. Null = pas de last. */
+    lastId: string | null;
+    /** Trace des appels pour assertion. */
+    calls: Array<{ maxId?: string; minId?: string }>;
+  }): DiscordApi {
+    let i = 0;
+    return {
+      getMessages: async () => [],
+      downloadAsset: async () => null,
+      getChannel: async () => ({ id: CH.id, type: CH.type, last_message_id: plan.lastId ?? null }),
+      searchMessageCount: async (_g: string, _c: string, maxId?: string, minId?: string) => {
+        plan.calls.push({
+          ...(maxId !== undefined && { maxId }),
+          ...(minId !== undefined && { minId }),
+        });
+        return plan.sequence[i++] ?? null;
+      },
+      searchDmMessageCount: async (_c: string, maxId?: string, minId?: string) => {
+        plan.calls.push({
+          ...(maxId !== undefined && { maxId }),
+          ...(minId !== undefined && { minId }),
+        });
+        return plan.sequence[i++] ?? null;
+      },
+    } as unknown as DiscordApi;
+  }
+
+  it('valeur < 8000 → estimation directe, pas de split', async () => {
+    const calls: Array<{ maxId?: string; minId?: string }> = [];
+    const api = bigSearchApi({ sequence: [1500], lastId: '9999', calls });
+    const runId = await planGuildExport(store, { id: 'g1', name: 'G' }, [CH], OPTS);
+    const events: ProgressSnapshot[] = [];
+    await new ExportRunner(api, store, { onProgress: (s) => events.push(s) }).run(runId);
+    // Pré-comptage : 1 appel sans max/min. Pas de split.
+    expect(calls.length).toBe(1);
+    expect(events[0]!.estimatedMessagesTotal).toBe(1500);
+  });
+
+  it('valeur = 8000 → dichotomie en 2 searches bornées (somme)', async () => {
+    const calls: Array<{ maxId?: string; minId?: string }> = [];
+    // 8000 (plafonné) → split → 6000 anciens + 5500 récents = 11 500.
+    const api = bigSearchApi({
+      sequence: [8000, 6000, 5500],
+      lastId: '9999999999999',
+      calls,
+    });
+    const runId = await planGuildExport(store, { id: 'g1', name: 'G' }, [CH], OPTS);
+    const events: ProgressSnapshot[] = [];
+    await new ExportRunner(api, store, { onProgress: (s) => events.push(s) }).run(runId);
+    expect(calls.length).toBe(3);
+    expect(calls[0]).toEqual({}); // search global sans bornes
+    expect(calls[1]!.maxId).toBeDefined(); // moitié ancienne
+    expect(calls[2]!.minId).toBeDefined(); // moitié récente
+    expect(events[0]!.estimatedMessagesTotal).toBe(11_500);
+  });
+
+  it('plafonné mais last_message_id null → garde 8000 brut sans split', async () => {
+    const calls: Array<{ maxId?: string; minId?: string }> = [];
+    const api = bigSearchApi({ sequence: [8000], lastId: null, calls });
+    const runId = await planGuildExport(store, { id: 'g1', name: 'G' }, [CH], OPTS);
+    const events: ProgressSnapshot[] = [];
+    await new ExportRunner(api, store, { onProgress: (s) => events.push(s) }).run(runId);
+    expect(calls.length).toBe(1);
+    expect(events[0]!.estimatedMessagesTotal).toBe(8000);
+  });
+});
+
+/**
+ * Rolling adjust (Sam 2026-05-19) : l'estimation initiale peut être
+ * sous-évaluée (salon > 16k = au-delà de la dichotomie 1 niveau). À
+ * mesure que la réalité dépasse, `estimatedMessagesTotal` étire pour
+ * ne pas rester bloqué à 100 %.
+ */
+describe('ExportRunner — rolling adjust de l estimation', () => {
+  it('estimatedTotal s étire si messagesTotal dépasse pendant le run', async () => {
+    const CH: RawChannel = { id: 'c1', type: 0, name: 'huge' };
+    // Estimation initiale 100, on télécharge 150 messages réels en deux
+    // pages (100 + 50, puis fin). Le rolling adjust doit étirer
+    // estimatedTotal pour que la barre n'explose pas au-dessus de 100 %.
+    let call = 0;
+    const pages = [batch(1, 100), batch(101, 50), []];
+    const api = {
+      getMessages: async () => pages[call++] ?? [],
+      downloadAsset: async () => null,
+      getChannel: async () => ({ id: CH.id, type: CH.type, last_message_id: null }),
+      searchMessageCount: async () => 100,
+      searchDmMessageCount: async () => null,
+    } as unknown as DiscordApi;
+    const runId = await planGuildExport(store, { id: 'g1', name: 'G' }, [CH], OPTS);
+    const events: ProgressSnapshot[] = [];
+    await new ExportRunner(api, store, { onProgress: (s) => events.push(s) }).run(runId);
+    const last = events[events.length - 1]!;
+    expect(last.messagesTotal).toBe(150);
+    expect(last.estimatedMessagesTotal).not.toBeNull();
+    // estimatedTotal a été étiré de 100 → ≥ 150 (pas de barre > 100 %).
+    expect(last.estimatedMessagesTotal).toBeGreaterThanOrEqual(150);
   });
 });

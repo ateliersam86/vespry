@@ -188,9 +188,11 @@ export class DiscordApi {
   /**
    * Nombre estimé de messages dans un salon — sert au pré-comptage pour la
    * barre de progression fluide. Discord renvoie `total_results` plafonné
-   * à 8000 (limite de son index Elasticsearch). Au-delà, on a 8000+ ; ce
-   * n'est pas parfait mais ça suffit largement à pondérer correctement
-   * une barre vis-à-vis des autres salons.
+   * à 8000 (limite de son index Elasticsearch).
+   *
+   * `maxId` / `minId` (optionnels) bornent la recherche temporellement —
+   * utilisés par le pré-comptage en dichotomie quand le compte global
+   * est plafonné (cf. `preCount` dans export-runner.ts).
    *
    * Renvoie `null` si l'appel échoue (perms manquantes, salon vide,
    * erreur réseau) — l'appelant retombe sur l'ancien calcul par salons.
@@ -198,10 +200,15 @@ export class DiscordApi {
   async searchMessageCount(
     guildId: Snowflake,
     channelId: Snowflake,
+    maxId?: Snowflake,
+    minId?: Snowflake,
   ): Promise<number | null> {
     try {
+      const params = [`channel_id=${channelId}`, 'limit=1'];
+      if (maxId) params.push(`max_id=${maxId}`);
+      if (minId) params.push(`min_id=${minId}`);
       const res = await this.get<{ total_results?: number }>(
-        `/guilds/${guildId}/messages/search?channel_id=${channelId}&limit=1`,
+        `/guilds/${guildId}/messages/search?${params.join('&')}`,
         true,
       );
       const n = res.total_results;
@@ -216,12 +223,20 @@ export class DiscordApi {
   /**
    * Variante DM : l'API search guild n'existe pas pour les DMs. Discord
    * expose `/channels/{id}/messages/search?limit=1` qui marche aussi pour
-   * les channels DM/group. On essaie d'abord la voie guild, sinon DM.
+   * les channels DM/group. Supporte aussi `max_id`/`min_id` pour la
+   * dichotomie en cas de plafonnement à 8000.
    */
-  async searchDmMessageCount(channelId: Snowflake): Promise<number | null> {
+  async searchDmMessageCount(
+    channelId: Snowflake,
+    maxId?: Snowflake,
+    minId?: Snowflake,
+  ): Promise<number | null> {
     try {
+      const params = ['limit=1'];
+      if (maxId) params.push(`max_id=${maxId}`);
+      if (minId) params.push(`min_id=${minId}`);
       const res = await this.get<{ total_results?: number }>(
-        `/channels/${channelId}/messages/search?limit=1`,
+        `/channels/${channelId}/messages/search?${params.join('&')}`,
         true,
       );
       const n = res.total_results;

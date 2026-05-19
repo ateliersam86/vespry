@@ -55,6 +55,13 @@ export interface RawChannel {
   guild_id?: Snowflake;
   /** Présent sur les DM / group DM. */
   recipients?: RawUser[];
+  /**
+   * Id du dernier message posté dans le salon. Présent sur `GET /channels/{id}`
+   * (mais pas toujours dans `GET /guilds/{id}/channels`). Sert au pré-comptage
+   * en dichotomie côté `ExportRunner.countChannelMessages` pour borner la
+   * recherche temporelle quand `total_results` est plafonné à 8000.
+   */
+  last_message_id?: Snowflake | null;
 }
 
 export interface RawAttachment {

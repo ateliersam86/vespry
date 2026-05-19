@@ -521,6 +521,18 @@ export class ExportRunner {
   ): Promise<ProgressSnapshot> {
     const channels = await this.store.getChannels(runId);
     const run = await this.store.getRun(runId);
+    const messagesTotal = channels.reduce((s, c) => s + c.messageCount, 0);
+    // Rolling adjust de l'estimation : si la réalité dépasse l'estimation
+    // initiale (cas du plafond 8000 par salon dépassé), on étire pour
+    // que la barre ne reste pas bloquée à 100 %. Elle NE redescend
+    // jamais — on plafonne l'estimation à au moins `messagesTotal`.
+    // Cf. feedback Sam (2026-05-19) sur les salons > 8000 messages.
+    if (
+      this.estimatedMessagesTotal !== null
+      && messagesTotal > this.estimatedMessagesTotal
+    ) {
+      this.estimatedMessagesTotal = messagesTotal;
+    }
     return {
       runId,
       status: run?.status ?? 'in_progress',
@@ -529,7 +541,7 @@ export class ExportRunner {
         (c) => c.status === 'done' || c.status === 'partial' || c.status === 'skipped',
       ).length,
       currentChannel,
-      messagesTotal: channels.reduce((s, c) => s + c.messageCount, 0),
+      messagesTotal,
       estimatedMessagesTotal: this.estimatedMessagesTotal,
       assetsDone: this.assetsDone,
       assetsFailed: this.assetsFailed,
@@ -539,7 +551,7 @@ export class ExportRunner {
   }
 
   /**
-   * Lance `searchMessageCount` pour chaque salon pending en parallèle (cap 5
+   * Lance `searchMessageCount` pour chaque salon pending en parallèle (cap 3
    * pour rester sous le rate-limit Discord ~50/min). Stocke le total estimé
    * dans `this.estimatedMessagesTotal`. Quand une estimation échoue pour un
    * salon donné, on l'ignore — l'estimation totale est juste un peu basse,
@@ -554,11 +566,6 @@ export class ExportRunner {
       this.estimatedMessagesTotal = 0;
       return;
     }
-    // Concurrence baissée de 5 → 3 (audit ship-readiness 2026-05-18) :
-    // sur un compte avec 50 salons, 5 workers + retry-after exponentiel
-    // pouvaient déclencher une cascade 429 sur le run lui-même qui suit
-    // immédiatement. 3 workers gardent le pré-comptage rapide (~3-4 s
-    // sur 50 salons) sans saturer l'API search Discord.
     const CONCURRENCY = 3;
     const counts: (number | null)[] = new Array(pending.length).fill(null);
     let cursor = 0;
@@ -574,22 +581,91 @@ export class ExportRunner {
         const i = next();
         if (i === null) return;
         const ch = pending[i];
-        if (!ch) return; // garde-fou : `next()` est cohérent mais TS l'ignore
-        // Type 1 (DM) et 3 (group DM) → endpoint channel/search, sinon guild/search.
-        // L'API guild search exige aussi que le user soit dans le guild, ce qui est
-        // évidemment le cas (on vient d'en récupérer la liste des salons).
-        const n = (isDmGuild || ch.type === 1 || ch.type === 3)
-          ? await this.api.searchDmMessageCount(ch.channelId)
-          : await this.api.searchMessageCount(guildId, ch.channelId);
-        counts[i] = n;
+        if (!ch) return;
+        counts[i] = await this.countChannelMessages(guildId, ch, isDmGuild);
       }
     });
     await Promise.all(workers);
     const total = counts.reduce<number>((s, c) => s + (c ?? 0), 0);
     const anySuccess = counts.some((c) => c !== null);
-    // Si aucune estimation n'a marché → null. Sinon, total même partiel
-    // (les salons sans estimation sont juste comptés à 0, donc la barre
-    // sous-estime un peu mais ne se trompe pas dans l'autre sens).
     this.estimatedMessagesTotal = anySuccess ? total : null;
+  }
+
+  /**
+   * Compte les messages d'un seul salon, avec dichotomie 1 niveau si la
+   * première search plafonne à 8000 (limite ES Discord).
+   *
+   * - 1 search par défaut (< 8000 → on a la valeur exacte).
+   * - Si plafonné, 2 searches supplémentaires bornées par snowflake : moitié
+   *   ancienne (`max_id=mid`) + moitié récente (`min_id=mid`). On somme.
+   *   Résultat : estimation correcte jusqu'à ~16k messages, sous-estimée
+   *   au-delà mais corrigée pendant le run par le rolling adjust de
+   *   `snapshot()` (estimatedTotal ne redescend jamais).
+   * - Si le salon n'a pas de cursor (jamais paginé), on ne peut pas
+   *   borner — on prend l'estimation plafonnée telle quelle.
+   */
+  private async countChannelMessages(
+    guildId: Snowflake,
+    ch: ChannelProgress,
+    isDmGuild: boolean,
+  ): Promise<number | null> {
+    const isDmChannel = isDmGuild || ch.type === 1 || ch.type === 3;
+    const search = (maxId?: Snowflake, minId?: Snowflake): Promise<number | null> =>
+      isDmChannel
+        ? this.api.searchDmMessageCount(ch.channelId, maxId, minId)
+        : this.api.searchMessageCount(guildId, ch.channelId, maxId, minId);
+
+    const initial = await search();
+    if (initial === null) return null;
+    // Seuil 8000 = plafond ES Discord. < 8000 = valeur exacte, on s'arrête.
+    if (initial < SEARCH_CAP_THRESHOLD) return initial;
+
+    // Plafonné : on cherche le `last_message_id` pour fixer la borne haute,
+    // puis on coupe en deux par snowflake midpoint. Si pas de last_msg,
+    // on retombe sur la valeur plafonnée brute.
+    let lastId: Snowflake | null = null;
+    try {
+      const channel = await this.api.getChannel(ch.channelId);
+      lastId = channel.last_message_id ?? null;
+    } catch { /* salon supprimé / permission perdue — fallback */ }
+    if (!lastId) return initial;
+
+    const midId = snowflakeMidpoint(lastId);
+    if (!midId) return initial;
+
+    const [oldHalf, newHalf] = await Promise.all([
+      search(midId), // max_id = mid → moitié ancienne (de 0 à mid)
+      search(undefined, midId), // min_id = mid → moitié récente
+    ]);
+    if (oldHalf === null && newHalf === null) return initial;
+    return (oldHalf ?? 0) + (newHalf ?? 0);
+  }
+}
+
+/**
+ * Au-delà de ce seuil, on considère le `total_results` plafonné par l'index
+ * Elasticsearch de Discord (limite ES ≈ 8000). On déclenche alors une
+ * dichotomie temporelle pour affiner.
+ */
+const SEARCH_CAP_THRESHOLD = 8000;
+
+/**
+ * Snowflake médian entre 0 et `lastId` — temporellement, c'est le moment
+ * "milieu de l'histoire" du salon. Sert à la dichotomie pour estimer un
+ * salon plafonné à 8000.
+ *
+ * Discord snowflake = 64 bits avec timestamp_ms en bits 22..63. Diviser
+ * par 2 le snowflake brut divise par 2 le timestamp depuis l'epoch Discord,
+ * ce qui produit un point qui borne en pratique la moitié temporelle.
+ *
+ * Renvoie null si `lastId` n'est pas un nombre valide.
+ */
+function snowflakeMidpoint(lastId: Snowflake): Snowflake | null {
+  try {
+    const n = BigInt(lastId);
+    if (n <= 0n) return null;
+    return (n / 2n).toString();
+  } catch {
+    return null;
   }
 }
