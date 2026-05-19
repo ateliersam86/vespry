@@ -124,9 +124,23 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 // Recharge l'alarme dès que la UI modifie le planning dans storage.
+// Skip si seul `lastFiredAt` a changé (audit final 2026-05-19 #6,
+// cf. service-worker.ts pour la justification détaillée).
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
-  if (!(SCHEDULE_STORAGE_KEY in changes)) return;
+  const change = changes[SCHEDULE_STORAGE_KEY];
+  if (!change) return;
+  const a = (change.oldValue ?? {}) as Record<string, unknown>;
+  const b = (change.newValue ?? {}) as Record<string, unknown>;
+  if (change.oldValue && change.newValue) {
+    let onlyLastFired = true;
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const k of keys) {
+      if (k === 'lastFiredAt') continue;
+      if (a[k] !== b[k]) { onlyLastFired = false; break; }
+    }
+    if (onlyLastFired) return;
+  }
   void syncScheduledAlarm();
 });
 

@@ -336,7 +336,21 @@ export async function packageRun(
   const profile = opts.profile ?? detectPerfProfile();
 
   const channelSlug = new Map<string, string>();
-  for (const ch of channels) channelSlug.set(ch.channelId, safeName(ch.name));
+  for (const ch of channels) {
+    // Threads (types 10/11/12) et posts de forum (parent_id présent) :
+    // préfixer le nom du fichier par celui du salon parent quand on le
+    // trouve dans le run. Permet à un utilisateur qui décompresse
+    // d'avoir « général.questions-sam.json » au lieu d'un fichier
+    // orphelin « questions-sam.json ». DCE le fait optionnellement,
+    // Vespry l'applique systématiquement.
+    const isThread = ch.type === 10 || ch.type === 11 || ch.type === 12;
+    if (isThread && ch.category) {
+      // category = nom du parent quand on l'a stocké (cf. planGuildExport)
+      channelSlug.set(ch.channelId, safeName(`${ch.category}.${ch.name}`));
+    } else {
+      channelSlug.set(ch.channelId, safeName(ch.name));
+    }
+  }
 
   // Plan des médias : url -> chemin relatif dans le zip.
   const urlToPath = new Map<string, string>();

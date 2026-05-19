@@ -203,3 +203,27 @@ describe('toHtml', () => {
     expect(out).toContain('7 votes');
   });
 });
+
+/**
+ * Audit final 2026-05-19, finding #1 (major) : sans filtrage, un embed
+ * Discord avec `url: "javascript:..."` produisait un <a href="javascript:...">
+ * cliquable dans l'archive HTML — RCE locale en contexte file://.
+ */
+describe('toHtml — securite (XSS protocole)', () => {
+  function embedded(url: string): RawMessage {
+    return msg({ embeds: [{ title: 'click me', url } as any] });
+  }
+  it('neutralise un embed avec url javascript: -> href="#"', () => {
+    const out = toHtml(ctx, [embedded('javascript:alert(1)')]);
+    expect(out).not.toContain('href="javascript:');
+    expect(out).toContain('href="#"');
+  });
+  it('neutralise un embed avec url data: -> href="#"', () => {
+    const out = toHtml(ctx, [embedded('data:text/html,<script>')]);
+    expect(out).not.toContain('href="data:');
+  });
+  it('preserve un embed avec url https:// — pas de faux positif', () => {
+    const out = toHtml(ctx, [embedded('https://example.com/safe')]);
+    expect(out).toContain('href="https://example.com/safe"');
+  });
+});

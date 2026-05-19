@@ -292,6 +292,22 @@ export function toCsv(ctx: ExportContext, messages: RawMessage[]): string {
 
 // ─────────────────────────────── HTML ───────────────────────────────
 
+/**
+ * Filtre une URL avant insertion dans un `href`. Discord embed/button
+ * acceptent un URL arbitraire de l'auteur du message — sans filtrage,
+ * un message hostile peut planter `href="javascript:..."` qui exécute
+ * du JS quand l'utilisateur ouvre l'archive (especialy file://).
+ * Audit final 2026-05-19, finding #1 (major).
+ *
+ * Whitelist stricte : http(s) et mailto. Tout autre protocole → `#`
+ * (le lien reste cliquable visuellement mais n'exécute rien).
+ */
+function safeHref(url: string): string {
+  const u = url.trim();
+  if (/^https?:\/\//i.test(u) || /^mailto:/i.test(u)) return u;
+  return '#';
+}
+
 /** Échappe le texte pour une insertion HTML sûre. */
 function esc(text: string): string {
   return text
@@ -411,7 +427,7 @@ function renderEmbed(
   if (e.title) {
     parts.push(
       e.url
-        ? `<div class="embed-title"><a href="${esc(e.url)}" rel="noopener noreferrer">${esc(e.title)}</a></div>`
+        ? `<div class="embed-title"><a href="${esc(safeHref(e.url))}" rel="noopener noreferrer">${esc(e.title)}</a></div>`
         : `<div class="embed-title">${esc(e.title)}</div>`,
     );
   }
@@ -507,7 +523,7 @@ function renderComponent(c: RawComponent): string {
     // Bouton : style 5 = lien externe → balise <a>, sinon <span> visuel.
     const label = esc((c.emoji?.name ? `${c.emoji.name} ` : '') + (c.label ?? ''));
     if (c.style === 5 && c.url) {
-      return `<a class="comp-btn link" href="${esc(c.url)}" rel="noopener noreferrer">${label}</a>`;
+      return `<a class="comp-btn link" href="${esc(safeHref(c.url))}" rel="noopener noreferrer">${label}</a>`;
     }
     return `<span class="comp-btn${c.disabled ? ' disabled' : ''}">${label || '—'}</span>`;
   }

@@ -29,7 +29,7 @@ analytique, aucun cookie tiers. Le code est public et auditable.
 
 | Donnée | D'où | Où va-t-elle | Pourquoi |
 |---|---|---|---|
-| Jeton de session Discord | Intercepté dans la page Discord ouverte par l'utilisateur | `chrome.storage.local` (locale, chiffrée par le navigateur) | Appeler l'API Discord au nom de l'utilisateur, exactement comme son client Discord. |
+| Jeton de session Discord | Intercepté dans la page Discord ouverte par l'utilisateur | `chrome.storage.local` (locale au profil utilisateur, accessible uniquement par Vespry) | Appeler l'API Discord au nom de l'utilisateur, exactement comme son client Discord. |
 | Messages exportés | API Discord (`GET /channels/{id}/messages`) | IndexedDB local, puis fichier `.zip` téléchargé | Reprise après crash + export final. |
 | Médias (images, vidéos, audio, fichiers) | CDN Discord | IndexedDB local, puis dossiers dans le `.zip` | Inclure les médias dans l'archive. |
 | Préférences utilisateur (thème, mode Avancé, templates de noms, planning, opt-in télémétrie) | Interactions utilisateur | `chrome.storage.local` | Persistance entre sessions. |

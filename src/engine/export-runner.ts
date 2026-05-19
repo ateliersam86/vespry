@@ -155,12 +155,21 @@ export async function planGuildExport(
     updatedAt: now,
   };
   await store.putRun(run);
+  // Map id → nom pour résoudre le parent d'un thread (types 10/11/12).
+  // Permet au packager de préfixer le slug d'un thread par son parent
+  // (Sam 2026-05-19 : threads séparés en fichiers, nommage clair).
+  const nameById = new Map<string, string>();
+  for (const ch of channels) nameById.set(ch.id, ch.name ?? ch.id);
   for (const ch of channels) {
+    const isThread = ch.type === 10 || ch.type === 11 || ch.type === 12;
+    const parentName = (isThread && ch.parent_id)
+      ? nameById.get(ch.parent_id) ?? null
+      : null;
     const progress: ChannelProgress = {
       runId,
       channelId: ch.id,
       name: ch.name ?? ch.id,
-      category: null,
+      category: parentName,
       type: ch.type,
       status: 'pending',
       cursor: null,

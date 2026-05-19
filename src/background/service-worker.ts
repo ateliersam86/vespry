@@ -81,11 +81,33 @@ async function syncScheduledAlarm(): Promise<void> {
 }
 
 // Recharge l'alarme dès que la UI modifie le planning dans storage.
+// MAIS : on écrit nous-même `lastFiredAt` dans cette clé après chaque
+// tir d'alarme, ce qui déclencherait un clear+create cascade inutile
+// (audit final 2026-05-19, finding #6). On compare les champs « UI » et
+// on skip le resync si seul `lastFiredAt` a bougé.
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
-  if (!(SCHEDULE_STORAGE_KEY in changes)) return;
+  const change = changes[SCHEDULE_STORAGE_KEY];
+  if (!change) return;
+  if (isLastFiredAtOnlyChange(change.oldValue, change.newValue)) return;
   void syncScheduledAlarm();
 });
+
+/**
+ * Vrai si la seule différence entre l'ancien et le nouveau planning est
+ * le champ `lastFiredAt`. Évite la cascade d'alarme à chaque tir.
+ */
+function isLastFiredAtOnlyChange(oldVal: unknown, newVal: unknown): boolean {
+  if (!oldVal || !newVal) return false;
+  const a = oldVal as Record<string, unknown>;
+  const b = newVal as Record<string, unknown>;
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    if (k === 'lastFiredAt') continue;
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
+}
 
 // Réveil sur l'alarme planifiée : pousse une commande à l'offscreen pour
 // qu'il enqueue un export incrémental du guild ciblé.
