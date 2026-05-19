@@ -219,5 +219,16 @@
   "schedule.choose_server": "Choisis un serveur…",
   "schedule.hour": "{h}:00 UTC",
   "schedule.save": "Enregistrer",
-  "schedule.current": "Actif : {guild} · {freq} à {hour}:00 UTC"
+  "schedule.current": "Actif : {guild} · {freq} à {hour}:00 UTC",
+  "popup.schedule_active": "Planning actif",
+  "popup.schedule_next": "Prochaine exécution",
+  "popup.schedule_last": "Dernière exécution",
+  "time.in_seconds": "dans {n}s",
+  "time.in_minutes": "dans {n} min",
+  "time.in_hours": "dans {n}h",
+  "time.in_days": "dans {n}j",
+  "time.ago_seconds": "il y a {n}s",
+  "time.ago_minutes": "il y a {n} min",
+  "time.ago_hours": "il y a {n}h",
+  "time.ago_days": "il y a {n}j"
 }

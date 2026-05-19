@@ -106,7 +106,13 @@ async function onScheduledAlarmFire(): Promise<void> {
     guildId: schedule.guildId,
     guildName: schedule.guildName,
   });
-  if (!result.ok) {
+  if (result.ok) {
+    // Trace de la dernière exécution réussie — lue par le popup pour
+    // afficher « Dernière exécution : il y a X » sans pinger l'offscreen.
+    await chrome.storage.local.set({
+      'vespry.scheduled': { ...schedule, lastFiredAt: Date.now() },
+    });
+  } else {
     // Échec non bloquant : la prochaine occurrence (24h / 7j) retentera.
     // Une notification informe l'utilisateur — il peut avoir besoin de se
     // reconnecter à Discord.
@@ -167,7 +173,11 @@ function updateBadge(state: VespryState): void {
   const running = state.queue.find((q) => q.status === 'in_progress');
   if (running) {
     const pct = progressPct(running);
-    void chrome.action.setBadgeBackgroundColor({ color: '#5865f2' });
+    // Un run planifié (chrome.alarms) porte une teinte différente —
+    // vert ambre vs violet du run manuel — pour que l'utilisateur voie
+    // d'un coup d'œil que Vespry s'est réveillé tout seul.
+    const color = running.triggeredBy === 'schedule' ? '#d6a85a' : '#5865f2';
+    void chrome.action.setBadgeBackgroundColor({ color });
     void chrome.action.setBadgeText({ text: `${pct}%` });
     return;
   }

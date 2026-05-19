@@ -150,7 +150,12 @@ async function onScheduledAlarmFire(): Promise<void> {
     guildId: schedule.guildId,
     guildName: schedule.guildName,
   });
-  if (!result.ok) {
+  if (result.ok) {
+    // Trace de la dernière exécution réussie (lue par le popup).
+    await chrome.storage.local.set({
+      'vespry.scheduled': { ...schedule, lastFiredAt: Date.now() },
+    });
+  } else {
     // Échec non bloquant : la prochaine occurrence (24 h / 7 j) retentera.
     notify(
       'Export planifié — impossible',
@@ -239,6 +244,7 @@ async function exec(command: VespryCommand): Promise<CommandResponse> {
           partitionSize: 0,
           formats: [...DEFAULT_FORMATS],
         },
+        'schedule', // origine planifiée → badge icône 🕒
       );
       return { ok: true, state: controller.toState() };
     }
@@ -278,7 +284,9 @@ function updateBadge(state: VespryState): void {
   const running = state.queue.find((q) => q.status === 'in_progress');
   if (running) {
     const pct = progressPct(running);
-    void chrome.action.setBadgeBackgroundColor({ color: '#5865f2' });
+    // Run planifié vs manuel — teinte distincte (cf. service-worker.ts).
+    const color = running.triggeredBy === 'schedule' ? '#d6a85a' : '#5865f2';
+    void chrome.action.setBadgeBackgroundColor({ color });
     void chrome.action.setBadgeText({ text: `${pct}%` });
     return;
   }

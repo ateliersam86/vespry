@@ -62,3 +62,25 @@
   border-top: 1px solid var(--v-border);
   padding-top: 10px;
 }
+
+/* Carte « Planning actif » — montre serveur + prochaine + dernière
+   exécution. Discrète, sous les tâches en cours. Lecture seule. */
+.popup__schedule {
+  background: var(--v-bg-alt);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius);
+  padding: 9px 11px;
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 12px;
+}
+.popup__schedule-hd {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-weight: 600;
+}
+.popup__schedule-guild {
+  font-weight: 700;
+}
+.popup__schedule-row {
+  display: flex; justify-content: space-between;
+  font-size: 11.5px;
+}

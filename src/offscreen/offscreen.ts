@@ -106,6 +106,7 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
           partitionSize: 0,
           formats: [...DEFAULT_FORMATS],
         },
+        'schedule', // origine planifiée → badge icône 🕒
       );
       return { ok: true, state: controller.toState() };
     }

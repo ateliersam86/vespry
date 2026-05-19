@@ -47,12 +47,23 @@ export interface ScheduledExport {
   frequency: ScheduleFrequency;
   /** Heure UTC, 0..23. */
   hourUtc: number;
+  /**
+   * Date (`Date.now()`-compatible) du dernier déclenchement effectif —
+   * mis à jour par `service-worker.ts` / `firefox/background.ts` après
+   * que `scheduled-export-fire` ait réussi à enqueuer un export. Sert
+   * au popup pour afficher « Dernière exécution : il y a 3 h ».
+   * Absent si jamais déclenché ; non requis (corruption-safe).
+   */
+  lastFiredAt?: number;
 }
 
 /** Valide la forme d'un payload lu depuis storage (corruption-safe). */
 export function isScheduledExport(v: unknown): v is ScheduledExport {
   if (!v || typeof v !== 'object') return false;
   const o = v as Record<string, unknown>;
+  // `lastFiredAt` est optionnel : on accepte absent ou number positif.
+  const lastOk = o.lastFiredAt === undefined
+    || (typeof o.lastFiredAt === 'number' && o.lastFiredAt > 0);
   return (
     typeof o.guildId === 'string'
     && o.guildId.length > 0
@@ -62,6 +73,7 @@ export function isScheduledExport(v: unknown): v is ScheduledExport {
     && Number.isInteger(o.hourUtc)
     && o.hourUtc >= 0
     && o.hourUtc <= 23
+    && lastOk
   );
 }
 

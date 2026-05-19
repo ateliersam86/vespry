@@ -44,6 +44,8 @@ export interface QueueItem {
   guildId: string;
   guildName: string;
   status: RunStatus;
+  /** Cf. `QueueItemView.triggeredBy`. */
+  triggeredBy: 'user' | 'schedule';
   channelsTotal: number;
   channelsDone: number;
   messages: number;
@@ -418,12 +420,22 @@ export class VespryController {
     return prev?.createdAt;
   }
 
-  /** Ajoute une tâche d'export à la file et lance le traitement. */
+  /**
+   * Ajoute une tâche d'export à la file et lance le traitement.
+   *
+   * `triggeredBy` indique l'origine du run :
+   *   - `'user'` (défaut) : clic « Lancer l'exportation » dans l'overlay.
+   *   - `'schedule'` : déclenché par `chrome.alarms` (Phase 3, daily/weekly).
+   *
+   * Propagé jusqu'à la `QueueItemView` puis au badge icône pour distinguer
+   * visuellement les deux cas. Cf. feedback Sam (2026-05-19).
+   */
   async enqueue(
     guild: RawGuild,
     channels: RawChannel[],
     media: MediaSelection,
     extras: EnqueueExtras,
+    triggeredBy: 'user' | 'schedule' = 'user',
   ): Promise<void> {
     const { incremental, ...rest } = extras;
     const options: ExportOptions = { media, ...rest };
@@ -461,6 +473,7 @@ export class VespryController {
       guildId: guild.id,
       guildName: guild.name,
       status: 'in_progress',
+      triggeredBy,
       channelsTotal: expanded.length,
       channelsDone: 0,
       messages: 0,
@@ -693,6 +706,7 @@ export class VespryController {
         runId: q.runId,
         guildName: q.guildName,
         status: q.status,
+        triggeredBy: q.triggeredBy,
         channelsTotal: q.channelsTotal,
         channelsDone: q.channelsDone,
         messages: q.messages,
@@ -798,6 +812,11 @@ export class VespryController {
       guildId,
       guildName,
       status,
+      // L'info `triggeredBy` n'est pas persistée dans le checkpoint —
+      // un run repris au démarrage suivant est traité comme `'user'` par
+      // défaut. Acceptable : un run planifié qui crashe a peu de chances
+      // d'être repris depuis le popup, c'est juste pour le badge.
+      triggeredBy: 'user',
       channelsTotal: channels.length,
       channelsDone: channels.filter((c) => c.status === 'done' || c.status === 'partial').length,
       messages: channels.reduce((s, c) => s + c.messageCount, 0),

@@ -69,6 +69,14 @@ export interface QueueItemView {
   runId: string;
   guildName: string;
   status: string;
+  /**
+   * Origine du run — `'user'` quand l'utilisateur a cliqué « Lancer
+   * l'exportation », `'schedule'` quand `chrome.alarms` a tiré une
+   * planification. Sert au badge icône (🕒 + % vs juste %) et aux
+   * notifications de fin pour distinguer les deux cas. Cf. Sam
+   * (2026-05-19) : « quand une exportation liée à une planification
+   * est en cours, voir une petite icône sur l'appli ». */
+  triggeredBy: 'user' | 'schedule';
   channelsTotal: number;
   channelsDone: number;
   messages: number;

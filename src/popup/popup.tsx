@@ -11,6 +11,10 @@ import { progressPct } from '../messaging';
 import { t } from '../ui/i18n';
 import { getVersion } from '../version';
 import { getThemePref, resolveTheme } from '../ui/theme-pref';
+import {
+  computeNextFireTime, loadSchedule,
+  type ScheduledExport,
+} from '../engine/scheduler';
 import '../ui/theme.css';
 import './popup.css';
 
@@ -29,6 +33,13 @@ function Popup(): JSX.Element {
   const [, force] = useReducer((n: number) => n + 1, 0);
   const [loaded, setLoaded] = useState(false);
   const [discordOpen, setDiscordOpen] = useState(false);
+  /**
+   * Planning d'export récurrent (Phase 3) — affiché dans le popup pour
+   * que l'utilisateur voie d'un coup d'œil la prochaine exécution sans
+   * devoir ouvrir Discord. `null` = aucun planning actif. Sam (2026-05-19) :
+   * « on devrait pouvoir voir la première et la prochaine exécution ».
+   */
+  const [schedule, setSchedule] = useState<ScheduledExport | null>(null);
 
   useEffect(() => {
     const off = controller.subscribe(force as () => void);
@@ -37,7 +48,23 @@ function Popup(): JSX.Element {
     void chrome.tabs
       .query({ url: ['https://discord.com/*', 'https://*.discord.com/*'] })
       .then((tabs) => setDiscordOpen(tabs.length > 0));
-    return off;
+    // Lecture initiale du planning + rafraîchissement à chaque modif
+    // storage (l'utilisateur peut le modifier depuis l'overlay pendant
+    // que le popup est ouvert ; cas rare mais propre).
+    void loadSchedule(chrome.storage.local).then(setSchedule);
+    const listener = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      area: string,
+    ): void => {
+      if (area === 'local' && 'vespry.scheduled' in changes) {
+        void loadSchedule(chrome.storage.local).then(setSchedule);
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => {
+      off();
+      chrome.storage.onChanged.removeListener(listener);
+    };
   }, []);
 
   const noSession = controller.error === 'no-token';
@@ -96,6 +123,8 @@ function Popup(): JSX.Element {
         </p>
       )}
 
+      {schedule && <ScheduleCard schedule={schedule} />}
+
       <button
         class={`v-btn ${discordOpen ? 'v-btn--ghost' : ''}`}
         onClick={openDiscord}
@@ -108,6 +137,66 @@ function Popup(): JSX.Element {
       </footer>
     </div>
   );
+}
+
+/**
+ * Carte « Planning actif » dans le popup — montre serveur, fréquence,
+ * prochaine occurrence et dernière exécution (si déjà tirée). Sam
+ * (2026-05-19) : « on devrait pouvoir voir la première et la prochaine
+ * exécution ». Lecture seule — pour modifier, l'utilisateur ouvre Discord
+ * → mode Avancé → section Planification.
+ */
+function ScheduleCard({ schedule }: { schedule: ScheduledExport }): JSX.Element {
+  const now = Date.now();
+  const next = computeNextFireTime(schedule, now);
+  const freq = schedule.frequency === 'daily'
+    ? t('schedule.frequency_daily')
+    : t('schedule.frequency_weekly');
+  return (
+    <div class="popup__schedule">
+      <div class="popup__schedule-hd">
+        <span>🕒 {t('popup.schedule_active')}</span>
+        <span class="v-muted">{freq}</span>
+      </div>
+      <div class="popup__schedule-guild">{schedule.guildName}</div>
+      <div class="popup__schedule-row v-muted">
+        <span>{t('popup.schedule_next')}</span>
+        <span title={new Date(next).toUTCString()}>{formatRelativeFuture(next, now)}</span>
+      </div>
+      {schedule.lastFiredAt && (
+        <div class="popup__schedule-row v-muted">
+          <span>{t('popup.schedule_last')}</span>
+          <span title={new Date(schedule.lastFiredAt).toUTCString()}>
+            {formatRelativePast(schedule.lastFiredAt, now)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** « dans 3 h », « dans 2 j » — résolution adaptée à l'échelle. */
+function formatRelativeFuture(target: number, now: number): string {
+  const sec = Math.max(0, Math.round((target - now) / 1000));
+  if (sec < 60) return t('time.in_seconds', { n: sec });
+  const min = Math.round(sec / 60);
+  if (min < 60) return t('time.in_minutes', { n: min });
+  const h = Math.round(min / 60);
+  if (h < 48) return t('time.in_hours', { n: h });
+  const d = Math.round(h / 24);
+  return t('time.in_days', { n: d });
+}
+
+/** « il y a 3 h », « il y a 2 j » — symétrique de formatRelativeFuture. */
+function formatRelativePast(target: number, now: number): string {
+  const sec = Math.max(0, Math.round((now - target) / 1000));
+  if (sec < 60) return t('time.ago_seconds', { n: sec });
+  const min = Math.round(sec / 60);
+  if (min < 60) return t('time.ago_minutes', { n: min });
+  const h = Math.round(min / 60);
+  if (h < 48) return t('time.ago_hours', { n: h });
+  const d = Math.round(h / 24);
+  return t('time.ago_days', { n: d });
 }
 
 const root = document.getElementById('app');
