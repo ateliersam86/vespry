@@ -50,5 +50,9 @@
     "vite": "^6.0.7",
     "vitest": "^3.0.2",
     "web-ext": "^10.1.0"
+  },
+  "_overrides_note": "Force rollup >= 2.80.0 sur tous les paths transitifs (audit /cso 2026-05-19, finding #2 MEDIUM). @crxjs/vite-plugin et @preact/preset-vite tiraient rollup 2.79.2 qui a un CVE path-traversal au build. Build-time only, on patche pour avoir un audit clean.",
+  "overrides": {
+    "rollup@<2.80.0": "^2.80.0"
   }
 }
