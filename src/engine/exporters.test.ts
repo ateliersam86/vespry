@@ -227,3 +227,110 @@ describe('toHtml — securite (XSS protocole)', () => {
     expect(out).toContain('href="https://example.com/safe"');
   });
 });
+
+/**
+ * Tests des features livrées en session 2026-05-19 (audit finding #4) :
+ * avatars réels téléchargés, emojis custom rendus en image, mentions
+ * pill colorée, bot tag, vidéo/audio inline.
+ */
+describe('toHtml — features 2026-05-19', () => {
+  // urlToPath qui simule les médias téléchargés dans le zip.
+  const ctxWithAvatar: ExportContext = {
+    ...ctx,
+    urlToPath: new Map([
+      ['https://cdn.discordapp.com/avatars/u1/abc123.png', 'avatars/u1.png'],
+      ['https://cdn.discordapp.com/emojis/999.png', 'emojis/999.png'],
+    ]),
+  };
+
+  it('avatar réel — utilise l\'image locale si urlToPath contient le CDN', () => {
+    const out = toHtml(ctxWithAvatar, [msg({
+      author: { id: 'u1', username: 'sora', global_name: 'Sora', avatar: 'abc123' } as any,
+    })]);
+    expect(out).toContain('class="av av-img"');
+    expect(out).toContain('../avatars/u1.png');
+  });
+
+  it('avatar fallback — pastille HSL si pas d\'avatar custom', () => {
+    const out = toHtml(ctx, [msg({
+      author: { id: 'u1', username: 'sora' } as any,
+    })]);
+    expect(out).toContain('background:hsl');
+    expect(out).not.toContain('class="av av-img"');
+  });
+
+  it('emoji custom — rendu en <img> si téléchargé', () => {
+    const out = toHtml(ctxWithAvatar, [msg({ content: 'Salut <:hibou:999> !' })]);
+    expect(out).toContain('class="emoji"');
+    expect(out).toContain('../emojis/999.png');
+    expect(out).toContain('alt=":hibou:"');
+  });
+
+  it('emoji custom — fallback texte :nom: si pas téléchargé', () => {
+    const out = toHtml(ctx, [msg({ content: 'Salut <:absent:42> !' })]);
+    expect(out).toContain(':absent:');
+    expect(out).not.toContain('<img class="emoji"');
+  });
+
+  it('mention user — span.mention avec data-user-id', () => {
+    const out = toHtml(ctx, [msg({
+      content: 'salut <@42> !',
+      mentions: [{ id: '42', username: 'sora', global_name: 'Sora' }] as any,
+    })]);
+    expect(out).toContain('class="mention mention--user"');
+    expect(out).toContain('data-user-id="42"');
+    expect(out).toContain('@Sora');
+  });
+
+  it('mention role — span.mention--role avec data-role-id', () => {
+    const out = toHtml(ctx, [msg({ content: 'cc <@&77>' })]);
+    expect(out).toContain('class="mention mention--role"');
+    expect(out).toContain('data-role-id="77"');
+  });
+
+  it('mention channel — span.mention--channel avec data-channel-id', () => {
+    const out = toHtml(ctx, [msg({ content: 'rejoignez <#88>' })]);
+    expect(out).toContain('class="mention mention--channel"');
+    expect(out).toContain('data-channel-id="88"');
+  });
+
+  it('bot tag — badge BOT à côté du nom si author.bot=true', () => {
+    const out = toHtml(ctx, [msg({
+      author: { id: 'b1', username: 'helper', bot: true } as any,
+    })]);
+    expect(out).toContain('class="bot-tag"');
+    expect(out).toContain('BOT');
+  });
+
+  it('pas de bot tag pour un utilisateur normal', () => {
+    const out = toHtml(ctx, [msg({
+      author: { id: 'u1', username: 'sam' } as any,
+    })]);
+    expect(out).not.toContain('class="bot-tag"');
+  });
+
+  it('vidéo — rendue en <video controls preload=none>', () => {
+    const out = toHtml(ctx, [msg({
+      attachments: [{
+        id: 'a', filename: 'demo.mp4', size: 1000,
+        url: 'https://cdn/v.mp4', proxy_url: '', content_type: 'video/mp4',
+      }] as any,
+    })]);
+    expect(out).toContain('<video class="att-video"');
+    expect(out).toContain('controls');
+    expect(out).toContain('preload="none"');
+    expect(out).toContain('type="video/mp4"');
+  });
+
+  it('audio — rendu en <audio controls preload=none>', () => {
+    const out = toHtml(ctx, [msg({
+      attachments: [{
+        id: 'a', filename: 'demo.mp3', size: 1000,
+        url: 'https://cdn/a.mp3', proxy_url: '', content_type: 'audio/mpeg',
+      }] as any,
+    })]);
+    expect(out).toContain('<audio class="att-audio"');
+    expect(out).toContain('controls');
+    expect(out).toContain('type="audio/mpeg"');
+  });
+});

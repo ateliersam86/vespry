@@ -8,6 +8,138 @@ l'overlay et le popup vient de `package.json`.
 Première version fonctionnelle prête pour soumission Chrome Web Store,
 Microsoft Edge Add-ons et Mozilla AMO.
 
+### Session 2026-05-19 — features Discord HTML + UX planification + sécurité
+
+**Rendu HTML enrichi (parité DCE/Discrub)** :
+
+- Avatars utilisateurs téléchargés et intégrés en image (au lieu de la
+  pastille HSL). `urlToPath` résolvait déjà les URL ; juste à brancher
+  côté `avatarChip()`.
+- Emojis custom Discord (`<:nom:id>`, `<a:nom:id>`) rendus en `<img>`
+  depuis `cdn.discordapp.com/emojis/{id}.{ext}` quand téléchargés
+  (sinon `:nom:` texte en fallback).
+- Vidéo / audio en lecteur natif (`<video controls preload=none>` /
+  `<audio controls>`) au lieu d'un lien-chip. `preload=none` évite la
+  saturation navigateur sur archives multi-médias.
+- Mentions Discord en pilule colorée avec `data-user-id` / `data-role-id` /
+  `data-channel-id` (couleurs séparées user / rôle / salon).
+- Bot tag (badge bleu « BOT ») à côté du nom d'auteur quand
+  `author.bot === true`.
+- @media print : thème clair forcé, URL des liens imprimées, pas de
+  coupure de message entre pages.
+- `safeHref()` whitelist http(s) / mailto sur tous les `href` issus
+  d'embeds Discord — sécurité XSS contre `javascript:` URL.
+- Regex auto-lien markdown ne capture plus la ponctuation finale.
+
+**Bouton CTA & UX export** :
+
+- Libellé dynamique : « Lancer l'exportation » par défaut, « + Ajouter
+  à la file » quand un export tourne déjà (plus de mention trompeuse
+  d'une file inexistante).
+- Shift+clic sur les messages dans l'aperçu central → sélection en
+  intervalle (façon Finder / Gmail).
+- Modale d'avertissement « gros export » basée sur l'estimation
+  **messages** (et non plus salons) — seuil 10 000 messages estimés.
+  Pré-flight `~1-3 s` au clic via `controller.estimate()`.
+- Format défaut HTML seul (au lieu de JSON + HTML cochés ensemble).
+- Section PasswordSection corrigée (CSS manquant) : bouton œil intégré
+  au champ, badge « 🔒 Chiffrement activé » dès qu'un mot de passe est
+  tapé, jauge de force visible.
+- Marges du panneau Vespry resserrées (86vw sur grand écran au lieu de
+  70vw).
+- Animation subtile du logo hibou (saut toutes les 8 s, désactivé sous
+  `prefers-reduced-motion`).
+- Crédit éditeur dans le footer : « © {année} L'Atelier de Sam — fait
+  avec passion par Samuel Muselet », année dynamique.
+- Modale d'avertissement ToS Discord au premier export (lien officiel,
+  rappel d'usage privé, opt-out « ne plus afficher »).
+
+**Progression d'export** :
+
+- Pré-comptage des messages via API search Discord au démarrage du run
+  pour pondérer la barre par messages réels. Fin du « saut à 80 % puis
+  blocage ».
+- Dichotomie 1 niveau (snowflake midpoint) sur les salons plafonnés à
+  8000 messages, pour estimer jusqu'à ~16 000 précisément.
+- Rolling adjust pendant le run : si la réalité dépasse l'estimation
+  initiale, on étire — jamais de barre bloquée à 100 %.
+- Concurrence pré-comptage baissée à 3 workers parallèles (cascade
+  429 évitée).
+- Helper `progressPct` partagé entre overlay, popup, badge icône,
+  bouton lanceur.
+
+**Système de planification d'export récurrent** :
+
+- Renommé « Backup automatique du serveur » avec texte d'aide explicite
+  (incrémental + tous salons accessibles).
+- Carte « Planning actif » dans le popup : serveur, fréquence,
+  prochaine occurrence, dernière exécution réussie.
+- Badge icône teinté ambre quand l'export en cours vient d'un déclenchement
+  planifié (vs bleu pour manuel).
+- Fix race condition : `lastFiredAt` mis à jour dans storage sans
+  re-déclencher `syncScheduledAlarm`.
+- Fix bug Firefox : `chrome.alarms` câblé dans l'event page (avant ce
+  fix, la planification ne se déclenchait jamais sur Firefox).
+
+**Historique des exports** :
+
+- Section « Exports récents » dans le popup (10 derniers runs lus
+  depuis IDB). Statut coloré (completed / partial / failed / paused).
+- Bouton suppression irréversible par entrée.
+- Estimations + métadonnées exposées via commandes `list-runs` et
+  `delete-run`.
+
+**Threads et noms de fichiers** :
+
+- Threads (types 10/11/12) préfixés par le nom du salon parent dans
+  le nom du fichier d'export (`général.questions-sam.json` au lieu de
+  `questions-sam.json`).
+
+**JSON agent-ready** :
+
+- Enveloppe enrichie : `$schema`, `vespryVersion`, `exportedAt`,
+  `guild{id,name}`, `channel{id,name,type,typeName}` (enum lisible),
+  `messages[].typeName`.
+- Champs Discord snake_case originaux préservés (forward-compat).
+- Identique entre chemins bulk et streaming.
+
+**CSV / TXT** :
+
+- CSV : BOM UTF-8 (compatibilité Excel Windows) + colonnes
+  `ChannelID,Channel,ChannelType` en tête.
+- TXT : typage des attachments (`[image:...]`, `[video:...]`,
+  `[audio:...]`, `[file:...]`).
+
+**Sécurité, privacy, légal** :
+
+- Whitelist protocole sur `<a href>` (XSS major fixé).
+- PRIVACY.md reformulé : 6 sorties réseau au lieu de 3 documentées,
+  ajout sections « GitHub Raw / Worker Cloudflare / API GitHub ».
+  Formulation token Discord rectifiée (« accessible uniquement par
+  Vespry », pas « chiffré par le navigateur »).
+- `host_permissions` Firefox élargies aux 3 endpoints auxiliaires.
+- LICENSE : copyright à jour.
+- `package.json` : `author`, `homepage`, `repository`, `bugs`.
+- `vellum-0.1.0.zip` (artefact pré-rebrand) supprimé du repo.
+- `*.zip` ajouté au `.gitignore`.
+
+**Popup** :
+
+- Bannière update : `checkForUpdate()` câblé, propose une release plus
+  récente quand `api.github.com/.../releases/latest` en a une.
+
+**Robustesse Firefox** :
+
+- Port `vespry-keepalive` réellement câblé côté `RemoteController`
+  (auparavant déclaré dans le background sans jamais être ouvert
+  côté UI — l'event page Firefox pouvait s'endormir mid-export).
+
+**Tests** :
+
+- 173 tests verts (était 142 en début de session, +31 tests). Couverture
+  progressPct, buildJsonEnvelope, dichotomie estimation, rolling adjust,
+  XSS protocole, avatars/emojis/mentions/bot tag/vidéo/audio rendus HTML.
+
 ### Polish UX (2026-05-18)
 
 - **Bouton CTA** : « Lancer l'exportation » par défaut, devient « + Ajouter

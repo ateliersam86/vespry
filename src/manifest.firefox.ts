@@ -112,6 +112,13 @@ export default defineManifest({
     'https://*.discord.com/*',
     'https://cdn.discordapp.com/*',
     'https://media.discordapp.net/*',
+    // Sorties auxiliaires (cf. PRIVACY.md §4-6) — Firefox MV3 (≥124)
+    // peut exiger ces déclarations sinon les requêtes échouent
+    // silencieusement. Documenté côté politique de confidentialité.
+    // Audit final 2026-05-19 #9.
+    'https://api.github.com/repos/ateliersam86/vespry/*',
+    'https://raw.githubusercontent.com/ateliersam86/vespry/*',
+    'https://vespry-donors.sam-muselet.workers.dev/*',
   ],
 
   icons: {
