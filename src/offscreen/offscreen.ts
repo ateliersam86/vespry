@@ -47,6 +47,11 @@ async function handle(command: VespryCommand): Promise<CommandResponse> {
           command.channelIds,
         ),
       };
+    case 'list-runs':
+      return { ok: true, runs: await controller.listRuns() };
+    case 'delete-run':
+      await controller.deleteRun(command.runId);
+      return { ok: true };
     case 'enqueue': {
       const extras: EnqueueExtras = {
         includeThreads: command.includeThreads,

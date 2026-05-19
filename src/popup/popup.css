@@ -80,6 +80,41 @@
 }
 .popup__update:hover { transform: translateY(-1px); }
 
+/* Section historique des exports — liste discrète sous le planning.
+   Lecture seule + bouton suppression par entrée. */
+.popup__history {
+  background: var(--v-bg-alt);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius);
+  padding: 9px 11px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.popup__history-hd {
+  font-size: 12px; font-weight: 600;
+  margin-bottom: 2px;
+}
+.popup__history-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 3px 0;
+  border-top: 1px solid var(--v-border);
+}
+.popup__history-row:first-of-type { border-top: 0; }
+.popup__history-main { flex: 1; min-width: 0; }
+.popup__history-guild {
+  font-size: 12.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.popup__history-status--completed { color: #23a55a; }
+.popup__history-status--partial   { color: #d6a85a; }
+.popup__history-status--failed    { color: #d65a5a; }
+.popup__history-status--paused    { color: #9991b3; }
+.popup__history-del {
+  background: transparent; border: 0; color: var(--v-muted);
+  cursor: pointer; padding: 4px 6px; border-radius: 4px;
+  font-size: 14px; transition: background .12s;
+}
+.popup__history-del:hover { background: var(--v-bg-elevated); color: #d65a5a; }
+
 .popup__schedule {
   background: var(--v-bg-alt);
   border: 1px solid var(--v-border);

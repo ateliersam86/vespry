@@ -15,6 +15,7 @@ import {
   computeNextFireTime, loadSchedule,
   type ScheduledExport,
 } from '../engine/scheduler';
+import type { ExportRunSummary } from '../messaging';
 import '../ui/theme.css';
 import './popup.css';
 
@@ -48,6 +49,12 @@ function Popup(): JSX.Element {
    * documenté dans PRIVACY.md (4e sortie réseau).
    */
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  /**
+   * Historique des exports précédents (chargé une fois au montage du
+   * popup, max 5 affichés). Sam (2026-05-19) : « continue avec
+   * l'historique et les autres fonctions non implémentées ».
+   */
+  const [history, setHistory] = useState<ExportRunSummary[]>([]);
 
   useEffect(() => {
     const off = controller.subscribe(force as () => void);
@@ -64,6 +71,10 @@ function Popup(): JSX.Element {
     // bannière. L'utilisateur clique pour ouvrir la release GitHub.
     // Pingue api.github.com (cf. PRIVACY.md § 6 — sortie réseau auxiliaire).
     void checkForUpdate().then(setLatestVersion);
+    // Historique des exports — chargé une fois, rafraîchi à chaque
+    // ouverture du popup (acceptable : on est sur du IDB local, lecture
+    // rapide ~10 ms). Limité aux 10 derniers pour ne pas saturer.
+    void controller.listRuns().then((all) => setHistory(all.slice(0, 10)));
     const listener = (
       changes: Record<string, chrome.storage.StorageChange>,
       area: string,
@@ -150,6 +161,16 @@ function Popup(): JSX.Element {
 
       {schedule && <ScheduleCard schedule={schedule} />}
 
+      {history.length > 0 && (
+        <HistoryCard
+          runs={history}
+          onDelete={(runId) => {
+            void controller.deleteRun(runId);
+            setHistory(history.filter((r) => r.runId !== runId));
+          }}
+        />
+      )}
+
       <button
         class={`v-btn ${discordOpen ? 'v-btn--ghost' : ''}`}
         onClick={openDiscord}
@@ -196,6 +217,54 @@ function ScheduleCard({ schedule }: { schedule: ScheduledExport }): JSX.Element 
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Section « Historique des exports » dans le popup. Lecture seule —
+ * pour supprimer, l'utilisateur clique sur la croix de chaque entrée.
+ * Pas de bouton « re-télécharger » pour les vieux runs : le blob du
+ * zip n'est plus en RAM côté controller, seulement les métadonnées et
+ * messages dans IDB. Pour récupérer le zip, l'utilisateur relance un
+ * export (incrémental ou complet selon ses besoins).
+ *
+ * Cf. Sam 2026-05-19 : « continue avec l'historique ».
+ */
+function HistoryCard({
+  runs,
+  onDelete,
+}: {
+  runs: ExportRunSummary[];
+  onDelete: (runId: string) => void;
+}): JSX.Element {
+  const now = Date.now();
+  return (
+    <div class="popup__history">
+      <div class="popup__history-hd">📜 {t('popup.history_title')}</div>
+      {runs.map((r) => (
+        <div class="popup__history-row" key={r.runId}>
+          <div class="popup__history-main">
+            <div class="popup__history-guild">{r.guildName}</div>
+            <div class="v-muted" style="font-size:11px">
+              {formatRelativePast(r.createdAt, now)}
+              {' · '}
+              {r.messageCount.toLocaleString()} {t('popup.history_msg')}
+              {' · '}
+              <span class={`popup__history-status popup__history-status--${r.status}`}>
+                {t(`status.${r.status}`)}
+              </span>
+            </div>
+          </div>
+          <button
+            class="popup__history-del"
+            title={t('popup.history_delete')}
+            onClick={() => onDelete(r.runId)}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

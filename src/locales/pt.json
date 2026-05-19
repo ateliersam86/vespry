@@ -239,5 +239,8 @@
   "large_run.cancel": "Cancel",
   "large_run.confirm": "Launch anyway",
   "popup.update_available": "Update available — v{v}",
-  "overlay.estimating": "Estimating…"
+  "overlay.estimating": "Estimating…",
+  "popup.history_title": "Recent exports",
+  "popup.history_msg": "msg",
+  "popup.history_delete": "Remove from history"
 }

@@ -6,6 +6,7 @@
  * content script de la page Discord.
  */
 import { CheckpointStore } from '../../engine/checkpoint-store';
+import type { ExportRunSummary } from '../../messaging';
 import { DiscordApi } from '../../engine/discord-api';
 import {
   ExportRunner,
@@ -343,6 +344,42 @@ export class VespryController {
    * Cf. Sam 2026-05-19 : le bon proxy pour l'avertissement n'est pas
    * le nombre de salons mais le nombre de messages.
    */
+  /**
+   * Historique des runs (lus depuis IDB) — vue épurée sérialisable
+   * (pas de blobs volumineux). Pour le popup « Historique ». Sam
+   * (2026-05-19) : « continue avec l'historique des exports ».
+   */
+  async listRuns(): Promise<ExportRunSummary[]> {
+    const runs = await this.store.listRuns();
+    const out: ExportRunSummary[] = [];
+    for (const r of runs) {
+      const channels = await this.store.getChannels(r.id);
+      const messages = channels.reduce((s, c) => s + c.messageCount, 0);
+      out.push({
+        runId: r.id,
+        guildId: r.guildId,
+        guildName: r.guildName,
+        status: r.status,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        messageCount: messages,
+        channelCount: channels.length,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Supprime un run du store (messages + médias + métadonnées). Appelé
+   * depuis le popup « Historique ». Irréversible. Si le run est dans la
+   * queue active, on le retire aussi côté state.
+   */
+  async deleteRun(runId: string): Promise<void> {
+    await this.store.deleteRun(runId);
+    this.queue = this.queue.filter((q) => q.runId !== runId);
+    this.notify();
+  }
+
   async estimateMessages(
     guildId: string,
     channelIds: string[],

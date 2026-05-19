@@ -9,6 +9,7 @@ import {
   isStateBroadcast,
   type CommandResponse,
   type EnqueueExtras,
+  type ExportRunSummary,
   type PurgeItemView,
   type QueueItemView,
   type VespryCommand,
@@ -160,6 +161,17 @@ export class RemoteController {
   async estimate(guildId: string, channelIds: string[]): Promise<number | null> {
     const r = await this.send({ cmd: 'estimate', guildId, channelIds });
     return r.estimatedTotal ?? null;
+  }
+
+  /** Historique des runs (popup → section Historique). */
+  async listRuns(): Promise<ExportRunSummary[]> {
+    const r = await this.send({ cmd: 'list-runs' });
+    return r.runs ?? [];
+  }
+
+  /** Supprime un run de l'historique IDB (irréversible). */
+  async deleteRun(runId: string): Promise<void> {
+    await this.send({ cmd: 'delete-run', runId });
   }
 
   /**

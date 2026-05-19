@@ -180,6 +180,8 @@ export type VespryCommand =
       guildId: string;
       channelIds: string[];
     }
+  | { cmd: 'list-runs' }
+  | { cmd: 'delete-run'; runId: string }
   | { cmd: 'get-donors' }
   | {
       cmd: 'checkout';
@@ -254,6 +256,26 @@ export interface CommandResponse {
    * rate-limit excédé). `0` est une valeur valide (salons vides).
    */
   estimatedTotal?: number | null;
+  /**
+   * Historique des runs précédents (commande `list-runs`) — vue épurée
+   * sans les blobs IDB volumineux. Triée du plus récent au plus ancien.
+   */
+  runs?: ExportRunSummary[];
+}
+
+/**
+ * Vue épurée d'un run d'export — sans les options ni les blobs, juste
+ * les métadonnées affichables dans l'historique du popup.
+ */
+export interface ExportRunSummary {
+  runId: string;
+  guildId: string;
+  guildName: string;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+  channelCount: number;
 }
 
 // --- messages de routage ---
