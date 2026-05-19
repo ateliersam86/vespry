@@ -9,7 +9,7 @@ import { useEffect, useReducer, useState } from 'preact/hooks';
 import { RemoteController } from '../ui/remote-controller';
 import { progressPct } from '../messaging';
 import { t } from '../ui/i18n';
-import { getVersion } from '../version';
+import { checkForUpdate, getVersion } from '../version';
 import { getThemePref, resolveTheme } from '../ui/theme-pref';
 import {
   computeNextFireTime, loadSchedule,
@@ -40,6 +40,14 @@ function Popup(): JSX.Element {
    * « on devrait pouvoir voir la première et la prochaine exécution ».
    */
   const [schedule, setSchedule] = useState<ScheduledExport | null>(null);
+  /**
+   * Version GitHub plus récente que celle actuelle, si l'API GitHub
+   * répond et qu'une release tag a été créée depuis. `null` = pas de
+   * update dispo / GitHub inaccessible. Affiché en bannière discrète
+   * sous le header. Helper checkForUpdate() pingue api.github.com —
+   * documenté dans PRIVACY.md (4e sortie réseau).
+   */
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
 
   useEffect(() => {
     const off = controller.subscribe(force as () => void);
@@ -52,6 +60,10 @@ function Popup(): JSX.Element {
     // storage (l'utilisateur peut le modifier depuis l'overlay pendant
     // que le popup est ouvert ; cas rare mais propre).
     void loadSchedule(chrome.storage.local).then(setSchedule);
+    // Notif d'update : silencieux si pas de release plus récente, sinon
+    // bannière. L'utilisateur clique pour ouvrir la release GitHub.
+    // Pingue api.github.com (cf. PRIVACY.md § 6 — sortie réseau auxiliaire).
+    void checkForUpdate().then(setLatestVersion);
     const listener = (
       changes: Record<string, chrome.storage.StorageChange>,
       area: string,
@@ -84,6 +96,19 @@ function Popup(): JSX.Element {
           </span>
         )}
       </header>
+      {latestVersion && (
+        /* Bannière update — cliquable, ouvre la release GitHub. Présente
+           uniquement si une version plus récente a été détectée
+           (checkForUpdate retourne null dans tous les autres cas). */
+        <a
+          class="popup__update"
+          href={`https://github.com/ateliersam86/vespry/releases/tag/v${latestVersion}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {t('popup.update_available', { v: latestVersion })}
+        </a>
+      )}
 
       {running.length > 0 && (
         <div class="popup__tasks">

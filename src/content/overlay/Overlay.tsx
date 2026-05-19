@@ -307,6 +307,15 @@ export function Overlay({
    */
   const [tosAcked, setTosAcked] = useState<boolean>(false);
   const [showToS, setShowToS] = useState(false);
+  /**
+   * Modale « gros export » — affichée avant le lancement si l'utilisateur
+   * a coché ≥ 8 salons. `null` = fermée, sinon contient le nombre de
+   * salons pour l'affichage. `largeRunAcked` (RAM uniquement, pas
+   * persisté entre sessions) évite de re-prompter dans la même session
+   * une fois l'utilisateur informé. Cf. feedback Sam 2026-05-19.
+   */
+  const [showLargeRun, setShowLargeRun] = useState<number | null>(null);
+  const [largeRunAcked, setLargeRunAcked] = useState(false);
 
   useEffect(() => {
     void getThemePref().then(setTheme);
@@ -502,15 +511,29 @@ export function Overlay({
   }
 
   /**
-   * Wrapper de `doEnqueue` qui gate sur l'acquittement ToS Discord. Au
-   * premier export (et tant que l'utilisateur n'a pas coché « ne plus
-   * afficher »), ouvre la modale d'avertissement. Quand l'utilisateur
-   * confirme, exécute `doEnqueue` ; s'il annule, on ne touche pas à la
-   * sélection — il peut juste réessayer.
+   * Wrapper de `doEnqueue` qui gate :
+   *   1. sur l'acquittement ToS Discord (au premier export, sauf opt-out),
+   *   2. sur un avertissement « gros export » au-delà d'un seuil de salons.
+   *
+   * Cf. feedback Sam (2026-05-19) : « la personne doit être avertie quand
+   * l'export va être très long ». On utilise le nombre de salons cochés
+   * comme proxy heuristique (l'estimation messages exacte demanderait un
+   * appel API par salon qu'on fait déjà au démarrage du run).
    */
   function enqueue(): void {
     if (!tosAcked) {
       setShowToS(true);
+      return;
+    }
+    const picked = channels.filter(
+      (c) => selected.has(c.id) || (manualSel.get(c.id)?.size ?? 0) > 0,
+    );
+    // Seuil empirique : au-delà de 8 salons, un export représente
+    // typiquement plusieurs minutes (pré-comptage + pagination + médias).
+    // Volontairement bas — mieux vaut un faux positif qu'un faux négatif
+    // (utilisateur qui s'attend à 30 s et patiente 30 min).
+    if (picked.length >= 8 && !largeRunAcked) {
+      setShowLargeRun(picked.length);
       return;
     }
     doEnqueue();
@@ -1033,6 +1056,19 @@ export function Overlay({
               void chrome.storage.local.set({ 'vespry.tosAcked': true });
               setTosAcked(true);
             }
+            doEnqueue();
+          }}
+        />
+      </div>
+    )}
+    {showLargeRun !== null && (
+      <div class="v-root" data-theme={resolvedTheme}>
+        <LargeRunModal
+          channelCount={showLargeRun}
+          onCancel={() => setShowLargeRun(null)}
+          onConfirm={() => {
+            setShowLargeRun(null);
+            setLargeRunAcked(true);
             doEnqueue();
           }}
         />
@@ -1936,6 +1972,47 @@ function ToSModal({
           </button>
           <button class="v-btn" onClick={() => onConfirm(remember)}>
             J'ai compris, je lance l'export
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modale d'avertissement « gros export ». Sam (2026-05-19) : « il faut
+ * que la personne soit avertie quand l'export va être très long ». On
+ * affiche au-delà de 8 salons sélectionnés, avant le lancement.
+ *
+ * L'estimation temporelle est volontairement floue (« plusieurs minutes
+ * à plusieurs dizaines de minutes ») — la vraie durée dépend du nombre
+ * de messages par salon (inconnu avant pré-comptage) et du profil perf
+ * de la machine.
+ */
+function LargeRunModal({
+  channelCount,
+  onCancel,
+  onConfirm,
+}: {
+  channelCount: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}): JSX.Element {
+  return (
+    <div class="v-modal-bd" onClick={onCancel}>
+      <div class="v-modal v-modal--tos" onClick={(e) => e.stopPropagation()}>
+        <div class="v-tos-title">⏳ {t('large_run.title')}</div>
+        <div class="v-tos-body">
+          <p>{t('large_run.body', { n: channelCount })}</p>
+          <p>{t('large_run.detail')}</p>
+          <p><b>{t('large_run.background_ok')}</b></p>
+        </div>
+        <div class="v-tos-actions">
+          <button class="v-btn v-btn--ghost" onClick={onCancel}>
+            {t('large_run.cancel')}
+          </button>
+          <button class="v-btn" onClick={onConfirm}>
+            {t('large_run.confirm')}
           </button>
         </div>
       </div>

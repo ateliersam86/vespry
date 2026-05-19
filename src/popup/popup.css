@@ -65,6 +65,21 @@
 
 /* Carte « Planning actif » — montre serveur + prochaine + dernière
    exécution. Discrète, sous les tâches en cours. Lecture seule. */
+/* Bannière update GitHub — visible si une release plus récente existe. */
+.popup__update {
+  display: block;
+  text-align: center;
+  background: linear-gradient(90deg, #5865f2 0%, #8b7be8 100%);
+  color: #fff !important;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: transform .15s ease;
+}
+.popup__update:hover { transform: translateY(-1px); }
+
 .popup__schedule {
   background: var(--v-bg-alt);
   border: 1px solid var(--v-border);

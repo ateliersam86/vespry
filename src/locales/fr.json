@@ -231,5 +231,12 @@
   "time.ago_minutes": "il y a {n} min",
   "time.ago_hours": "il y a {n}h",
   "time.ago_days": "il y a {n}j",
-  "schedule.help": "Vespry ré-exportera ce serveur automatiquement à l'horaire choisi — uniquement les nouveaux messages depuis le dernier backup, sur tous les salons accessibles."
+  "schedule.help": "Vespry ré-exportera ce serveur automatiquement à l'horaire choisi — uniquement les nouveaux messages depuis le dernier backup, sur tous les salons accessibles.",
+  "large_run.title": "Gros export en vue",
+  "large_run.body": "Tu as sélectionné {n} salons — Vespry va les traiter un par un.",
+  "large_run.detail": "Selon le nombre de messages et de médias, ça peut prendre de quelques minutes à plus d'une heure.",
+  "large_run.background_ok": "Tu peux fermer cet onglet Discord — Vespry tourne en arrière-plan. Le badge sur l'icône affichera la progression.",
+  "large_run.cancel": "Annuler",
+  "large_run.confirm": "Lancer quand même",
+  "popup.update_available": "Mise à jour disponible — v{v}"
 }

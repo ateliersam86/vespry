@@ -37,10 +37,10 @@ analytique, aucun cookie tiers. Le code est public et auditable.
 
 ## Sorties réseau (les seules)
 
-Cinq sorties réseau, toutes explicites. Les deux dernières sont liées au
-mur des soutiens et à la mise à jour des crédits — elles ne véhiculent
-aucune donnée utilisateur autre que l'IP/User-Agent inhérents à toute
-requête HTTP.
+Six sorties réseau, toutes explicites. Les trois dernières sont liées au
+mur des soutiens, à la mise à jour des crédits, et au check de version
+GitHub — elles ne véhiculent aucune donnée utilisateur autre que
+l'IP/User-Agent inhérents à toute requête HTTP.
 
 ### 1. API Discord
 
@@ -118,6 +118,22 @@ publics agrégés (pseudonyme + message + date), pas d'IPs.
 **À venir (v0.2)** : option « afficher le mur des soutiens » désactivée
 par défaut pour les utilisateurs qui veulent zéro requête sortante hors
 Discord.
+
+### 6. GitHub API — check de version
+
+À l'ouverture du popup, Vespry fait un GET sur
+`https://api.github.com/repos/ateliersam86/vespry/releases/latest` pour
+détecter si une nouvelle version de l'extension est disponible. Si oui,
+une bannière propose de l'installer en cliquant (lien vers GitHub
+Releases).
+
+**Que voit GitHub ?** IP et User-Agent — données par défaut d'une
+requête HTTP. Aucune donnée Discord, aucun identifiant Vespry. L'API
+GitHub `/repos/.../releases/latest` est anonyme et publique
+(60 requêtes/h sans token).
+
+Si la requête échoue (hors-ligne, rate-limit, etc.), aucun message
+d'erreur — l'utilisateur ne voit juste pas la bannière.
 
 ## Conformité RGPD
 
