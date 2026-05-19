@@ -167,6 +167,19 @@ export type VespryCommand =
       filename?: string;
     }
   | { cmd: 'preview'; channelId: string; before?: string }
+  | {
+      /**
+       * Estimation rapide du nombre de messages d'un ensemble de salons,
+       * AVANT lancement d'un export. Sam (2026-05-19) : « le bon proxy
+       * pour l'avertissement gros export n'est pas le nombre de salons
+       * mais le nombre de messages ». Utilisé par l'overlay pour décider
+       * si afficher la modale d'avertissement. Renvoie `null` si toutes
+       * les searches échouent (perms, rate-limit).
+       */
+      cmd: 'estimate';
+      guildId: string;
+      channelIds: string[];
+    }
   | { cmd: 'get-donors' }
   | {
       cmd: 'checkout';
@@ -235,6 +248,12 @@ export interface CommandResponse {
   checkoutUrl?: string;
   /** Id local de la purge créée (commande `purge`). */
   purgeRunId?: string;
+  /**
+   * Estimation rapide du nombre total de messages (commande `estimate`).
+   * `null` si toutes les recherches ont échoué (permissions perdues,
+   * rate-limit excédé). `0` est une valeur valide (salons vides).
+   */
+  estimatedTotal?: number | null;
 }
 
 // --- messages de routage ---

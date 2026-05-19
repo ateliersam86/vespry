@@ -332,6 +332,54 @@ export class VespryController {
   }
 
   /**
+   * Estimation rapide du nombre de messages attendus pour un ensemble
+   * de salons, AVANT lancement d'un export. Volontairement rapide :
+   * 3 workers parallèles, pas de dichotomie. Si un salon est plafonné
+   * à 8000 messages on garde 8000 (sous-estimé, mais utile pour décider
+   * si afficher l'avertissement « gros export » à 10k+).
+   *
+   * `null` si toutes les recherches ont échoué (perms, rate-limit).
+   *
+   * Cf. Sam 2026-05-19 : le bon proxy pour l'avertissement n'est pas
+   * le nombre de salons mais le nombre de messages.
+   */
+  async estimateMessages(
+    guildId: string,
+    channelIds: string[],
+  ): Promise<number | null> {
+    if (!this.api || channelIds.length === 0) return 0;
+    const isDmGuild = !guildId || guildId === '@me';
+    const counts: (number | null)[] = new Array(channelIds.length).fill(null);
+    let cursor = 0;
+    const next = (): number | null => {
+      if (cursor >= channelIds.length) return null;
+      const i = cursor;
+      cursor += 1;
+      return i;
+    };
+    const CONCURRENCY = 3;
+    const workers = Array.from(
+      { length: Math.min(CONCURRENCY, channelIds.length) },
+      async () => {
+        if (!this.api) return;
+        for (;;) {
+          const i = next();
+          if (i === null) return;
+          const id = channelIds[i];
+          if (!id) return;
+          counts[i] = isDmGuild
+            ? await this.api.searchDmMessageCount(id)
+            : await this.api.searchMessageCount(guildId, id);
+        }
+      },
+    );
+    await Promise.all(workers);
+    const anyOk = counts.some((c) => c !== null);
+    if (!anyOk) return null;
+    return counts.reduce<number>((s, c) => s + (c ?? 0), 0);
+  }
+
+  /**
    * Aperçu des messages d'un salon (lecture seule, une page ~100).
    * `before` = id de message → page plus ancienne (défilement de l'historique).
    */

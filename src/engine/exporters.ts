@@ -193,7 +193,21 @@ export function toTxt(ctx: ExportContext, messages: RawMessage[]): string {
     }
     for (const a of m.attachments) {
       const local = mediaHref(a.url, ctx.urlToPath);
-      out.push(`  [${L.attachment} : ${a.filename}${local ? ` → ${local}` : ''}]`);
+      // Sam (2026-05-19) : précise le TYPE d'attachment dans le TXT
+      // (image/video/audio/file) au lieu d'un uniforme « attachment ».
+      const ct = a.content_type ?? '';
+      const ext = a.url;
+      let typeLabel = L.attachment;
+      if (ct.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif)(\?|$)/i.test(ext)) {
+        typeLabel = 'image';
+      } else if (ct.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)(\?|$)/i.test(ext)) {
+        typeLabel = 'video';
+      } else if (ct.startsWith('audio/') || /\.(mp3|ogg|oga|wav|m4a|flac|opus)(\?|$)/i.test(ext)) {
+        typeLabel = 'audio';
+      } else {
+        typeLabel = 'file';
+      }
+      out.push(`  [${typeLabel} : ${a.filename}${local ? ` → ${local}` : ''}]`);
     }
     for (const s of m.sticker_items ?? []) {
       out.push(`  [${L.sticker} : ${s.name}]`);

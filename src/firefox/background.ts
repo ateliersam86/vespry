@@ -176,6 +176,14 @@ async function exec(command: VespryCommand): Promise<CommandResponse> {
       return { ok: true, state: controller.toState() };
     case 'load-channels':
       return { ok: true, channels: await controller.loadChannels(command.guildId) };
+    case 'estimate':
+      return {
+        ok: true,
+        estimatedTotal: await controller.estimateMessages(
+          command.guildId,
+          command.channelIds,
+        ),
+      };
     case 'enqueue': {
       const extras: EnqueueExtras = {
         includeThreads: command.includeThreads,

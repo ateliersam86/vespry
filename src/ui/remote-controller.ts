@@ -152,6 +152,17 @@ export class RemoteController {
   }
 
   /**
+   * Estimation rapide du nombre de messages totaux pour un ensemble de
+   * salons (avant lancement d'un export). Sert à l'overlay pour décider
+   * d'afficher la modale « gros export ». `null` si toutes les
+   * recherches ont échoué. Cf. controller.ts.estimateMessages.
+   */
+  async estimate(guildId: string, channelIds: string[]): Promise<number | null> {
+    const r = await this.send({ cmd: 'estimate', guildId, channelIds });
+    return r.estimatedTotal ?? null;
+  }
+
+  /**
    * Aperçu des messages d'un salon. `before` = id du plus ancien message déjà
    * affiché → renvoie la page précédente (défilement infini de l'historique).
    */

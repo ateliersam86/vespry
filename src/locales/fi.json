@@ -233,10 +233,11 @@
   "time.ago_days": "{n}d ago",
   "schedule.help": "Vespry will silently re-export this server on the chosen schedule — only the new messages since the last successful run, all accessible channels.",
   "large_run.title": "Large export ahead",
-  "large_run.body": "You've selected {n} channels — Vespry will work through them one by one.",
+  "large_run.body": "Approximately {n} messages estimated — Vespry will work through them in batches of 100.",
   "large_run.detail": "Depending on the number of messages and media, this can take from a few minutes to over an hour.",
   "large_run.background_ok": "You can close this Discord tab — Vespry runs in the background. The icon badge will show the progress.",
   "large_run.cancel": "Cancel",
   "large_run.confirm": "Launch anyway",
-  "popup.update_available": "Update available — v{v}"
+  "popup.update_available": "Update available — v{v}",
+  "overlay.estimating": "Estimating…"
 }

@@ -316,6 +316,12 @@ export function Overlay({
    */
   const [showLargeRun, setShowLargeRun] = useState<number | null>(null);
   const [largeRunAcked, setLargeRunAcked] = useState(false);
+  /**
+   * Spinner sur le bouton « Lancer » pendant l'estimation pré-flight
+   * (~1-3 s). Cf. enqueue() qui appelle controller.estimate avant
+   * de décider d'afficher la modale gros export ou de lancer direct.
+   */
+  const [estimating, setEstimating] = useState(false);
 
   useEffect(() => {
     void getThemePref().then(setTheme);
@@ -513,14 +519,15 @@ export function Overlay({
   /**
    * Wrapper de `doEnqueue` qui gate :
    *   1. sur l'acquittement ToS Discord (au premier export, sauf opt-out),
-   *   2. sur un avertissement « gros export » au-delà d'un seuil de salons.
+   *   2. sur un avertissement « gros export » au-delà d'un seuil de
+   *      MESSAGES estimés (et non plus de salons — Sam 2026-05-19 :
+   *      8 salons × 3 msgs n'est pas dangereux, 1 salon × 200 000 si).
    *
-   * Cf. feedback Sam (2026-05-19) : « la personne doit être avertie quand
-   * l'export va être très long ». On utilise le nombre de salons cochés
-   * comme proxy heuristique (l'estimation messages exacte demanderait un
-   * appel API par salon qu'on fait déjà au démarrage du run).
+   * L'estimation est faite en pré-flight (~1-3 s) AVANT le run réel,
+   * via `controller.estimate()` qui fait une search Discord sur chaque
+   * salon. Spinner sur le bouton pendant l'attente.
    */
-  function enqueue(): void {
+  async function enqueue(): Promise<void> {
     if (!tosAcked) {
       setShowToS(true);
       return;
@@ -528,13 +535,32 @@ export function Overlay({
     const picked = channels.filter(
       (c) => selected.has(c.id) || (manualSel.get(c.id)?.size ?? 0) > 0,
     );
-    // Seuil empirique : au-delà de 8 salons, un export représente
-    // typiquement plusieurs minutes (pré-comptage + pagination + médias).
-    // Volontairement bas — mieux vaut un faux positif qu'un faux négatif
-    // (utilisateur qui s'attend à 30 s et patiente 30 min).
-    if (picked.length >= 8 && !largeRunAcked) {
-      setShowLargeRun(picked.length);
+    if (!activeGuild || picked.length === 0) return;
+    // Si l'utilisateur a déjà acquitté pour cette session OU qu'on a très
+    // peu de salons (< 3), on n'estime même pas — gain de temps évident.
+    if (largeRunAcked || picked.length < 3) {
+      doEnqueue();
       return;
+    }
+    // Pré-flight : appel search pour chaque salon (cap concurrence 3).
+    // Spinner sur le bouton pendant l'attente — ~1-3 s typique.
+    setEstimating(true);
+    try {
+      const total = await controller.estimate(
+        activeGuild.id,
+        picked.map((c) => c.id),
+      );
+      // Seuil : 10 000 messages — ordre de grandeur où la pagination
+      // (100 msgs / 700 ms throttle ≈ ~70 min sans média) et le pré-comptage
+      // commencent à se voir. `null` (toutes les searches ont échoué) →
+      // on continue sans avertir, l'utilisateur le verra au pré-comptage
+      // du runner.
+      if (total !== null && total >= 10_000) {
+        setShowLargeRun(total);
+        return;
+      }
+    } finally {
+      setEstimating(false);
     }
     doEnqueue();
   }
@@ -1008,17 +1034,17 @@ export function Overlay({
           <div class="v-side-foot">
             <button
               class="v-btn"
-              disabled={selected.size === 0 && manualSel.size === 0}
-              onClick={enqueue}
+              disabled={
+                estimating
+                || (selected.size === 0 && manualSel.size === 0)
+              }
+              onClick={() => { void enqueue(); }}
             >
-              {/* Libellé dynamique : par défaut « Lancer l'exportation »
-                  parce qu'il n'y a pas de file visible. Si un export tourne
-                  déjà, le clic AJOUTE à la file — on bascule alors sur le
-                  libellé « + Ajouter à la file » pour rester honnête sur
-                  ce qui va se passer. Cf. feedback Sam (2026-05-18). */}
-              {controller.queue.some((q) => q.status === 'in_progress')
-                ? t('overlay.add_to_queue')
-                : t('overlay.launch_export')}
+              {estimating
+                ? t('overlay.estimating')
+                : controller.queue.some((q) => q.status === 'in_progress')
+                  ? t('overlay.add_to_queue')
+                  : t('overlay.launch_export')}
             </button>
           </div>
         </div>
@@ -1064,7 +1090,7 @@ export function Overlay({
     {showLargeRun !== null && (
       <div class="v-root" data-theme={resolvedTheme}>
         <LargeRunModal
-          channelCount={showLargeRun}
+          messageCount={showLargeRun}
           onCancel={() => setShowLargeRun(null)}
           onConfirm={() => {
             setShowLargeRun(null);
@@ -1990,20 +2016,23 @@ function ToSModal({
  * de la machine.
  */
 function LargeRunModal({
-  channelCount,
+  messageCount,
   onCancel,
   onConfirm,
 }: {
-  channelCount: number;
+  messageCount: number;
   onCancel: () => void;
   onConfirm: () => void;
 }): JSX.Element {
+  // Formatage du compteur : > 1000 → « 12 500 » avec séparateurs ;
+  // > 100 000 → « 100 000+ » (plafond Discord pas dépassé).
+  const display = messageCount.toLocaleString();
   return (
     <div class="v-modal-bd" onClick={onCancel}>
       <div class="v-modal v-modal--tos" onClick={(e) => e.stopPropagation()}>
         <div class="v-tos-title">⏳ {t('large_run.title')}</div>
         <div class="v-tos-body">
-          <p>{t('large_run.body', { n: channelCount })}</p>
+          <p>{t('large_run.body', { n: display })}</p>
           <p>{t('large_run.detail')}</p>
           <p><b>{t('large_run.background_ok')}</b></p>
         </div>
