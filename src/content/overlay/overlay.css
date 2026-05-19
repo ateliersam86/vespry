@@ -50,15 +50,14 @@
   animation: v-fade-in .25s ease both;
 }
 .v-win {
-  /* Responsif : sur grand écran on garde 15 % de marge à gauche et à droite
-     (largeur = 70vw), sur écran serré on retombe à 94vw pour rester
-     utilisable. `max(70vw, 880px)` garantit qu'on ne passe pas en dessous
-     de 880 px sur écran moyen (sinon le panneau droit est cramé). Le
-     `min(94vw, …)` rabaisse à 94vw quand 880 px serait plus large que
-     l'écran (mobile / fenêtre étroite). Plafonds absolus pour 4K/5K. */
-  width: min(94vw, max(70vw, 880px));
-  height: min(92vh, max(80vh, 560px));
-  max-width: 1800px; max-height: 1200px;
+  /* Responsif (Sam 2026-05-19 — encore trop de marges, on resserre) :
+     - 86vw → ~7 % de marge L/R sur grand écran (au lieu de 15 % avant)
+     - 95vh → 2.5 % de marge T/B (au lieu de 10 %)
+     - plancher min 880×560 px pour ne pas écraser sur petite résolution
+     - plafond augmenté à 1920×1280 px pour les 4K/5K (au lieu de 1800×1200) */
+  width: min(96vw, max(86vw, 880px));
+  height: min(95vh, max(90vh, 560px));
+  max-width: 1920px; max-height: 1280px;
   background: var(--bg); border-radius: 10px; overflow: hidden;
   display: flex; flex-direction: column;
   box-shadow: 0 18px 56px rgba(0,0,0,.6);
@@ -487,6 +486,79 @@
   display: block; font: 700 11px var(--font); color: var(--muted);
   text-transform: uppercase; letter-spacing: .3px; margin-bottom: 7px;
 }
+
+/* ============ chiffrement zip (PasswordSection — Phase 4) ============
+   Le composant a été livré sans CSS au commit initial (audit Sam
+   2026-05-19) : bouton toggle œil placé en dessous du champ au lieu
+   d'être à droite, pas d'indicateur clair que le chiffrement est actif
+   quand un mot de passe est tapé. */
+
+/* En-tête du field : label à gauche, badge état (clair / chiffré) à
+   droite. Sans ce flex, le label tout court restait + badge sous lui. */
+.v-pw-head {
+  display: flex !important; /* override `.v-field label { display: block }` */
+  align-items: center; justify-content: space-between;
+  gap: 8px;
+}
+.v-pw-status {
+  font: 600 10.5px var(--font); text-transform: none; letter-spacing: 0;
+  color: var(--muted); white-space: nowrap;
+}
+.v-pw-status.on {
+  color: var(--green);
+  /* léger pulse à l'activation pour attirer l'œil — non-distrayant. */
+  animation: v-pw-pulse 0.6s ease;
+}
+@keyframes v-pw-pulse {
+  0% { transform: scale(0.92); }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+/* Champ + bouton œil dans le même rang (position:relative + absolute). */
+.v-pw-row {
+  position: relative;
+  display: flex;
+}
+.v-pw-input {
+  flex: 1;
+  /* place pour le bouton œil à droite. */
+  padding-right: 40px;
+}
+.v-pw-toggle {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 0; color: var(--muted);
+  cursor: pointer; font-size: 16px; border-radius: 6px;
+  transition: background 0.15s ease;
+}
+.v-pw-toggle:hover { background: var(--bg3); color: var(--text); }
+.v-pw-toggle:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+
+/* Jauge de force — visible seulement quand un mot de passe est tapé.
+   La barre `.v-pw-bar` est colorée selon le niveau (.weak/.medium/.strong). */
+.v-pw-strength {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 8px;
+}
+.v-pw-strength .v-pw-bar {
+  flex: 1; height: 4px; border-radius: 2px;
+  background: var(--bg3);
+  transition: background 0.2s ease;
+}
+.v-pw-weak .v-pw-bar     { background: linear-gradient(to right, #d65a5a 33%, var(--bg3) 33%); }
+.v-pw-medium .v-pw-bar   { background: linear-gradient(to right, #d6a85a 66%, var(--bg3) 66%); }
+.v-pw-strong .v-pw-bar   { background: var(--green); }
+.v-pw-label {
+  font: 600 11px var(--font); color: var(--muted); white-space: nowrap;
+}
+.v-pw-weak .v-pw-label   { color: #d65a5a; }
+.v-pw-medium .v-pw-label { color: #d6a85a; }
+.v-pw-strong .v-pw-label { color: var(--green); }
+
 .v-daterow { display: flex; gap: 8px; align-items: center; }
 .v-date {
   background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;

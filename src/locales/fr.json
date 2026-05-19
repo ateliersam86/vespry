@@ -202,6 +202,8 @@
   "overlay.filename_help": "Variables : {guildName}, {date}, {datetime}. Par défaut : vespry-{guildName}",
   "overlay.filename_preview": "Aperçu : {name}",
   "password.label": "Chiffrer l'export (optionnel)",
+  "password.status_on": "Chiffrement activé",
+  "password.status_off": "Pas de chiffrement",
   "password.placeholder": "Tapez un mot de passe",
   "password.show": "Afficher le mot de passe",
   "password.hide": "Masquer le mot de passe",

@@ -202,6 +202,8 @@
   "overlay.filename_help": "Placeholders: {guildName}, {date}, {datetime}. Default: vespry-{guildName}",
   "overlay.filename_preview": "Preview: {name}",
   "password.label": "Encrypt the export (optional)",
+  "password.status_on": "Encryption on",
+  "password.status_off": "No encryption",
   "password.placeholder": "Type a password",
   "password.show": "Show password",
   "password.hide": "Hide password",
