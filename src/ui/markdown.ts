@@ -61,6 +61,12 @@ export function humanize(
 const CODE_PLACEHOLDER = 'CODE';
 const INLINE_CODE_PLACEHOLDER = 'IC';
 
+/** Marqueur opaque pour mentions Discord rendues en pilule colorée. */
+const MENTION_PLACEHOLDER = 'MNT';
+/** Marqueur opaque pour emojis custom Discord rendus en image téléchargée. */
+const EMOJI_PLACEHOLDER = 'EMJ';
+
+
 /** Rend les transformations inline (gras, italique, spoiler…). */
 function inlineMd(s: string): string {
   let r = s;
@@ -128,9 +134,62 @@ export function renderInlineHtml(
   text: string,
   mentions: MentionLabels,
   resolved?: ResolvedMentions,
+  /**
+   * Resolver d'emoji custom : pour `(id, animated)`, retourne le chemin
+   * local relatif au fichier HTML (typiquement `../emojis/{id}.png`) si
+   * l'emoji a été téléchargé pendant le run, sinon `null`. Quand null,
+   * l'emoji est rendu en texte `:nom:` (comportement historique).
+   * Audit B+C 2026-05-18 : avant ce fix, les emojis custom n'apparaissaient
+   * jamais en image dans le HTML — même si déjà téléchargés.
+   */
+  emojiResolver?: (id: string, animated: boolean) => string | null,
 ): string {
-  // Humanize + escape d'abord, AVANT toute insertion de balise.
-  let s = escapeHtml(humanize(text, mentions, resolved));
+  // Pré-passe MENTIONS — on remplace les balises Discord `<@id>`,
+  // `<@&id>`, `<#id>` par des marqueurs opaques AVANT escape, et on
+  // collecte les pilules HTML correspondantes. Audit B+C 2026-05-18 :
+  // avant, les mentions étaient rendues en texte plat `@nom` au lieu
+  // d'un span coloré façon Discord.
+  const pillsHtml: string[] = [];
+  let s = text.replace(/<@!?(\d+)>/g, (_m, id: string) => {
+    const name = resolved?.users?.[id] ?? mentions.user.replace(/^@/, '');
+    pillsHtml.push(
+      `<span class="mention mention--user" data-user-id="${id}">@${escapeHtml(name)}</span>`,
+    );
+    return `${MENTION_PLACEHOLDER}${pillsHtml.length - 1}${MENTION_PLACEHOLDER}`;
+  });
+  s = s.replace(/<@&(\d+)>/g, (_m, id: string) => {
+    const name = resolved?.roles?.[id] ?? mentions.role.replace(/^@/, '');
+    pillsHtml.push(
+      `<span class="mention mention--role" data-role-id="${id}">@${escapeHtml(name)}</span>`,
+    );
+    return `${MENTION_PLACEHOLDER}${pillsHtml.length - 1}${MENTION_PLACEHOLDER}`;
+  });
+  s = s.replace(/<#(\d+)>/g, (_m, id: string) => {
+    const name = resolved?.channels?.[id] ?? mentions.channel.replace(/^#/, '');
+    pillsHtml.push(
+      `<span class="mention mention--channel" data-channel-id="${id}">#${escapeHtml(name)}</span>`,
+    );
+    return `${MENTION_PLACEHOLDER}${pillsHtml.length - 1}${MENTION_PLACEHOLDER}`;
+  });
+
+  // Pré-passe EMOJIS CUSTOM — si l'image locale a été téléchargée, on
+  // remplace `<:nom:id>` / `<a:nom:id>` par un `<img class="emoji">` avec
+  // alt = `:nom:`. Sinon on laisse `humanize()` faire son repli texte.
+  const emojiHtml: string[] = [];
+  if (emojiResolver) {
+    s = s.replace(/<(a?):(\w+):(\d+)>/g, (m, anim: string, name: string, id: string) => {
+      const localPath = emojiResolver(id, anim === 'a');
+      if (!localPath) return m; // pas téléchargé → humanize() s'en chargera
+      emojiHtml.push(
+        `<img class="emoji" src="${localPath}" alt=":${escapeHtml(name)}:" `
+        + `title=":${escapeHtml(name)}:" loading="lazy">`,
+      );
+      return `${EMOJI_PLACEHOLDER}${emojiHtml.length - 1}${EMOJI_PLACEHOLDER}`;
+    });
+  }
+
+  // Humanize résiduel (emojis custom non résolus → `:name:`), puis escape.
+  s = escapeHtml(humanize(s, mentions, resolved));
 
   // Protège les blocs et le code inline : on les remplace par des marqueurs
   // opaques, on travaille le reste, puis on les ré-injecte.
@@ -165,6 +224,17 @@ export function renderInlineHtml(
 
   // Newlines hors blocs → <br>.
   out = out.replace(/\n(?!<\/?(h\d|blockquote|ul|li))/g, '<br>');
+
+  // Ré-injecte les pilules de mention (data-user-id/role-id/channel-id).
+  out = out.replace(
+    new RegExp(`${MENTION_PLACEHOLDER}(\\d+)${MENTION_PLACEHOLDER}`, 'g'),
+    (_m, i: string) => pillsHtml[Number(i)] ?? '',
+  );
+  // Ré-injecte les emojis custom (<img class="emoji">).
+  out = out.replace(
+    new RegExp(`${EMOJI_PLACEHOLDER}(\\d+)${EMOJI_PLACEHOLDER}`, 'g'),
+    (_m, i: string) => emojiHtml[Number(i)] ?? '',
+  );
 
   // Ré-injecte les blocs et code inline.
   out = out.replace(

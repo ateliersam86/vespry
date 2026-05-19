@@ -294,28 +294,76 @@ function esc(text: string): string {
 function renderContent(
   raw: string,
   mentions: MentionLabels,
-  resolved?: ResolvedMentions,
+  resolved: ResolvedMentions | undefined,
+  urlToPath: Map<string, string>,
 ): string {
-  return renderInlineHtml(raw, mentions, resolved);
+  // Resolver d'emoji custom : on a déjà téléchargé les emojis (collectAssets
+  // les ramasse depuis content + reactions) ; on cherche le chemin local
+  // dans `urlToPath`. Quand l'emoji a été téléchargé, on renvoie le path
+  // relatif depuis `html/` (le sous-dossier où vivent les fichiers HTML).
+  const emojiResolver = (id: string, animated: boolean): string | null => {
+    const ext = animated ? 'gif' : 'png';
+    const cdnUrl = `https://cdn.discordapp.com/emojis/${id}.${ext}`;
+    const localPath = urlToPath.get(cdnUrl);
+    return localPath ? `../${localPath}` : null;
+  };
+  return renderInlineHtml(raw, mentions, resolved, emojiResolver);
 }
 
-/** Pastille d'avatar : initiale colorée — self-contained, pas de média externe. */
-function avatarChip(m: RawMessage): string {
+/**
+ * Avatar de l'auteur — image réelle (téléchargée dans `avatars/` du zip)
+ * si dispo via urlToPath, sinon pastille initiale colorée comme fallback.
+ *
+ * Audit B+C 2026-05-18 : DCE et Discrub téléchargent les vrais avatars.
+ * Vespry collecte déjà les bons URLs dans `collectAssets` (media.ts:170)
+ * — il manquait juste leur utilisation côté rendu.
+ */
+function avatarChip(m: RawMessage, urlToPath?: Map<string, string>): string {
   const name = authorName(m);
+  if (urlToPath && m.author.avatar) {
+    const ext = m.author.avatar.startsWith('a_') ? 'gif' : 'png';
+    const cdnUrl = `https://cdn.discordapp.com/avatars/${m.author.id}/${m.author.avatar}.${ext}`;
+    const localPath = urlToPath.get(cdnUrl);
+    if (localPath) {
+      // ../ : on est dans `html/`, le média vit à la racine du zip.
+      return `<img class="av av-img" src="../${esc(localPath)}" alt="${esc(name)}" loading="lazy">`;
+    }
+  }
   const initial = esc(name.slice(0, 1).toUpperCase());
-  // Teinte dérivée de l'id auteur — stable, lisible sur fond sombre.
+  // Fallback : teinte dérivée de l'id — stable, lisible sur fond sombre.
   let hash = 0;
   for (const ch of m.author.id) hash = (hash * 31 + ch.charCodeAt(0)) % 360;
   return `<div class="av" style="background:hsl(${hash} 45% 42%)">${initial}</div>`;
 }
 
-/** Une pièce jointe en HTML : image inline, sinon lien. */
+/** Une pièce jointe en HTML : image / vidéo / audio inline, sinon lien. */
 function renderAttachment(a: RawAttachment, urlToPath: Map<string, string>): string {
   const href = mediaOrCdn(a.url, urlToPath);
-  const isImage = (a.content_type ?? '').startsWith('image/')
+  const ct = a.content_type ?? '';
+  const isImage = ct.startsWith('image/')
     || /\.(png|jpe?g|gif|webp|avif)(\?|$)/i.test(a.url);
   if (isImage) {
     return `<a href="${esc(href)}"><img class="att-img" src="${esc(href)}" alt="${esc(a.filename)}" loading="lazy"></a>`;
+  }
+  // Vidéo et audio rendus en lecteur natif (audit B+C 2026-05-18 : DCE et
+  // Discrub le faisaient, Vespry tombait sur un lien-chip). `preload=none`
+  // évite que le navigateur télécharge le média avant qu'on clique play —
+  // important quand l'archive contient des dizaines de vidéos.
+  const isVideo = ct.startsWith('video/')
+    || /\.(mp4|mov|webm|mkv|m4v)(\?|$)/i.test(a.url);
+  if (isVideo) {
+    const type = ct || 'video/mp4';
+    return `<video class="att-video" controls preload="none">`
+      + `<source src="${esc(href)}" type="${esc(type)}">`
+      + `<a href="${esc(href)}">📎 ${esc(a.filename)}</a></video>`;
+  }
+  const isAudio = ct.startsWith('audio/')
+    || /\.(mp3|ogg|oga|wav|m4a|flac|opus)(\?|$)/i.test(a.url);
+  if (isAudio) {
+    const type = ct || 'audio/mpeg';
+    return `<audio class="att-audio" controls preload="none">`
+      + `<source src="${esc(href)}" type="${esc(type)}">`
+      + `<a href="${esc(href)}">📎 ${esc(a.filename)}</a></audio>`;
   }
   return `<a class="att-file" href="${esc(href)}">📎 ${esc(a.filename)}</a>`;
 }
@@ -354,14 +402,14 @@ function renderEmbed(
     );
   }
   if (e.description) {
-    parts.push(`<div class="embed-desc">${renderContent(e.description, mentions)}</div>`);
+    parts.push(`<div class="embed-desc">${renderContent(e.description, mentions, undefined, urlToPath)}</div>`);
   }
   if (e.fields && e.fields.length > 0) {
     parts.push('<div class="embed-fields">');
     for (const f of e.fields) {
       parts.push(
         `<div class="embed-field"><div class="embed-fn">${esc(f.name)}</div>`
-        + `<div class="embed-fv">${renderContent(f.value, mentions)}</div></div>`,
+        + `<div class="embed-fv">${renderContent(f.value, mentions, undefined, urlToPath)}</div></div>`,
       );
     }
     parts.push('</div>');
@@ -467,11 +515,32 @@ function renderComponents(components: RawComponent[] | undefined): string | null
   return `<div class="components">${flat.map(renderComponent).join('')}</div>`;
 }
 
-/** Bandeau des réactions d'un message. */
-function renderReactions(reactions: RawReaction[]): string {
-  const chips = reactions
-    .map((r) => `<span class="react">${esc(r.emoji.name ?? '?')} ${r.count}</span>`)
-    .join('');
+/**
+ * Bandeau des réactions d'un message. Emoji custom (avec `id`) rendu en
+ * image téléchargée si dispo ; emoji Unicode standard ou non-téléchargé
+ * tombent en texte. Audit B+C : avant, on rendait juste `name` en texte
+ * peu importe le type (les emojis custom devenaient `?` ou un nom brut).
+ */
+function renderReactions(
+  reactions: RawReaction[],
+  urlToPath: Map<string, string>,
+): string {
+  const chips = reactions.map((r) => {
+    const { id, name, animated } = r.emoji;
+    let body: string;
+    if (id) {
+      const ext = animated ? 'gif' : 'png';
+      const cdnUrl = `https://cdn.discordapp.com/emojis/${id}.${ext}`;
+      const localPath = urlToPath.get(cdnUrl);
+      body = localPath
+        ? `<img class="emoji" src="../${esc(localPath)}" alt=":${esc(name ?? '')}:">`
+        : esc(name ?? '?');
+    } else {
+      // Emoji Unicode (sans id) : juste le caractère, suffisant côté visuel.
+      body = esc(name ?? '?');
+    }
+    return `<span class="react">${body} ${r.count}</span>`;
+  }).join('');
   return `<div class="reactions">${chips}</div>`;
 }
 
@@ -519,6 +588,8 @@ const HTML_STYLE = HTML_STYLE_POLL + `
   .av { width: 40px; height: 40px; border-radius: 50%; flex: none;
     display: flex; align-items: center; justify-content: center;
     font-weight: 700; color: #fff; }
+  /* Avatar réel téléchargé : on garde la même boîte 40×40 ronde. */
+  .av-img { object-fit: cover; background: #2a2536; }
   .av.spacer { background: none; }
   .body { min-width: 0; flex: 1; }
   .head { display: flex; align-items: baseline; gap: 8px; }
@@ -534,6 +605,11 @@ const HTML_STYLE = HTML_STYLE_POLL + `
     margin-bottom: 2px; padding-left: 8px; border-left: 2px solid #4a4458; }
   .reply-author { font-weight: 600; color: #ab9ff0; }
   .reply-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .att-video, .att-audio {
+    display: block; margin-top: 6px; max-width: 480px; width: 100%;
+    border-radius: 8px; background: #0f0c16;
+  }
+  .att-audio { max-width: 380px; }
   .att-img { max-width: 380px; max-height: 300px; border-radius: 8px;
     margin-top: 6px; display: block; }
   .att-file { display: inline-block; margin-top: 4px; padding: 6px 10px;
@@ -556,6 +632,34 @@ const HTML_STYLE = HTML_STYLE_POLL + `
   .reactions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .react { background: #2a2536; border-radius: 999px; padding: 2px 9px;
     font-size: 13px; }
+  /* Mentions Discord : pilule violette pâle, comme dans le client Discord.
+     Couleurs séparées user / role / channel pour distinction visuelle. */
+  .mention {
+    background: rgba(108, 92, 224, .22); color: #d6cfff;
+    padding: 0 4px; border-radius: 4px; font-weight: 600;
+    text-decoration: none;
+  }
+  .mention--role { background: rgba(214, 168, 90, .20); color: #f0d6a1; }
+  .mention--channel { background: rgba(80, 138, 220, .22); color: #b9d3ff; }
+  /* Bot tag à côté du nom d'auteur — signal visuel standard (Discord
+     officiel, DCE, Discrub) que ce message vient d'une application/bot. */
+  .bot-tag {
+    background: #5865f2; color: #fff;
+    padding: 1px 6px; border-radius: 4px;
+    font-size: 10px; font-weight: 700; letter-spacing: .3px;
+    margin-left: 2px; vertical-align: 2px;
+  }
+  /* Emoji custom inline rendu en image (téléchargé dans emojis/ du zip).
+     22 px = taille canonique Discord. La barre de hauteur 1.5em du conteneur
+     reste cohérente avec le texte autour. */
+  .emoji {
+    width: 22px; height: 22px;
+    vertical-align: -5px;
+    display: inline-block;
+    object-fit: contain;
+  }
+  /* Réactions : emoji custom téléchargé rendu en image (cf. renderReactions). */
+  .react .emoji { width: 18px; height: 18px; margin-right: 2px; vertical-align: -3px; }
 
   /* ─── Impression — Vespry est le premier à le gérer parmi DCE/Discrub ───
      Tous les exports HTML concurrents sont en dark sans @media print.
@@ -605,18 +709,24 @@ function renderSystemMessage(m: RawMessage, labels: ExportLabels): string {
 function renderMessage(m: RawMessage, grouped: boolean, ctx: ExportContext): string {
   const L = ctx.labels;
   const parts: string[] = [`<div class="msg${grouped ? ' grouped' : ''}">`];
-  parts.push(grouped ? '<div class="av spacer"></div>' : avatarChip(m));
+  parts.push(grouped ? '<div class="av spacer"></div>' : avatarChip(m, ctx.urlToPath));
   parts.push('<div class="body">');
   if (m.referenced_message) parts.push(renderReply(m.referenced_message, L.mentions, isForwarded(m)));
   if (!grouped) {
     const edited = isEdited(m) ? ` <span class="edited">(${esc(L.edited)})</span>` : '';
+    // Bot tag à côté du nom — DCE et Discrub le mettent, c'est le signal
+    // visuel standard que ce message vient d'une application/bot. Audit
+    // B+C 2026-05-18.
+    const botTag = m.author.bot
+      ? ' <span class="bot-tag">BOT</span>'
+      : '';
     parts.push(
-      `<div class="head"><span class="author">${esc(authorName(m))}</span>`
+      `<div class="head"><span class="author">${esc(authorName(m))}</span>${botTag}`
       + `<span class="time">${esc(fmtDate(m.timestamp))}</span>${edited}</div>`,
     );
   }
   if (m.content.trim()) {
-    parts.push(`<div class="content">${renderContent(m.content, L.mentions, resolvedFrom(m))}</div>`);
+    parts.push(`<div class="content">${renderContent(m.content, L.mentions, resolvedFrom(m), ctx.urlToPath)}</div>`);
   }
   for (const a of m.attachments) parts.push(renderAttachment(a, ctx.urlToPath));
   for (const s of m.sticker_items ?? []) parts.push(renderSticker(s, ctx.urlToPath, L));
@@ -629,7 +739,7 @@ function renderMessage(m: RawMessage, grouped: boolean, ctx: ExportContext): str
   const components = renderComponents(m.components);
   if (components) parts.push(components);
   if (m.reactions && m.reactions.length > 0) {
-    parts.push(renderReactions(m.reactions));
+    parts.push(renderReactions(m.reactions, ctx.urlToPath));
   }
   parts.push('</div></div>');
   return parts.join('');
