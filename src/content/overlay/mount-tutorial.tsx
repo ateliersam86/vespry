@@ -15,37 +15,51 @@
 import { render } from 'preact';
 import { Tutorial } from './Tutorial';
 import tutorialCss from './Tutorial.css?inline';
+import { getThemePref, resolveTheme } from '../../ui/theme-pref';
 
 const HOST_ID = 'vespry-tutorial-host';
 let host: HTMLDivElement | null = null;
+let mountPoint: HTMLDivElement | null = null;
 
 /**
  * Ouvre le tuto. Si déjà ouvert (host présent), no-op. `startStep` permet
  * d'enchaîner depuis un step précis (ex. step 1 si l'overlay vient
  * d'être ouvert et qu'on saute le step 0 du bouton lanceur).
  */
-export function openTutorial(startStep = 0): void {
+export async function openTutorial(startStep = 0): Promise<void> {
   if (host) return;
   if (!document.body) return;
   host = document.createElement('div');
   host.id = HOST_ID;
+  // Propage le thème actuel sur le host pour que Tutorial.css branche les
+  // variables claires/sombres. Cf. audit Codex 2026-05-22 #9.
+  const pref = await getThemePref();
+  host.setAttribute('data-theme', resolveTheme(pref));
   const shadow = host.attachShadow({ mode: 'open' });
 
   const style = document.createElement('style');
   style.textContent = tutorialCss;
   shadow.appendChild(style);
 
-  const mountPoint = document.createElement('div');
+  mountPoint = document.createElement('div');
   shadow.appendChild(mountPoint);
   document.body.appendChild(host);
 
   render(<Tutorial startStep={startStep} onClose={closeTutorial} />, mountPoint);
 }
 
+/**
+ * Démonte le tuto. IMPORTANT : `render(null, mountPoint)` AVANT de retirer
+ * le host du DOM, sinon les `useEffect` du composant Tutorial ne nettoient
+ * pas leurs ressources (le `requestAnimationFrame` continue à tourner et
+ * le `keydown` reste accroché à `window`). Cf. audit Codex 2026-05-22 #1.
+ */
 export function closeTutorial(): void {
   if (!host) return;
+  if (mountPoint) render(null, mountPoint);
   host.remove();
   host = null;
+  mountPoint = null;
 }
 
 export function isTutorialOpen(): boolean {

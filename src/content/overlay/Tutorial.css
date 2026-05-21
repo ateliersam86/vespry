@@ -1,13 +1,32 @@
 /* Tutoriel interactif Vespry — styles autonomes.
    Le tuto vit dans SON PROPRE host DOM (cf. mount-tutorial.tsx), pas dans
    le shadow Vespry, parce qu'un parent de l'overlay a filter:blur qui
-   casse position:fixed. Du coup ces classes doivent être autosuffisantes,
-   sans dépendance aux variables CSS de l'overlay. */
+   casse position:fixed. Du coup ces classes doivent être autosuffisantes.
+
+   Theming : le host expose `data-theme="dark" | "light"` (set par
+   openTutorial avec resolveTheme), et les variables ci-dessous y sont
+   bindées. Cf. audit Codex 2026-05-22 #9. */
 
 :host {
-  /* Pas de hauteur intrinsèque : seul le contenu en position fixed
-     occupe l'espace. */
   all: initial;
+  --tuto-bg: #1f2128;
+  --tuto-text: #e8e9ee;
+  --tuto-muted: #b3b5be;
+  --tuto-border: #2c2f38;
+  --tuto-accent: #6c5ce0;
+  --tuto-accent-soft: #8a7cff;
+  --tuto-backdrop: rgba(0, 0, 0, .68);
+  --tuto-shadow: 0 16px 40px rgba(0, 0, 0, .65);
+}
+:host([data-theme="light"]) {
+  --tuto-bg: #ffffff;
+  --tuto-text: #2a2540;
+  --tuto-muted: #6e6790;
+  --tuto-border: #d9d3ec;
+  --tuto-accent: #6c5ce0;
+  --tuto-accent-soft: #6c5ce0;
+  --tuto-backdrop: rgba(40, 35, 65, .55);
+  --tuto-shadow: 0 16px 40px rgba(40, 35, 65, .25);
 }
 
 .v-tuto-root {
@@ -22,7 +41,7 @@
 .v-tuto-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, .68);
+  background: var(--tuto-backdrop);
   pointer-events: auto;
 }
 
@@ -31,8 +50,8 @@
   border-radius: 10px;
   background: transparent;
   box-shadow:
-    0 0 0 4px #6c5ce0,
-    0 0 0 9999px rgba(0, 0, 0, .68);
+    0 0 0 4px var(--tuto-accent),
+    0 0 0 9999px var(--tuto-backdrop);
   pointer-events: auto;
   transition:
     top .18s ease,
@@ -45,12 +64,12 @@
   position: fixed;
   width: 320px;
   max-width: calc(100vw - 32px);
-  background: #1f2128;
-  color: #e8e9ee;
-  border: 1px solid #2c2f38;
+  background: var(--tuto-bg);
+  color: var(--tuto-text);
+  border: 1px solid var(--tuto-border);
   border-radius: 10px;
   padding: 16px 18px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, .65);
+  box-shadow: var(--tuto-shadow);
   pointer-events: auto;
   animation: v-tuto-pop .25s cubic-bezier(.16, 1, .3, 1) both;
 }
@@ -60,7 +79,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .04em;
-  color: #8a7cff;
+  color: var(--tuto-accent-soft);
   margin-bottom: 4px;
 }
 
@@ -68,13 +87,13 @@
   font-size: 15px;
   font-weight: 700;
   margin-bottom: 6px;
-  color: #fff;
+  color: var(--tuto-text);
 }
 
 .v-tuto-body {
   font-size: 13px;
   line-height: 1.5;
-  color: #b3b5be;
+  color: var(--tuto-muted);
   margin-bottom: 14px;
 }
 
@@ -100,23 +119,23 @@
 }
 
 .v-tuto-btn-primary {
-  background: #6c5ce0;
+  background: var(--tuto-accent);
   color: #fff;
 }
 
 .v-tuto-btn-primary:hover {
-  background: #7a6deb;
+  background: var(--tuto-accent-soft);
 }
 
 .v-tuto-btn-ghost {
   background: transparent;
-  color: #b3b5be;
-  border-color: #2c2f38;
+  color: var(--tuto-muted);
+  border-color: var(--tuto-border);
 }
 
 .v-tuto-btn-ghost:hover {
-  color: #fff;
-  border-color: #6c5ce0;
+  color: var(--tuto-text);
+  border-color: var(--tuto-accent);
 }
 
 @keyframes v-tuto-fade {
@@ -133,7 +152,7 @@
    Suivant) : guide l'utilisateur à cliquer sur le bouton lanceur Vespry. */
 .v-tuto-await {
   font: 12px "gg sans", system-ui, -apple-system, Helvetica, Arial, sans-serif;
-  color: #8a7cff;
+  color: var(--tuto-accent-soft);
   font-style: italic;
   display: flex;
   align-items: center;

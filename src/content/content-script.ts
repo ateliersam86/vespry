@@ -97,19 +97,31 @@ console.log('[Vespry] launcher init', { hasBody: !!document.body });
 const observer = new MutationObserver(() => {
   if (!document.getElementById(LAUNCH_ID)) injectLauncher();
 });
-if (document.body) {
+let observedBody: HTMLElement | null = null;
+function attachObserver(): void {
+  if (!document.body) return;
+  if (observedBody === document.body) return;
+  observer.disconnect();
   observer.observe(document.body, { childList: true, subtree: false });
-} else {
+  observedBody = document.body;
+}
+attachObserver();
+if (!document.body) {
   // Body pas encore là (run_at: document_idle est tardif, mais on garde la
   // ceinture-bretelles) — réessaie au DOMContentLoaded.
   document.addEventListener('DOMContentLoaded', () => {
     injectLauncher();
-    observer.observe(document.body, { childList: true, subtree: false });
+    attachObserver();
   });
 }
-// Filet de sécurité : si un wrapper Discord remplace tout le body, le
-// MutationObserver attaché à l'ancien body ne déclenche plus. Polling 8s.
-setInterval(injectLauncher, 8000);
+// Filet de sécurité : si Discord remplace tout le body en SPA, l'observer
+// pointe sur l'ancien node détaché et ne déclenche plus. Le polling 8s
+// ré-injecte ET ré-attache l'observer sur le nouveau body. Cf. audit Codex
+// 2026-05-22 #4.
+setInterval(() => {
+  injectLauncher();
+  attachObserver();
+}, 8000);
 
 // --- 3. Tuto : premier launch + bouton « Revoir » depuis le popup ---
 
@@ -123,7 +135,7 @@ async function maybeShowOnboarding(): Promise<void> {
   if (!should) return;
   // Petit délai pour que le bouton lanceur soit bien rendu (rAF + 200 ms).
   requestAnimationFrame(() => {
-    setTimeout(() => openTutorial(0), 200);
+    setTimeout(() => { void openTutorial(0); }, 200);
   });
 }
 void maybeShowOnboarding();
@@ -142,7 +154,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     // lanceur) et on enchaîne avec les steps overlay (1+). Sinon on
     // commence par le step 0 pour que l'utilisateur (re)voie où cliquer.
     const overlayOpen = !!document.getElementById('vespry-overlay-host');
-    openTutorial(overlayOpen ? 1 : 0);
+    void openTutorial(overlayOpen ? 1 : 0);
   }
 });
 

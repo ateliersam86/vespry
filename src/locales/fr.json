@@ -284,5 +284,9 @@
   "reset.busy": "Effacement…",
   "reset.done_title": "Vespry est réinitialisé.",
   "reset.done_help": "Recharge l'onglet Discord pour repartir d'un état propre.",
-  "tuto.await_launch": "Clique sur Vespry pour continuer"
+  "tuto.await_launch": "Clique sur Vespry pour continuer",
+  "reset.partial_title": "Effacement partiel",
+  "reset.partial_help": "Recharge l'onglet Discord pour finaliser la suppression de l'historique.",
+  "reset.failed_title": "Échec de la réinitialisation",
+  "reset.retry": "Réessayer"
 }

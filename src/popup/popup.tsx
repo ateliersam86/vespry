@@ -235,7 +235,8 @@ function Popup(): JSX.Element {
  * sauvegarde ou autre. Il faut prévoir tous les problèmes. »
  */
 function ResetSection(): JSX.Element {
-  const [stage, setStage] = useState<'closed' | 'confirm' | 'done'>('closed');
+  type Stage = 'closed' | 'confirm' | 'done' | 'partial' | 'failed';
+  const [stage, setStage] = useState<Stage>('closed');
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState('');
 
@@ -244,7 +245,12 @@ function ResetSection(): JSX.Element {
     try {
       const r = await resetAllVespryData();
       setSummary(r.summary);
-      setStage('done');
+      // Triplet d'états honnête : succès complet, succès partiel (IDB
+      // bloquée mais préférences purgées), échec total. Cf. audit Codex
+      // 2026-05-22 #3 : on ne dit plus « réinitialisé » si ok=false.
+      if (!r.ok) setStage('failed');
+      else if (r.blocked) setStage('partial');
+      else setStage('done');
     } finally {
       setBusy(false);
     }
@@ -263,6 +269,29 @@ function ResetSection(): JSX.Element {
         <strong>{t('reset.done_title')}</strong>
         <div class="popup__reset-summary">{summary}</div>
         <div class="popup__reset-help">{t('reset.done_help')}</div>
+      </div>
+    );
+  }
+  if (stage === 'partial') {
+    return (
+      <div class="popup__reset-partial">
+        <strong>{t('reset.partial_title')}</strong>
+        <div class="popup__reset-summary">{summary}</div>
+        <div class="popup__reset-help">{t('reset.partial_help')}</div>
+      </div>
+    );
+  }
+  if (stage === 'failed') {
+    return (
+      <div class="popup__reset-failed">
+        <strong>{t('reset.failed_title')}</strong>
+        <div class="popup__reset-summary">{summary}</div>
+        <button
+          class="popup__reset-confirm"
+          onClick={() => setStage('confirm')}
+        >
+          {t('reset.retry')}
+        </button>
       </div>
     );
   }

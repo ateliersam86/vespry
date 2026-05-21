@@ -109,15 +109,40 @@ export function Tutorial({ startStep = 0, onClose }: Props): JSX.Element | null 
   const [stepIdx, setStepIdx] = useState(startStep);
   const [rect, setRect] = useState<Rect | null>(null);
   const rafRef = useRef<number | null>(null);
+  const skipBtnRef = useRef<HTMLButtonElement>(null);
+  const previousFocus = useRef<Element | null>(null);
 
-  // Suit l'élément cible à chaque frame. Si on est sur le step 0 (bouton
-  // lanceur) et que l'utilisateur clique dessus, l'overlay Vespry va se
-  // monter — on détecte la présence du shadow root et on passe au step 1.
+  // Focus initial sur « Passer » à l'ouverture, restauration du focus
+  // précédent à la fermeture. Cf. audit Codex 2026-05-22 #6.
   useEffect(() => {
+    previousFocus.current = document.activeElement;
+    // Léger délai pour laisser le DOM/anim s'installer avant le focus.
+    const t = setTimeout(() => skipBtnRef.current?.focus(), 80);
+    return () => {
+      clearTimeout(t);
+      if (previousFocus.current instanceof HTMLElement) {
+        previousFocus.current.focus();
+      }
+    };
+  }, []);
+
+  // Suit l'élément cible. Si on est sur le step 0 (bouton lanceur) et que
+  // l'utilisateur clique dessus, l'overlay Vespry va se monter — on détecte
+  // la présence du shadow root et on passe au step 1.
+  //
+  // Optimisation perf : on coalesce les setRect via un compare-and-skip
+  // pour ne pas re-render Preact à 60 FPS sur un step 0 statique (le
+  // bouton lanceur ne bouge pas). Cf. audit Codex 2026-05-22 #5.
+  useEffect(() => {
+    let lastSerialized = '';
     function tick(): void {
       const step = STEPS[stepIdx]!;
       const r = measure(step.scope, step.selector);
-      setRect(r);
+      const sig = r ? `${r.top}|${r.left}|${r.width}|${r.height}` : 'null';
+      if (sig !== lastSerialized) {
+        lastSerialized = sig;
+        setRect(r);
+      }
 
       // Avancement automatique step 0 → 1 quand l'overlay Vespry apparaît.
       if (stepIdx === 0) {
@@ -186,7 +211,12 @@ export function Tutorial({ startStep = 0, onClose }: Props): JSX.Element | null 
   const bubbleStyle = spotlight ? bubblePosition(spotlight, placement) : centerStyle();
 
   return (
-    <div class="v-tuto-root" role="dialog" aria-label={t('tuto.dialog_label')}>
+    <div
+      class="v-tuto-root"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('tuto.dialog_label')}
+    >
       {/* Backdrop sombre + spotlight via box-shadow géante (technique
           classique : la « fenêtre » a un fond transparent et une box-shadow
           immense qui crée le voile autour). Pendant que la cible est
@@ -216,14 +246,14 @@ export function Tutorial({ startStep = 0, onClose }: Props): JSX.Element | null 
             l'overlay ouvert. */}
         {stepIdx === 0 ? (
           <div class="v-tuto-actions">
-            <button class="v-tuto-btn v-tuto-btn-ghost" onClick={skip}>
+            <button ref={skipBtnRef} class="v-tuto-btn v-tuto-btn-ghost" onClick={skip}>
               {t('tuto.skip')}
             </button>
             <div class="v-tuto-await">{t('tuto.await_launch')}</div>
           </div>
         ) : (
           <div class="v-tuto-actions">
-            <button class="v-tuto-btn v-tuto-btn-ghost" onClick={skip}>
+            <button ref={skipBtnRef} class="v-tuto-btn v-tuto-btn-ghost" onClick={skip}>
               {t('tuto.skip')}
             </button>
             <div class="v-tuto-nav">

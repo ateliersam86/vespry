@@ -91,9 +91,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           lineHeight: 1.5,
         }}
       >
-        <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>
-          🦊 Oups, Vespry a rencontré un souci.
-        </div>
+        {/* Heading sémantique pour les lecteurs d'écran. L'emoji décoratif
+            est marqué aria-hidden pour ne pas être annoncé. Cf. audit
+            Codex 2026-05-22 #11. */}
+        <h2
+          role="heading"
+          aria-level={2}
+          style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', marginTop: 0 }}
+        >
+          <span aria-hidden="true">🦊 </span>
+          Oups, Vespry a rencontré un souci.
+        </h2>
         <p style={{ margin: '0 0 14px', fontSize: '13px', color: '#9991b3' }}>
           L'erreur a été enregistrée. Tu peux la signaler pour qu'on la corrige.
         </p>

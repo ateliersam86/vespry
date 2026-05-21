@@ -284,5 +284,9 @@
   "reset.busy": "Wiping…",
   "reset.done_title": "Vespry has been reset.",
   "reset.done_help": "Reload the Discord tab to start clean.",
-  "tuto.await_launch": "Click Vespry to continue"
+  "tuto.await_launch": "Click Vespry to continue",
+  "reset.partial_title": "Partial wipe",
+  "reset.partial_help": "Reload the Discord tab to finish clearing the export history.",
+  "reset.failed_title": "Reset failed",
+  "reset.retry": "Try again"
 }

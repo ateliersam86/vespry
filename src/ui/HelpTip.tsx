@@ -67,7 +67,18 @@ export function HelpTip({ id, text, placement = 'top' }: Props): JSX.Element {
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        onKeyDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          // Gérer Escape ici directement : si on `stopPropagation` aveuglément,
+          // le listener `window` qui ferme la bulle ne reçoit jamais l'event.
+          // Cf. audit Codex 2026-05-22 #7. Pour les autres touches, on stoppe
+          // la propagation pour éviter que Discord intercepte (raccourcis `/`).
+          if (e.key === 'Escape') {
+            setOpen(false);
+            btnRef.current?.blur();
+            return;
+          }
+          e.stopPropagation();
+        }}
       >
         ?
       </button>
