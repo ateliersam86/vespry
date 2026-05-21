@@ -283,5 +283,6 @@
   "reset.confirm": "Wipe everything",
   "reset.busy": "Wiping…",
   "reset.done_title": "Vespry has been reset.",
-  "reset.done_help": "Reload the Discord tab to start clean."
+  "reset.done_help": "Reload the Discord tab to start clean.",
+  "tuto.await_launch": "Click Vespry to continue"
 }

@@ -206,21 +206,38 @@ export function Tutorial({ startStep = 0, onClose }: Props): JSX.Element | null 
         </div>
         <div class="v-tuto-title">{t(step.titleKey)}</div>
         <div class="v-tuto-body">{t(step.bodyKey)}</div>
-        <div class="v-tuto-actions">
-          <button class="v-tuto-btn v-tuto-btn-ghost" onClick={skip}>
-            {t('tuto.skip')}
-          </button>
-          <div class="v-tuto-nav">
-            {stepIdx > 0 && (
-              <button class="v-tuto-btn v-tuto-btn-ghost" onClick={prev}>
-                {t('tuto.prev')}
-              </button>
-            )}
-            <button class="v-tuto-btn v-tuto-btn-primary" onClick={next}>
-              {stepIdx === STEPS.length - 1 ? t('tuto.done') : t('tuto.next')}
+        {/* Le step 0 n'a PAS de bouton "Suivant" : la seule façon
+            d'avancer est de cliquer sur le bouton lanceur Vespry (le tuto
+            détecte l'apparition du shadow root et passe auto au step 1).
+            Cf. feedback Sam 2026-05-21 : « on peut passer à l'étape 2
+            sans attendre que l'on clique sur Vespry, ça lance les étapes
+            2-3-4 alors qu'on n'a même pas ouvert Vespry ». Idem pour le
+            "Précédent" du step 1 : pas de retour au step 0 une fois
+            l'overlay ouvert. */}
+        {stepIdx === 0 ? (
+          <div class="v-tuto-actions">
+            <button class="v-tuto-btn v-tuto-btn-ghost" onClick={skip}>
+              {t('tuto.skip')}
             </button>
+            <div class="v-tuto-await">{t('tuto.await_launch')}</div>
           </div>
-        </div>
+        ) : (
+          <div class="v-tuto-actions">
+            <button class="v-tuto-btn v-tuto-btn-ghost" onClick={skip}>
+              {t('tuto.skip')}
+            </button>
+            <div class="v-tuto-nav">
+              {stepIdx > 1 && (
+                <button class="v-tuto-btn v-tuto-btn-ghost" onClick={prev}>
+                  {t('tuto.prev')}
+                </button>
+              )}
+              <button class="v-tuto-btn v-tuto-btn-primary" onClick={next}>
+                {stepIdx === STEPS.length - 1 ? t('tuto.done') : t('tuto.next')}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

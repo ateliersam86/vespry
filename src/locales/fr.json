@@ -283,5 +283,6 @@
   "reset.confirm": "Tout effacer",
   "reset.busy": "Effacement…",
   "reset.done_title": "Vespry est réinitialisé.",
-  "reset.done_help": "Recharge l'onglet Discord pour repartir d'un état propre."
+  "reset.done_help": "Recharge l'onglet Discord pour repartir d'un état propre.",
+  "tuto.await_launch": "Clique sur Vespry pour continuer"
 }
