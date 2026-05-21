@@ -12,6 +12,7 @@ import { progressPct } from '../messaging';
 import { t } from '../ui/i18n';
 import { formatRelativeFuture, formatRelativePast } from '../ui/relative-time';
 import { reportProblem } from '../diagnostics';
+import { resetAllVespryData } from '../ui/reset-vespry';
 import { checkForUpdate, getVersion } from '../version';
 import { getThemePref, resolveTheme } from '../ui/theme-pref';
 import {
@@ -184,13 +185,23 @@ function Popup(): JSX.Element {
       <button
         class="popup__replay-tuto"
         onClick={() => {
-          // Reset le flag pour que l'overlay relance le tuto au prochain
-          // affichage. L'utilisateur va sur Discord et le tuto démarre.
-          void chrome.storage.local.set({ 'vespry.tutoCompleted': false });
+          // Reset les flags tuto (vespry.tutoCompleted + firstSeenOnDiscord).
+          // Le content-script écoute storage.onChanged et relance le tuto
+          // immédiatement, peu importe que l'overlay soit ouvert ou non.
+          // Cf. content-script.ts § 3 (« tuto : premier launch + bouton
+          // Revoir »). Si Discord n'est pas ouvert dans aucun onglet, on
+          // l'ouvre — le tuto démarrera au chargement.
+          void chrome.storage.local.set({
+            'vespry.tutoCompleted': false,
+            'vespry.firstSeenOnDiscord': false,
+          });
+          if (!discordOpen) openDiscord();
         }}
       >
         {t('popup.review_tuto')}
       </button>
+
+      <ResetSection />
 
       <footer class="popup__foot v-muted">
         v{getVersion()} · {t('popup.tagline')}
@@ -207,6 +218,76 @@ function Popup(): JSX.Element {
           {t('report.problem')}
         </span>
       </footer>
+    </div>
+  );
+}
+
+/**
+ * Section « Réinitialisation Vespry » dans le footer du popup.
+ *
+ * Trois états : (1) bouton replié (ghost discret), (2) modale de
+ * confirmation listant ce qui sera purgé, (3) post-reset avec récap.
+ * L'utilisateur doit cliquer DEUX fois (bouton replié + bouton danger
+ * dans la modale) pour éviter les clics accidentels.
+ *
+ * Cf. feedback Sam 2026-05-21 : « un système pour nettoyer toutes les
+ * données liées à Vespry en cas de bug par rapport à l'historique de
+ * sauvegarde ou autre. Il faut prévoir tous les problèmes. »
+ */
+function ResetSection(): JSX.Element {
+  const [stage, setStage] = useState<'closed' | 'confirm' | 'done'>('closed');
+  const [busy, setBusy] = useState(false);
+  const [summary, setSummary] = useState('');
+
+  async function confirmReset(): Promise<void> {
+    setBusy(true);
+    try {
+      const r = await resetAllVespryData();
+      setSummary(r.summary);
+      setStage('done');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (stage === 'closed') {
+    return (
+      <button class="popup__reset-trigger" onClick={() => setStage('confirm')}>
+        {t('reset.trigger')}
+      </button>
+    );
+  }
+  if (stage === 'done') {
+    return (
+      <div class="popup__reset-done">
+        <strong>{t('reset.done_title')}</strong>
+        <div class="popup__reset-summary">{summary}</div>
+        <div class="popup__reset-help">{t('reset.done_help')}</div>
+      </div>
+    );
+  }
+  return (
+    <div class="popup__reset-modal">
+      <strong>{t('reset.confirm_title')}</strong>
+      <ul class="popup__reset-list">
+        <li>{t('reset.item_history')}</li>
+        <li>{t('reset.item_prefs')}</li>
+        <li>{t('reset.item_schedule')}</li>
+        <li>{t('reset.item_tuto')}</li>
+        <li>{t('reset.item_token')}</li>
+      </ul>
+      <div class="popup__reset-actions">
+        <button class="popup__reset-cancel" onClick={() => setStage('closed')}>
+          {t('reset.cancel')}
+        </button>
+        <button
+          class="popup__reset-confirm"
+          disabled={busy}
+          onClick={() => void confirmReset()}
+        >
+          {busy ? t('reset.busy') : t('reset.confirm')}
+        </button>
+      </div>
     </div>
   );
 }

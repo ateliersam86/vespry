@@ -1,0 +1,130 @@
+/* Tutoriel interactif Vespry — styles autonomes.
+   Le tuto vit dans SON PROPRE host DOM (cf. mount-tutorial.tsx), pas dans
+   le shadow Vespry, parce qu'un parent de l'overlay a filter:blur qui
+   casse position:fixed. Du coup ces classes doivent être autosuffisantes,
+   sans dépendance aux variables CSS de l'overlay. */
+
+:host {
+  /* Pas de hauteur intrinsèque : seul le contenu en position fixed
+     occupe l'espace. */
+  all: initial;
+}
+
+.v-tuto-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646; /* sous le bouton lanceur (2147483647) */
+  pointer-events: none;
+  font: 13px/1.5 "gg sans", system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  animation: v-tuto-fade .25s ease both;
+}
+
+.v-tuto-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, .68);
+  pointer-events: auto;
+}
+
+.v-tuto-spotlight {
+  position: fixed;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow:
+    0 0 0 4px #6c5ce0,
+    0 0 0 9999px rgba(0, 0, 0, .68);
+  pointer-events: auto;
+  transition:
+    top .18s ease,
+    left .18s ease,
+    width .18s ease,
+    height .18s ease;
+}
+
+.v-tuto-bubble {
+  position: fixed;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  background: #1f2128;
+  color: #e8e9ee;
+  border: 1px solid #2c2f38;
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .65);
+  pointer-events: auto;
+  animation: v-tuto-pop .25s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.v-tuto-step {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #8a7cff;
+  margin-bottom: 4px;
+}
+
+.v-tuto-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #fff;
+}
+
+.v-tuto-body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #b3b5be;
+  margin-bottom: 14px;
+}
+
+.v-tuto-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.v-tuto-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.v-tuto-btn {
+  border-radius: 6px;
+  padding: 7px 14px;
+  font: 600 13px "gg sans", system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+
+.v-tuto-btn-primary {
+  background: #6c5ce0;
+  color: #fff;
+}
+
+.v-tuto-btn-primary:hover {
+  background: #7a6deb;
+}
+
+.v-tuto-btn-ghost {
+  background: transparent;
+  color: #b3b5be;
+  border-color: #2c2f38;
+}
+
+.v-tuto-btn-ghost:hover {
+  color: #fff;
+  border-color: #6c5ce0;
+}
+
+@keyframes v-tuto-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes v-tuto-pop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

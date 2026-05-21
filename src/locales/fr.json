@@ -269,5 +269,19 @@
   "tuto.prev": "Précédent",
   "tuto.next": "Suivant",
   "tuto.done": "C'est parti",
-  "popup.review_tuto": "Revoir le tutoriel"
+  "popup.review_tuto": "Revoir le tutoriel",
+  "tuto.step0_title": "Voici Vespry",
+  "tuto.step0_body": "Clique sur ce bouton à tout moment pour exporter une conversation Discord.",
+  "reset.trigger": "Réinitialiser Vespry",
+  "reset.confirm_title": "Tout effacer ? Cette action est irréversible.",
+  "reset.item_history": "Historique des exports passés (IndexedDB)",
+  "reset.item_prefs": "Préférences (thème, mode Avancé, etc.)",
+  "reset.item_schedule": "Planning d'export récurrent",
+  "reset.item_tuto": "État du tutoriel (reverra l'intro)",
+  "reset.item_token": "Jeton Discord capté (sera re-capté au prochain Discord)",
+  "reset.cancel": "Annuler",
+  "reset.confirm": "Tout effacer",
+  "reset.busy": "Effacement…",
+  "reset.done_title": "Vespry est réinitialisé.",
+  "reset.done_help": "Recharge l'onglet Discord pour repartir d'un état propre."
 }

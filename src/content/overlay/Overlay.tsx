@@ -60,7 +60,6 @@ import { FilenameTemplateField } from './FilenameTemplateField';
 import { PasswordSection } from './PasswordSection';
 import { HelpTip } from '../../ui/HelpTip';
 import { formatRelativePast } from '../../ui/relative-time';
-import { Tutorial, shouldShowTutorial } from './Tutorial';
 import {
   DEFAULT_ZIP_TEMPLATE,
   loadZipTemplate,
@@ -368,24 +367,12 @@ export function Overlay({
    */
   const [showLargeRun, setShowLargeRun] = useState<number | null>(null);
   const [largeRunAcked, setLargeRunAcked] = useState(false);
-  /**
-   * Tutoriel interactif au premier lancement (3 steps). Vérifie le flag
-   * `vespry.tutoCompleted` au montage et déclenche l'affichage si absent.
-   * L'utilisateur peut le rappeler depuis le popup (bouton « Revoir »).
-   * Cf. feedback Sam 2026-05-21.
-   */
-  const [showTutorial, setShowTutorial] = useState(false);
-  useEffect(() => {
-    void shouldShowTutorial().then((should) => {
-      if (should) setShowTutorial(true);
-    });
-    // Permet aussi au popup de relancer le tuto via un message.
-    function onMsg(e: MessageEvent): void {
-      if (e.data === 'vespry-tuto-replay') setShowTutorial(true);
-    }
-    window.addEventListener('message', onMsg);
-    return () => window.removeEventListener('message', onMsg);
-  }, []);
+  // Le tutoriel ne vit plus dans l'overlay : il est piloté par le
+  // content-script et monté dans son propre host DOM (cf.
+  // `src/content/overlay/mount-tutorial.tsx`). Ça permet au backdrop de
+  // couvrir tout l'écran (le shadow Vespry est dans un parent avec
+  // `filter: blur` qui casse `position: fixed`) et de cibler aussi bien
+  // le bouton lanceur Discord que les éléments du panneau Vespry.
   /**
    * Spinner sur le bouton « Lancer » pendant l'estimation pré-flight
    * (~1-3 s). Cf. enqueue() qui appelle controller.estimate avant
@@ -1245,16 +1232,6 @@ export function Overlay({
           }}
         />
       </div>
-    )}
-    {showTutorial && (
-      <Tutorial
-        // L'overlay vit dans un Shadow DOM. Le composant Tutorial mesure
-        // ses cibles via querySelector — il faut donc lui passer la racine
-        // shadow, sinon il chercherait dans le document principal et ne
-        // trouverait rien. `getRootNode()` remonte au ShadowRoot.
-        root={(document.getElementById('vespry-overlay-host')?.shadowRoot ?? document) as ShadowRoot | Document}
-        onClose={() => setShowTutorial(false)}
-      />
     )}
     </>
   );

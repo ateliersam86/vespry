@@ -8,6 +8,47 @@ l'overlay et le popup vient de `package.json`.
 Première version fonctionnelle prête pour soumission Chrome Web Store,
 Microsoft Edge Add-ons et Mozilla AMO.
 
+### Session 2026-05-21 (suite) — tuto fix critique + reset Vespry
+
+**Bug critique tuto résolu** : le tuto était rendu dans le shadow DOM
+Vespry, dont un parent a `filter: blur(55px)` qui casse `position: fixed`
+(crée un containing block). Conséquence : backdrop transparent, spotlight
+mal positionné, impossible de cibler le bouton lanceur Discord. Fix :
+Tutorial.tsx réécrit pour vivre dans **son propre host DOM** attaché à
+`document.body`, avec son CSS embarqué (`Tutorial.css?inline`). Le tuto
+peut maintenant cibler à la fois le DOM principal Discord (`scope: 'doc'`)
+et le shadow Vespry (`scope: 'shadow'`).
+
+**Step 0 ajouté** : pointe le bouton lanceur Vespry (`#vespry-launch-btn`)
+au tout début du tuto. Texte : « Voici Vespry. Clique sur ce bouton à tout
+moment pour exporter une conversation Discord. » Quand l'utilisateur clique
+sur le bouton, l'overlay s'ouvre et le tuto avance automatiquement au
+step 1 (détection du `.v-rail` dans le shadow root).
+
+**Onboarding au premier launch sur Discord** : flag
+`vespry.firstSeenOnDiscord` introduit. Au montage du content-script, si
+absent, le tuto démarre automatiquement au step 0 (200 ms après le rAF
+pour laisser le bouton lanceur se rendre).
+
+**Bouton « Revoir le tuto » réparé** : le popup reset les flags, le
+content-script écoute `chrome.storage.onChanged` et déclenche le tuto
+immédiatement (step 0 si Vespry pas ouvert, step 1 sinon). Plus besoin
+de cliquer sur le bouton Vespry manuellement. Si Discord n'est ouvert
+dans aucun onglet, le popup ouvre Discord avant.
+
+**Bouton lanceur renforcé** : z-index passé à 2147483647 (max int32) au
+cas où Discord aurait ajouté un wrapper plus haut. `MutationObserver`
+sur `document.body` remplace le polling 4s par une ré-injection
+réactive ; le polling 8s reste en filet de sécurité. `console.log`
+de debug pour faciliter les futurs diagnostics.
+
+**Réinitialisation complète de Vespry** : section dans le footer du
+popup avec bouton replié → modale de confirmation (liste ce qui sera
+effacé : IndexedDB, préférences, planning, tuto, jeton capté) → exécution
++ récap. `src/ui/reset-vespry.ts` : purge `indexedDB.deleteDatabase('vespry')`
++ `chrome.storage.local` (clés `vespry.*` + jetons). Idempotent. 11
+nouvelles clés i18n `reset.*` × 15 locales.
+
 ### Session 2026-05-21 — onboarding, tooltips, robustesse erreurs
 
 **Tutoriel interactif au premier lancement** : `Tutorial.tsx` + 3 steps

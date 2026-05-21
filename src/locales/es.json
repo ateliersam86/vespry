@@ -269,5 +269,19 @@
   "tuto.prev": "Previous",
   "tuto.next": "Next",
   "tuto.done": "Got it",
-  "popup.review_tuto": "Replay the tutorial"
+  "popup.review_tuto": "Replay the tutorial",
+  "tuto.step0_title": "Meet Vespry",
+  "tuto.step0_body": "Click this button anytime to export a Discord conversation.",
+  "reset.trigger": "Reset Vespry",
+  "reset.confirm_title": "Wipe everything? This cannot be undone.",
+  "reset.item_history": "Past exports history (IndexedDB)",
+  "reset.item_prefs": "Preferences (theme, advanced mode, etc.)",
+  "reset.item_schedule": "Scheduled recurring export",
+  "reset.item_tuto": "Tutorial state (intro will replay)",
+  "reset.item_token": "Captured Discord token (will be re-captured next time you visit Discord)",
+  "reset.cancel": "Cancel",
+  "reset.confirm": "Wipe everything",
+  "reset.busy": "Wiping…",
+  "reset.done_title": "Vespry has been reset.",
+  "reset.done_help": "Reload the Discord tab to start clean."
 }
