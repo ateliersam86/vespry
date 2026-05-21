@@ -675,6 +675,7 @@ function snowflakeMidpoint(lastId: Snowflake): Snowflake | null {
     if (n <= 0n) return null;
     return (n / 2n).toString();
   } catch {
+    // silencieux : entrée non-numérique, le JSDoc documente le contrat null.
     return null;
   }
 }

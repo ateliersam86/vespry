@@ -58,6 +58,9 @@ import { ScheduleSection } from './ScheduleSection';
 import { PurgeModal } from './PurgeModal';
 import { FilenameTemplateField } from './FilenameTemplateField';
 import { PasswordSection } from './PasswordSection';
+import { HelpTip } from '../../ui/HelpTip';
+import { formatRelativePast } from '../../ui/relative-time';
+import { Tutorial, shouldShowTutorial } from './Tutorial';
 import {
   DEFAULT_ZIP_TEMPLATE,
   loadZipTemplate,
@@ -132,20 +135,29 @@ function zoneLabel(z: SelectionZone, channels: RawChannel[]): string {
   return z.negate ? `${t('zone.not')} ${core}` : core;
 }
 
-/** Ligne case à cocher + libellé (options, filtres booléens). */
+/**
+ * Ligne case à cocher + libellé (options, filtres booléens).
+ *
+ * Optionnellement, une pastille `?` d'aide est rendue à droite du libellé
+ * si `help` est fourni (cf. HelpTip). Le clic sur la pastille ne propage
+ * pas au toggle (HelpTip stopPropagation ses events).
+ */
 function CheckRow({
   on,
   onToggle,
   label,
+  help,
 }: {
   on: boolean;
   onToggle: () => void;
   label: string;
+  help?: string;
 }): JSX.Element {
   return (
     <div class="v-checkrow" onClick={onToggle}>
       <span class={`v-cbx ${on ? 'on' : ''}`}>{on ? <IconCheck /> : null}</span>
-      {label}
+      <span>{label}</span>
+      {help ? <HelpTip text={help} /> : null}
     </div>
   );
 }
@@ -199,7 +211,7 @@ function groupChannels(all: RawChannel[], dmZone: boolean): CategoryGroup[] {
   for (const cat of cats) {
     const channels = text.filter((c) => c.parent_id === cat.id);
     if (channels.length) {
-      groups.push({ id: cat.id, name: cat.name ?? '—', channels });
+      groups.push({ id: cat.id, name: cat.name ?? '·', channels });
     }
   }
   return groups;
@@ -268,6 +280,13 @@ export function Overlay({
   const [fContent, setFContent] = useState('');
   const [fAuthor, setFAuthor] = useState('');
   const [fMention, setFMention] = useState('');
+  /**
+   * Suggestions pour le champ « Auteur » du filtre. Alimentées depuis les
+   * auteurs déjà vus dans les exports passés du serveur courant (best-effort,
+   * branchement IDB à venir). Vide si aucun export précédent : l'input reste
+   * pleinement fonctionnel. Branché à `<datalist id="vespry-authors">`.
+   */
+  const [knownAuthors] = useState<string[]>([]);
   /** Zones-drapeaux actives (pinned, image, sticker…) — un critère sans saisie. */
   const [flags, setFlags] = useState<Set<FlagKind>>(new Set());
   /** Combinaison des zones de critères : OU (`any`) ou ET (`all`). */
@@ -277,6 +296,23 @@ export function Overlay({
   const [reactionUsers, setReactionUsers] = useState(false);
   /** Export incrémental — seulement les messages depuis le dernier export. */
   const [incremental, setIncremental] = useState(false);
+  /**
+   * Date du dernier export réussi par serveur. Alimentée au montage via
+   * `controller.listRuns()`. Affichée sous le toggle Incrémental pour lever
+   * l'ambiguïté « est-ce qu'il y a déjà eu un export ? ». Cf. feedback Sam
+   * 2026-05-21. Map<guildId, lastUpdatedAt>.
+   */
+  const [lastRunByGuild, setLastRunByGuild] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    void controller.listRuns().then((runs) => {
+      const map = new Map<string, number>();
+      for (const r of runs) {
+        const prev = map.get(r.guildId) ?? 0;
+        if (r.updatedAt > prev) map.set(r.guildId, r.updatedAt);
+      }
+      setLastRunByGuild(map);
+    });
+  }, [controller]);
   /** Opt-in à l'envoi de rapports de schéma anonymes (aide la détection). */
   const [schemaOptIn, setSchemaOptIn] = useState(false);
   useEffect(() => {
@@ -290,8 +326,24 @@ export function Overlay({
    * juste après comme `manualSel` / `selected`.
    */
   const [zipPassword, setZipPassword] = useState('');
-  /** Panneau d'export : mode avancé (options pointues visibles) ou simple. */
-  const [advanced, setAdvanced] = useState(false);
+  /**
+   * Panneau d'export : mode avancé (options pointues visibles) ou simple.
+   * Défaut `true` au premier launch : l'utilisateur power-user trouve ainsi
+   * directement les filtres (texte, dates, période). Le choix est persisté
+   * dans `chrome.storage.local` sous `vespry.advancedMode` pour respecter la
+   * préférence ensuite. Cf. feedback Sam 2026-05-21 : les filtres étaient
+   * invisibles en mode Simple, perçus comme « ne fonctionnent pas du tout ».
+   */
+  const [advanced, setAdvanced] = useState(true);
+  useEffect(() => {
+    void chrome.storage.local.get('vespry.advancedMode').then((r) => {
+      const stored = r['vespry.advancedMode'];
+      if (typeof stored === 'boolean') setAdvanced(stored);
+    });
+  }, []);
+  useEffect(() => {
+    void chrome.storage.local.set({ 'vespry.advancedMode': advanced });
+  }, [advanced]);
   const [view, setView] = useState<'export' | 'credits'>('export');
   const [theme, setTheme] = useState<ThemePref>('dark');
   const [credits, setCredits] = useState<Credits | null>(null);
@@ -316,6 +368,24 @@ export function Overlay({
    */
   const [showLargeRun, setShowLargeRun] = useState<number | null>(null);
   const [largeRunAcked, setLargeRunAcked] = useState(false);
+  /**
+   * Tutoriel interactif au premier lancement (3 steps). Vérifie le flag
+   * `vespry.tutoCompleted` au montage et déclenche l'affichage si absent.
+   * L'utilisateur peut le rappeler depuis le popup (bouton « Revoir »).
+   * Cf. feedback Sam 2026-05-21.
+   */
+  const [showTutorial, setShowTutorial] = useState(false);
+  useEffect(() => {
+    void shouldShowTutorial().then((should) => {
+      if (should) setShowTutorial(true);
+    });
+    // Permet aussi au popup de relancer le tuto via un message.
+    function onMsg(e: MessageEvent): void {
+      if (e.data === 'vespry-tuto-replay') setShowTutorial(true);
+    }
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
   /**
    * Spinner sur le bouton « Lancer » pendant l'estimation pré-flight
    * (~1-3 s). Cf. enqueue() qui appelle controller.estimate avant
@@ -732,7 +802,7 @@ export function Overlay({
                 ? <IconCheck />
                 : selected.size > 0 ? <IconMinus /> : null}
             </span>
-            <span class="v-clist-name">{activeGuild?.name ?? '—'}</span>
+            <span class="v-clist-name">{activeGuild?.name ?? '·'}</span>
             {totalChannels > 0 && (
               <span class="v-clist-count">{selected.size}/{totalChannels}</span>
             )}
@@ -743,6 +813,8 @@ export function Overlay({
             placeholder={t('overlay.search_channels')}
             value={search}
             onInput={(e) => setSearch((e.target as HTMLInputElement).value)}
+            onKeyDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           />
           <div class="v-clist-scroll">
             {loadingChannels && <div class="v-cat">{t('overlay.loading')}</div>}
@@ -876,13 +948,18 @@ export function Overlay({
               )}
             </div>
             <div class="v-field">
-              <label>{t('overlay.period_label')}</label>
+              <label>
+                {t('overlay.period_label')}
+                <HelpTip text={t('tip.period')} />
+              </label>
               <div class="v-daterow">
                 <input
                   class="v-date"
                   type="date"
                   value={afterDate}
                   onInput={(e) => setAfterDate((e.target as HTMLInputElement).value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
                 />
                 <span class="v-muted">→</span>
                 <input
@@ -890,6 +967,8 @@ export function Overlay({
                   type="date"
                   value={beforeDate}
                   onInput={(e) => setBeforeDate((e.target as HTMLInputElement).value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
                 />
               </div>
             </div>
@@ -908,7 +987,10 @@ export function Overlay({
               </div>
             </div>
             <div class="v-field">
-              <label>{t('overlay.format_label')}</label>
+              <label>
+                {t('overlay.format_label')}
+                <HelpTip text={t('tip.formats')} />
+              </label>
               <div class="v-mchips">
                 {ALL_FORMATS.map((f) => {
                   const on = formats.includes(f);
@@ -932,7 +1014,10 @@ export function Overlay({
             {advanced && (
             <>
             <div class="v-field">
-              <label>{t('overlay.partition_label')}</label>
+              <label>
+                {t('overlay.partition_label')}
+                <HelpTip text={t('tip.partition')} />
+              </label>
               <div class="v-mchips">
                 {PARTITION_SIZES.map((size) => (
                   <span
@@ -953,16 +1038,26 @@ export function Overlay({
                 <input
                   class="v-input"
                   type="text"
+                  list="vespry-authors"
                   placeholder={t('filter.author')}
                   value={fAuthor}
                   onInput={(e) => setFAuthor((e.target as HTMLInputElement).value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
                 />
+                <datalist id="vespry-authors">
+                  {knownAuthors.map((a) => (
+                    <option key={a} value={a} />
+                  ))}
+                </datalist>
                 <input
                   class="v-input"
                   type="text"
                   placeholder={t('filter.content')}
                   value={fContent}
                   onInput={(e) => setFContent((e.target as HTMLInputElement).value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
                 />
                 <input
                   class="v-input"
@@ -970,6 +1065,8 @@ export function Overlay({
                   placeholder={t('filter.mention')}
                   value={fMention}
                   onInput={(e) => setFMention((e.target as HTMLInputElement).value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
                 />
               </div>
               <div class="v-mchips">
@@ -1000,7 +1097,31 @@ export function Overlay({
                 on={incremental}
                 onToggle={() => setIncremental(!incremental)}
                 label={t('filter.incremental')}
+                help={t('tip.incremental')}
               />
+              {/* Indique la fraîcheur du dernier export du serveur courant.
+                  Si aucun export précédent, on le dit aussi : l'utilisateur
+                  sait que cocher Incrémental fera un export complet la
+                  première fois. Cf. feedback Sam 2026-05-21. */}
+              {activeGuild && (
+                <div class="v-help" style="margin-top:4px;padding-left:24px">
+                  {lastRunByGuild.has(activeGuild.id)
+                    ? t('incremental.last_export', {
+                        when: formatRelativePast(
+                          lastRunByGuild.get(activeGuild.id) as number,
+                          Date.now(),
+                        ),
+                      })
+                    : t('incremental.never_exported')}
+                </div>
+              )}
+            </div>
+            {/* Section Confidentialité — dédiée pour bien séparer un opt-in
+                de télémétrie (envoi anonyme côté réseau) d'un simple filtre
+                local. Cf. feedback Sam 2026-05-21 : le toggle était mal placé
+                dans « Filtres » et son intitulé n'était pas compréhensible. */}
+            <div class="v-field">
+              <label>{t('privacy.section')}</label>
               <CheckRow
                 on={schemaOptIn}
                 onToggle={() => {
@@ -1008,7 +1129,8 @@ export function Overlay({
                   setSchemaOptIn(next);
                   void setSchemaReportEnabled(next);
                 }}
-                label={t('filter.schema_optin')}
+                label={t('privacy.schema_optin')}
+                help={t('tip.schema_optin')}
               />
             </div>
             {focus && activeGuild && (manualSel.get(focus.id)?.size ?? 0) > 0 && (
@@ -1033,7 +1155,7 @@ export function Overlay({
           </div>
           <div class="v-side-foot">
             <button
-              class="v-btn"
+              class="v-btn v-tuto-launch"
               disabled={
                 estimating
                 || (selected.size === 0 && manualSel.size === 0)
@@ -1123,6 +1245,16 @@ export function Overlay({
           }}
         />
       </div>
+    )}
+    {showTutorial && (
+      <Tutorial
+        // L'overlay vit dans un Shadow DOM. Le composant Tutorial mesure
+        // ses cibles via querySelector — il faut donc lui passer la racine
+        // shadow, sinon il chercherait dans le document principal et ne
+        // trouverait rien. `getRootNode()` remonte au ShadowRoot.
+        root={(document.getElementById('vespry-overlay-host')?.shadowRoot ?? document) as ShadowRoot | Document}
+        onClose={() => setShowTutorial(false)}
+      />
     )}
     </>
   );
@@ -1295,7 +1427,7 @@ function Components({ components }: { components: RawComponent[] }): JSX.Element
     <div class="v-components">
       {flat.map((c, i) => {
         if (c.type === 2) {
-          const label = (c.emoji?.name ? `${c.emoji.name} ` : '') + (c.label ?? '—');
+          const label = (c.emoji?.name ? `${c.emoji.name} ` : '') + (c.label ?? '·');
           if (c.style === 5 && c.url) {
             return (
               <a key={i} class="v-comp-btn link" href={c.url} target="_blank" rel="noopener noreferrer">
@@ -1310,7 +1442,7 @@ function Components({ components }: { components: RawComponent[] }): JSX.Element
           );
         }
         return (
-          <span key={i} class="v-comp-menu-label">▾ {c.placeholder ?? '—'}</span>
+          <span key={i} class="v-comp-menu-label">▾ {c.placeholder ?? '·'}</span>
         );
       })}
     </div>
@@ -1922,7 +2054,7 @@ function DonorWall({
 function Credit(): JSX.Element {
   return (
     <div class="v-credit">
-      © {new Date().getFullYear()} L'Atelier de Sam — fait avec passion par Samuel Muselet.
+      © {new Date().getFullYear()} L'Atelier de Sam · fait avec passion par Samuel Muselet.
     </div>
   );
 }
@@ -1954,7 +2086,7 @@ function ToSModal({
   return (
     <div class="v-modal-bd" onClick={onCancel}>
       <div class="v-modal v-modal--tos" onClick={(e) => e.stopPropagation()}>
-        <div class="v-tos-title">Avant ton premier export — à lire</div>
+        <div class="v-tos-title">À lire avant ton premier export</div>
         <div class="v-tos-body">
           <p>
             Vespry utilise l'API officielle de Discord avec
@@ -1970,8 +2102,8 @@ function ToSModal({
             </a>.
           </p>
           <p>
-            En pratique, exporter ton propre historique est rarement sanctionné —
-            c'est ce que font des outils similaires depuis des années. Mais la
+            En pratique, exporter ton propre historique est rarement sanctionné.
+            C'est ce que font des outils similaires depuis des années, mais la
             décision revient à Discord, pas à nous.
           </p>
           <p>

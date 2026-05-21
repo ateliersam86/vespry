@@ -134,3 +134,31 @@
   display: flex; justify-content: space-between;
   font-size: 11.5px;
 }
+
+/* Bouton « Revoir le tuto » dans le popup. Discret, lié au reset du flag
+   `vespry.tutoCompleted`. Cf. feedback Sam 2026-05-21. */
+.popup__replay-tuto {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 6px;
+  font: 12px var(--font);
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+  transition: color .12s ease, border-color .12s ease;
+}
+.popup__replay-tuto:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.popup__report {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color .12s ease;
+}
+.popup__report:hover { color: var(--accent); }

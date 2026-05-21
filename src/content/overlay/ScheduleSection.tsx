@@ -18,11 +18,14 @@ import { useEffect, useState } from 'preact/hooks';
 import {
   loadSchedule,
   saveSchedule,
+  computeNextFireTime,
   type ScheduleFrequency,
   type ScheduledExport,
 } from '../../engine/scheduler';
+import { formatRelativeFuture, formatRelativePast } from '../../ui/relative-time';
 import { t } from '../../ui/i18n';
 import type { RawGuild } from '../../engine/types';
+import { HelpTip } from '../../ui/HelpTip';
 
 interface Props {
   /** Serveurs connus (issus de `RemoteController.guilds`). */
@@ -81,7 +84,10 @@ export function ScheduleSection({ guilds }: Props): preact.JSX.Element {
 
   return (
     <div class="v-field">
-      <label>{t('schedule.label')}</label>
+      <label>
+        {t('schedule.label')}
+        <HelpTip text={t('tip.schedule')} />
+      </label>
       {/* Texte d'aide explicite : on lève l'illusion que la planification
           fige la sélection ad hoc affichée à droite. Sam (2026-05-19) :
           « si on exporte à chaque fois la même liste de messages que l'on
@@ -154,6 +160,19 @@ export function ScheduleSection({ guilds }: Props): preact.JSX.Element {
           </span>
         )}
       </div>
+      {/* Affichage du dernier et prochain export auto, pour lever l'ambiguïté
+          « est-ce que ça tourne ou pas ? ». Cf. feedback Sam 2026-05-21.
+          Le saved.lastFiredAt est posé par le service worker à chaque tir.
+          computeNextFireTime calcule la prochaine occurrence prévue. */}
+      {saved && (
+        <div class="v-help" style="margin-top:8px">
+          {saved.lastFiredAt
+            ? `${t('schedule.last_fire')} ${formatRelativePast(saved.lastFiredAt, Date.now())}`
+            : t('schedule.never_fired')}
+          {' · '}
+          {t('schedule.next_fire')} {formatRelativeFuture(computeNextFireTime(saved, Date.now()), Date.now())}
+        </div>
+      )}
     </div>
   );
 }

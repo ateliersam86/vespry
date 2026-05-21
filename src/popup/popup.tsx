@@ -7,8 +7,11 @@
 import { type JSX, render } from 'preact';
 import { useEffect, useReducer, useState } from 'preact/hooks';
 import { RemoteController } from '../ui/remote-controller';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { progressPct } from '../messaging';
 import { t } from '../ui/i18n';
+import { formatRelativeFuture, formatRelativePast } from '../ui/relative-time';
+import { reportProblem } from '../diagnostics';
 import { checkForUpdate, getVersion } from '../version';
 import { getThemePref, resolveTheme } from '../ui/theme-pref';
 import {
@@ -178,8 +181,31 @@ function Popup(): JSX.Element {
         {discordOpen ? t('popup.go_discord') : t('popup.open_discord')}
       </button>
 
+      <button
+        class="popup__replay-tuto"
+        onClick={() => {
+          // Reset le flag pour que l'overlay relance le tuto au prochain
+          // affichage. L'utilisateur va sur Discord et le tuto démarre.
+          void chrome.storage.local.set({ 'vespry.tutoCompleted': false });
+        }}
+      >
+        {t('popup.review_tuto')}
+      </button>
+
       <footer class="popup__foot v-muted">
         v{getVersion()} · {t('popup.tagline')}
+        {' · '}
+        <span
+          class="popup__report"
+          onClick={() => {
+            // Ouvre une issue GitHub pré-remplie avec env + journal 60 lignes
+            // + champs Discord inconnus détectés. Sans contenu de messages
+            // ni jeton. Cf. src/diagnostics.ts pour le détail du rapport.
+            void reportProblem('Problème signalé depuis le popup Vespry');
+          }}
+        >
+          {t('report.problem')}
+        </span>
       </footer>
     </div>
   );
@@ -269,29 +295,15 @@ function HistoryCard({
   );
 }
 
-/** « dans 3 h », « dans 2 j » — résolution adaptée à l'échelle. */
-function formatRelativeFuture(target: number, now: number): string {
-  const sec = Math.max(0, Math.round((target - now) / 1000));
-  if (sec < 60) return t('time.in_seconds', { n: sec });
-  const min = Math.round(sec / 60);
-  if (min < 60) return t('time.in_minutes', { n: min });
-  const h = Math.round(min / 60);
-  if (h < 48) return t('time.in_hours', { n: h });
-  const d = Math.round(h / 24);
-  return t('time.in_days', { n: d });
-}
-
-/** « il y a 3 h », « il y a 2 j » — symétrique de formatRelativeFuture. */
-function formatRelativePast(target: number, now: number): string {
-  const sec = Math.max(0, Math.round((now - target) / 1000));
-  if (sec < 60) return t('time.ago_seconds', { n: sec });
-  const min = Math.round(sec / 60);
-  if (min < 60) return t('time.ago_minutes', { n: min });
-  const h = Math.round(min / 60);
-  if (h < 48) return t('time.ago_hours', { n: h });
-  const d = Math.round(h / 24);
-  return t('time.ago_days', { n: d });
-}
+// formatRelativeFuture / formatRelativePast vivent désormais dans
+// `src/ui/relative-time.ts` (partage avec l'overlay). Cf. import en haut.
 
 const root = document.getElementById('app');
-if (root) render(<Popup />, root);
+if (root) {
+  render(
+    <ErrorBoundary context="popup">
+      <Popup />
+    </ErrorBoundary>,
+    root,
+  );
+}

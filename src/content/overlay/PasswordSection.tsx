@@ -18,6 +18,7 @@
 import { useState } from 'preact/hooks';
 import { estimatePasswordStrength, type PasswordStrength } from '../../engine/encrypt-zip';
 import { t } from '../../ui/i18n';
+import { HelpTip } from '../../ui/HelpTip';
 
 interface Props {
   /** Mot de passe courant (état remonté côté Overlay pour passer à enqueue). */
@@ -42,7 +43,10 @@ export function PasswordSection({ password, onChange }: Props): preact.JSX.Eleme
   return (
     <div class="v-field">
       <label class="v-pw-head">
-        <span>{t('password.label')}</span>
+        <span>
+          {t('password.label')}
+          <HelpTip text={t('tip.encryption')} />
+        </span>
         {/* Signal visuel clair : tant que le champ est vide → l'archive
             sortira EN CLAIR. Dès qu'au moins 1 char est saisi → le badge
             « 🔒 Chiffrement activé » apparaît côté droit du label.

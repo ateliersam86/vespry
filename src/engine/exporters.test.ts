@@ -30,7 +30,7 @@ function msg(over: Partial<RawMessage> = {}): RawMessage {
 describe('toTxt', () => {
   it('inclut en-tête, auteur, date et contenu', () => {
     const out = toTxt(ctx, [msg()]);
-    expect(out).toContain('Groupe avec Sora — #questions-sam');
+    expect(out).toContain('Groupe avec Sora · #questions-sam');
     expect(out).toContain('1 messages');
     expect(out).toContain('Sam');
     expect(out).toContain('bonjour');

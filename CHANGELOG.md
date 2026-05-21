@@ -8,6 +8,59 @@ l'overlay et le popup vient de `package.json`.
 Première version fonctionnelle prête pour soumission Chrome Web Store,
 Microsoft Edge Add-ons et Mozilla AMO.
 
+### Session 2026-05-21 — onboarding, tooltips, robustesse erreurs
+
+**Tutoriel interactif au premier lancement** : `Tutorial.tsx` + 3 steps
+(sélection serveurs/salons, panneau réglages, bouton Lancer). Spotlight via
+box-shadow géante autour de l'élément ciblé, backdrop dim, bulle Preact
+positionnée selon `step.placement`. Trigger au montage de l'overlay si flag
+`vespry.tutoCompleted` absent. Bouton « Revoir le tutoriel » dans le popup
+qui reset le flag. 16 clés i18n `tuto.*` × 15 locales.
+
+**Tooltips d'aide contextuelle** : `HelpTip.tsx` (pastille `?` 16 px,
+bulle au survol/focus, ARIA propre, Esc ferme). Branchés sur 7 endroits :
+chiffrement, planification, format d'export, période, découpage des gros
+salons, incrémental, opt-in signalement schéma. `CheckRow` étendu pour
+accepter une prop `help?`.
+
+**Section Confidentialité dédiée** : le toggle « signalement anonyme des
+nouveaux champs Discord » est sorti de Filtres vers une section Privacy
+propre. Wording reformulé en clair, tooltip explique ce qui part
+exactement (juste le nom des champs, jamais le contenu).
+
+**Bug filtres résolu** : le mode Simple par défaut masquait toute la
+section Filtres, perçu comme « ne fonctionnent pas du tout ». Mode Avancé
+activé par défaut au premier launch, choix persisté dans
+`chrome.storage.local`. `stopPropagation` préventif sur tous les inputs
+texte/date pour neutraliser les raccourcis globaux de Discord. Datalist
+auteur en place (alimentation IDB en follow-up #57).
+
+**Date du dernier export visible** : section Planification affiche
+maintenant « dernier export auto · prochain », et sous le toggle
+Incrémental « dernier export de ce serveur » (ou « aucun export
+précédent »). Données depuis `controller.listRuns()` et
+`saved.lastFiredAt`. Helpers `formatRelativePast` / `formatRelativeFuture`
+extraits dans `src/ui/relative-time.ts` (partage popup + overlay).
+
+**Audit patterns IA dans i18n + HTML** : 0 em-dash restant dans toutes
+les chaînes user-facing (15 locales + `exporters.ts`). Tournures marketing
+IA remplacées par du langage builder concret. Tests adaptés (un seul
+ajustement : séparateur `·` au lieu de `—` dans l'en-tête TXT).
+
+**Error Boundary Preact** : `src/ui/ErrorBoundary.tsx` wrappe maintenant
+l'Overlay (via `mount.tsx`) et le popup. `componentDidCatch` →
+`recordEvent` + UI fallback avec bouton « Signaler ce problème » qui
+ouvre une issue GitHub pré-remplie. Plus d'écran blanc sur crash composant.
+Audit des ~56 try/catch : `recordEvent` ajouté dans les muets critiques
+(engine, controller, service-worker), commentaires `// silencieux:` sur
+les muets intentionnels.
+
+**Bouton « Signaler ce problème » étendu** : déjà présent dans l'overlay
+(header), désormais aussi dans le footer du popup. Pré-remplissage
+GitHub : version, navigateur, langue, 60 dernières erreurs captées,
+champs Discord inconnus rencontrés. Aucun jeton, aucun contenu de
+message dans le rapport.
+
 ### Session 2026-05-19 — features Discord HTML + UX planification + sécurité
 
 **Rendu HTML enrichi (parité DCE/Discrub)** :

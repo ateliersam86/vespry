@@ -185,6 +185,9 @@ function vespryVersion(): string {
   try {
     return chrome.runtime.getManifest().version;
   } catch {
+    // silencieux : vitest n'a pas `chrome.runtime`, fallback statique. Tout
+    // contexte runtime (offscreen, background) a `chrome` — un échec ici
+    // est uniquement le cas test.
     return '0.1.0';
   }
 }

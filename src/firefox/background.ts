@@ -39,7 +39,7 @@
  */
 import { VespryController } from '../content/overlay/controller';
 import { getToken } from '../engine/auth';
-import { installGlobalHandlers } from '../diagnostics';
+import { installGlobalHandlers, recordEvent } from '../diagnostics';
 import { loadCredits } from '../credits';
 import { createCheckout, fetchDonorFeed } from '../donors';
 import { ALL_MEDIA, DEFAULT_FORMATS } from '../engine/checkpoint-types';
@@ -110,6 +110,7 @@ async function syncScheduledAlarm(): Promise<void> {
     await installAlarmFor(chrome.alarms, schedule);
   } catch (e) {
     console.warn('[Vespry] sync alarm a échoué :', e);
+    recordEvent('warn', `syncScheduledAlarm a échoué : ${String(e)}`);
   }
 }
 

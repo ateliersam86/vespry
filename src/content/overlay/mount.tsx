@@ -6,6 +6,7 @@
  */
 import { render } from 'preact';
 import { Overlay } from './Overlay';
+import { ErrorBoundary } from '../../ui/ErrorBoundary';
 import type { RemoteController } from '../../ui/remote-controller';
 import overlayCss from './overlay.css?inline';
 
@@ -26,7 +27,12 @@ export function openOverlay(controller: RemoteController): void {
   shadow.appendChild(mountPoint);
   document.body.appendChild(host);
 
-  render(<Overlay controller={controller} onClose={closeOverlay} />, mountPoint);
+  render(
+    <ErrorBoundary context="overlay">
+      <Overlay controller={controller} onClose={closeOverlay} />
+    </ErrorBoundary>,
+    mountPoint,
+  );
 }
 
 export function closeOverlay(): void {

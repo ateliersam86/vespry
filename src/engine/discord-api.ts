@@ -9,6 +9,7 @@
  * discord.com ; le jeton passe dans l'en-tête `authorization`. Aucun cookie
  * n'est nécessaire — c'est le même modèle que DiscordChatExporter.
  */
+import { recordEvent } from '../diagnostics';
 import {
   DiscordApiError,
   type ActiveThreadsResponse,
@@ -213,9 +214,12 @@ export class DiscordApi {
       );
       const n = res.total_results;
       return typeof n === 'number' && n >= 0 ? n : null;
-    } catch {
+    } catch (e) {
       // 403 (pas la permission de chercher), 404 (salon inaccessible),
       // 429 (rate-limit excédé) — tous non-fatals pour l'export lui-même.
+      // Traçé pour qu'un utilisateur dont l'estimation foire en masse puisse
+      // ouvrir un rapport éclairant.
+      recordEvent('warn', `searchMessageCount(${channelId}) a échoué : ${String(e)}`);
       return null;
     }
   }
@@ -241,7 +245,10 @@ export class DiscordApi {
       );
       const n = res.total_results;
       return typeof n === 'number' && n >= 0 ? n : null;
-    } catch {
+    } catch (e) {
+      // Même logique que searchMessageCount — non-fatal, mais on trace pour
+      // pouvoir investiguer si l'estimation foire systématiquement sur les DMs.
+      recordEvent('warn', `searchDmMessageCount(${channelId}) a échoué : ${String(e)}`);
       return null;
     }
   }
@@ -372,9 +379,17 @@ export class DiscordApi {
   async downloadAsset(url: string): Promise<Blob | null> {
     try {
       const res = await fetch(url);
-      if (!res.ok) return null;
+      if (!res.ok) {
+        // 403 / 404 sur lien CDN signé typiquement = URL expirée (~24 h).
+        // L'asset reste marqué `failed` dans le store, on note la raison.
+        recordEvent('warn', `downloadAsset ${res.status} ${res.statusText} ${url.slice(0, 80)}`);
+        return null;
+      }
       return await res.blob();
-    } catch {
+    } catch (e) {
+      // Erreur réseau / CSP / lien malformé — l'export continue mais l'asset
+      // manquera dans le zip. Sam doit voir ces lignes dans le rapport.
+      recordEvent('warn', `downloadAsset a échoué : ${String(e)} sur ${url.slice(0, 80)}`);
       return null;
     }
   }

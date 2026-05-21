@@ -170,7 +170,7 @@ function stickerUrl(id: string, formatType: number): string | null {
 export function toTxt(ctx: ExportContext, messages: RawMessage[]): string {
   const L = ctx.labels;
   const out: string[] = [
-    `${ctx.guildName} — #${ctx.channelName}`,
+    `${ctx.guildName} · #${ctx.channelName}`,
     `${messages.length} ${L.messages}`,
     '='.repeat(60),
     '',
@@ -525,16 +525,16 @@ function renderComponent(c: RawComponent): string {
     if (c.style === 5 && c.url) {
       return `<a class="comp-btn link" href="${esc(safeHref(c.url))}" rel="noopener noreferrer">${label}</a>`;
     }
-    return `<span class="comp-btn${c.disabled ? ' disabled' : ''}">${label || '—'}</span>`;
+    return `<span class="comp-btn${c.disabled ? ' disabled' : ''}">${label || '·'}</span>`;
   }
   // Menu déroulant : on liste les options si présentes.
   const ph = esc(c.placeholder ?? '');
   if (c.options && c.options.length > 0) {
     const opts = c.options
       .map((o) => `<li>${esc(o.label)}</li>`).join('');
-    return `<div class="comp-menu"><span class="comp-menu-label">▾ ${ph || '—'}</span><ul>${opts}</ul></div>`;
+    return `<div class="comp-menu"><span class="comp-menu-label">▾ ${ph || '·'}</span><ul>${opts}</ul></div>`;
   }
-  return `<span class="comp-menu-label">▾ ${ph || '—'}</span>`;
+  return `<span class="comp-menu-label">▾ ${ph || '·'}</span>`;
 }
 
 /** Rend l'ensemble des composants d'un message. Null si vide. */
@@ -732,7 +732,7 @@ const HTML_STYLE = HTML_STYLE_POLL + `
 /** Rend un message système : ligne centrée et discrète. */
 function renderSystemMessage(m: RawMessage, labels: ExportLabels): string {
   const label = humanize(m.content, labels.mentions).trim() || labels.systemMessage(m.type);
-  return `<div class="sys">— ${esc(label)} · ${esc(fmtDate(m.timestamp))} —</div>`;
+  return `<div class="sys">${esc(label)} · ${esc(fmtDate(m.timestamp))}</div>`;
 }
 
 /** Rend un message normal (par défaut ou réponse). */
@@ -804,7 +804,7 @@ export function toHtml(ctx: ExportContext, messages: RawMessage[]): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(ctx.guildName)} — #${esc(ctx.channelName)}</title>
+<title>${esc(ctx.guildName)} · #${esc(ctx.channelName)}</title>
 <style>${HTML_STYLE}</style>
 </head>
 <body>
@@ -850,7 +850,7 @@ export function htmlHeader(ctx: ExportContext, messageCount: number): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(ctx.guildName)} — #${esc(ctx.channelName)}</title>
+<title>${esc(ctx.guildName)} · #${esc(ctx.channelName)}</title>
 <style>${HTML_STYLE}</style>
 </head>
 <body>
@@ -920,7 +920,7 @@ export function csvMessage(ctx: ExportContext, m: RawMessage): string {
 export function txtHeader(ctx: ExportContext, messageCount: number): string {
   const L = ctx.labels;
   return [
-    `${ctx.guildName} — #${ctx.channelName}`,
+    `${ctx.guildName} · #${ctx.channelName}`,
     `${messageCount} ${L.messages}`,
     '='.repeat(60),
     '',

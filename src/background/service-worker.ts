@@ -20,6 +20,7 @@ import {
   type VespryState,
 } from '../messaging';
 import { getToken } from '../engine/auth';
+import { installGlobalHandlers, recordEvent } from '../diagnostics';
 import {
   SCHEDULE_STORAGE_KEY,
   SCHEDULED_EXPORT_ALARM_NAME,
@@ -27,6 +28,8 @@ import {
   isScheduledExport,
   loadSchedule,
 } from '../engine/scheduler';
+
+installGlobalHandlers('service-worker');
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
 const DISCORD_URL = 'https://discord.com/channels/@me';
@@ -77,6 +80,7 @@ async function syncScheduledAlarm(): Promise<void> {
     await installAlarmFor(chrome.alarms, schedule);
   } catch (e) {
     console.warn('[Vespry] sync alarm a échoué :', e);
+    recordEvent('warn', `syncScheduledAlarm a échoué : ${String(e)}`);
   }
 }
 
@@ -154,6 +158,9 @@ async function forwardCommand(command: VespryCommand): Promise<CommandResponse> 
   try {
     await ensureOffscreen();
   } catch (e) {
+    // L'utilisateur ne pourra plus exporter — c'est critique, on trace pour
+    // qu'un rapport remonte la cause exacte (CSP, quota, race au démarrage).
+    recordEvent('error', `ensureOffscreen a échoué : ${String(e)}`);
     return { ok: false, error: `offscreen non créé : ${String(e)}` };
   }
   const envelope: ExecEnvelope = { kind: 'vespry-exec', command };
@@ -165,10 +172,13 @@ async function forwardCommand(command: VespryCommand): Promise<CommandResponse> 
       const r = await chrome.runtime.sendMessage(envelope);
       if (r && typeof r === 'object') return r as CommandResponse;
     } catch (e) {
+      // silencieux par tentative : la boucle réessaie. On consigne uniquement
+      // l'échec FINAL ci-dessous pour éviter 6 lignes redondantes dans le buffer.
       lastError = String(e);
     }
     await sleep(400);
   }
+  recordEvent('error', `forwardCommand(${command.cmd}) abandon après 6 tentatives : ${lastError}`);
   return { ok: false, error: lastError };
 }
 

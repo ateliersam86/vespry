@@ -17,6 +17,7 @@ import { packageRun } from '../../engine/packager';
 import { detectPerfProfile } from '../../engine/perf-profile';
 import { maybeSendSchemaReport } from '../../engine/schema-report';
 import { loadCredits } from '../../credits';
+import { recordEvent } from '../../diagnostics';
 import type {
   AssetKind,
   ExportOptions,
@@ -424,7 +425,11 @@ export class VespryController {
     if (!this.api) return [];
     try {
       return await this.api.getMessages(channelId, before);
-    } catch {
+    } catch (e) {
+      // L'aperçu est secondaire (UX read-only avant export) — on n'interrompt
+      // rien, mais on trace pour qu'un utilisateur dont l'aperçu reste vide
+      // sache pourquoi en signalant un problème.
+      recordEvent('warn', `previewChannel(${channelId}) a échoué : ${String(e)}`);
       return [];
     }
   }
@@ -446,8 +451,11 @@ export class VespryController {
       for (const th of await this.api.getActiveThreads(guildId)) {
         if (th.parent_id && selected.has(th.parent_id)) threads.set(th.id, th);
       }
-    } catch {
-      /* threads actifs indisponibles — sans gravité */
+    } catch (e) {
+      // Threads actifs indisponibles (perms, salon supprimé) — non bloquant
+      // mais on garde la trace : un utilisateur qui voit ses threads
+      // manquants dans l'export aura la raison dans le rapport.
+      recordEvent('warn', `getActiveThreads(${guildId}) a échoué : ${String(e)}`);
     }
     for (const ch of channels) {
       for (const visibility of ['public', 'private'] as const) {
@@ -863,8 +871,15 @@ export class VespryController {
     try {
       status = await runner.run(item.runId);
     } catch (e) {
+      // Échec dur du runner — l'utilisateur a déjà la trace courte dans le
+      // panneau (pushLog ↓). On enregistre la version complète (stack si
+      // dispo) dans le buffer diagnostic pour étoffer le rapport GitHub.
       status = 'failed';
       pushLog(item.log, `${clock()}  ✗ ${e instanceof Error ? e.message : String(e)}`);
+      recordEvent(
+        'error',
+        `runItem(${item.runId}): ${e instanceof Error ? `${e.message}\n${e.stack ?? ''}` : String(e)}`,
+      );
     }
     item.status = status;
     if (status === 'completed' || status === 'partial') {
