@@ -240,30 +240,97 @@ export async function resetTutorial(): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEY]: false, [FIRST_SEEN_KEY]: false });
 }
 
-/** Calcule la position de la bulle selon le placement choisi. */
+/**
+ * Calcule la position de la bulle selon le placement choisi, en clampant
+ * dans le viewport. La bulle fait ~320 × ~180 px (cf. Tutorial.css), et
+ * on garde un margin de sécurité de 16 px par rapport aux bords. Si le
+ * placement souhaité fait dépasser la bulle, on bascule sur l'aligne
+ * opposé (translate négatif au lieu de positif, ou centrage au bord).
+ *
+ * Cf. feedback Sam 2026-05-21 : « l'étape 1 du tutoriel est complètement
+ * coupée, elle dépasse totalement hors du viewport » — typique du
+ * bouton lanceur en haut à droite avec `placement: 'bottom'`.
+ */
+const BUBBLE_W = 320;
+const BUBBLE_H = 180;
+const SAFE = 16;
+
 function bubblePosition(spot: Rect, placement: 'top' | 'bottom' | 'left' | 'right'): string {
   const margin = 16;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  // Clamp viewport pour éviter qu'une bulle déborde quand le spotlight est
-  // près d'un bord (ex. bouton lanceur en haut à droite → placement bottom).
+
+  // Helper : à partir d'une position "naïve" (centre cible), renvoie un
+  // `(left, transform)` qui garantit que la bulle reste dans le viewport.
+  // `cx` = x du centre désiré, sans clamp.
+  function clampX(cx: number): { left: number; tx: string } {
+    const halfW = BUBBLE_W / 2;
+    if (cx - halfW < SAFE) {
+      // Trop à gauche → on aligne le bord gauche de la bulle au SAFE.
+      return { left: SAFE, tx: '0%' };
+    }
+    if (cx + halfW > vw - SAFE) {
+      // Trop à droite → on aligne le bord droit de la bulle à vw - SAFE.
+      return { left: vw - SAFE, tx: '-100%' };
+    }
+    return { left: cx, tx: '-50%' };
+  }
+  function clampY(cy: number): { top: number; ty: string } {
+    const halfH = BUBBLE_H / 2;
+    if (cy - halfH < SAFE) {
+      return { top: SAFE, ty: '0%' };
+    }
+    if (cy + halfH > vh - SAFE) {
+      return { top: vh - SAFE, ty: '-100%' };
+    }
+    return { top: cy, ty: '-50%' };
+  }
+
   switch (placement) {
     case 'right': {
-      const left = Math.min(spot.left + spot.width + margin, vw - 340);
-      return `top:${Math.max(16, spot.top)}px;left:${left}px;transform:translate(0,0);`;
+      const left = spot.left + spot.width + margin;
+      const fitsRight = left + BUBBLE_W + SAFE <= vw;
+      if (fitsRight) {
+        const y = clampY(spot.top + spot.height / 2);
+        return `top:${y.top}px;left:${left}px;transform:translate(0,${y.ty});`;
+      }
+      // Pas la place à droite → fallback en bottom centré.
+      const top = Math.min(spot.top + spot.height + margin, vh - BUBBLE_H - SAFE);
+      const x = clampX(spot.left + spot.width / 2);
+      return `top:${top}px;left:${x.left}px;transform:translate(${x.tx},0);`;
     }
     case 'left': {
-      const left = Math.max(spot.left - margin, 340);
-      return `top:${Math.max(16, spot.top)}px;left:${left}px;transform:translate(-100%,0);`;
+      const right = spot.left - margin;
+      const fitsLeft = right - BUBBLE_W - SAFE >= 0;
+      if (fitsLeft) {
+        const y = clampY(spot.top + spot.height / 2);
+        return `top:${y.top}px;left:${right}px;transform:translate(-100%,${y.ty});`;
+      }
+      // Pas la place à gauche → fallback en bottom centré.
+      const top = Math.min(spot.top + spot.height + margin, vh - BUBBLE_H - SAFE);
+      const x = clampX(spot.left + spot.width / 2);
+      return `top:${top}px;left:${x.left}px;transform:translate(${x.tx},0);`;
     }
     case 'bottom': {
-      const top = Math.min(spot.top + spot.height + margin, vh - 200);
-      return `top:${top}px;left:${spot.left + spot.width / 2}px;transform:translate(-50%,0);`;
+      const top = spot.top + spot.height + margin;
+      const fitsBottom = top + BUBBLE_H + SAFE <= vh;
+      const y = fitsBottom ? top : Math.max(SAFE, spot.top - margin - BUBBLE_H);
+      const x = clampX(spot.left + spot.width / 2);
+      const ty = fitsBottom ? '0' : '0'; // toujours aligné top de la bulle au y calculé
+      return `top:${y}px;left:${x.left}px;transform:translate(${x.tx},${ty});`;
     }
     case 'top':
     default: {
-      const top = Math.max(spot.top - margin, 200);
-      return `top:${top}px;left:${spot.left + spot.width / 2}px;transform:translate(-50%,-100%);`;
+      const above = spot.top - margin;
+      const fitsTop = above - BUBBLE_H - SAFE >= 0;
+      if (fitsTop) {
+        const x = clampX(spot.left + spot.width / 2);
+        return `top:${above}px;left:${x.left}px;transform:translate(${x.tx},-100%);`;
+      }
+      // Pas la place au-dessus → bascule en bottom.
+      const top = Math.min(spot.top + spot.height + margin, vh - BUBBLE_H - SAFE);
+      const x = clampX(spot.left + spot.width / 2);
+      return `top:${top}px;left:${x.left}px;transform:translate(${x.tx},0);`;
     }
   }
 }

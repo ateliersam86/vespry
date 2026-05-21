@@ -53,13 +53,15 @@ function injectLauncher(): void {
   ].join(';');
   // Mascotte hibou + libellé. Le libellé est dans un span dédié pour que
   // `updateLauncher` puisse l'actualiser sans effacer l'icône.
-  // Évite `innerHTML` (anti-pattern signalé par le linter AMO) en
-  // construisant le DOM via DOMParser pour l'icône SVG + appendChild
-  // pour le span. Contenu 100 % sous notre contrôle, mais le linter ne
-  // peut pas le savoir — autant éviter le warning. Audit final 2026-05-19 #11.
-  const svgEl = new DOMParser()
-    .parseFromString(owlSvgString(20), 'image/svg+xml')
-    .documentElement;
+  // Évite `innerHTML` (anti-pattern signalé par le linter AMO). Important :
+  // `DOMParser.parseFromString(..., 'image/svg+xml')` donne un *Document SVG*
+  // dont les nœuds appartiennent à ce document — un simple `appendChild`
+  // dans un document HTML perd le namespace SVG sur certains navigateurs
+  // (le hibou est rendu invisible). `document.importNode(node, true)`
+  // recopie le sous-arbre avec namespaces préservés. Cf. feedback Sam
+  // 2026-05-21 : « tu n'as toujours pas restauré le logo de Vespry ».
+  const svgDoc = new DOMParser().parseFromString(owlSvgString(20), 'image/svg+xml');
+  const svgEl = document.importNode(svgDoc.documentElement, true);
   btn.appendChild(svgEl);
   const label = document.createElement('span');
   label.id = LABEL_ID;
