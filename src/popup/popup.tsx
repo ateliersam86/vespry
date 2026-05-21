@@ -11,7 +11,7 @@ import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { progressPct } from '../messaging';
 import { t } from '../ui/i18n';
 import { formatRelativeFuture, formatRelativePast } from '../ui/relative-time';
-import { reportProblem } from '../diagnostics';
+import { reportProblem, proposeImprovement } from '../diagnostics';
 import { resetAllVespryData } from '../ui/reset-vespry';
 import { checkForUpdate, getVersion } from '../version';
 import { getThemePref, resolveTheme } from '../ui/theme-pref';
@@ -216,6 +216,19 @@ function Popup(): JSX.Element {
           }}
         >
           {t('report.problem')}
+        </span>
+        {' · '}
+        <span
+          class="popup__report"
+          onClick={() => {
+            // Ouvre une discussion GitHub (Ideas) pré-remplie. Différent de
+            // « Signaler un problème » : pas de rapport technique, juste
+            // un canal pour les suggestions produit. Template guide vers
+            // « cas d'usage » plutôt que « solution ».
+            proposeImprovement();
+          }}
+        >
+          {t('feedback.propose')}
         </span>
       </footer>
     </div>

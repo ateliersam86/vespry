@@ -288,5 +288,6 @@
   "reset.partial_title": "Effacement partiel",
   "reset.partial_help": "Recharge l'onglet Discord pour finaliser la suppression de l'historique.",
   "reset.failed_title": "Échec de la réinitialisation",
-  "reset.retry": "Réessayer"
+  "reset.retry": "Réessayer",
+  "feedback.propose": "Proposer une amélioration"
 }

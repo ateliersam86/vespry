@@ -102,3 +102,26 @@ export async function reportProblem(
   }
   return 'clipboard';
 }
+
+/**
+ * Ouvre une discussion GitHub (catégorie « Ideas ») pré-remplie pour que
+ * l'utilisateur propose une amélioration. Différent de `reportProblem` :
+ *
+ *   - Cible Discussions, pas Issues (votes, threading, conversation).
+ *   - Aucun rapport technique automatique (env, journal, etc.) — c'est
+ *     une suggestion produit, pas un bug. Seule la version est passée
+ *     pour aider à savoir quelle release l'a inspirée.
+ *   - Le template `.github/DISCUSSION_TEMPLATE/ideas.yml` guide l'utilisateur
+ *     vers une description orientée problème, pas solution.
+ *
+ * Si `GITHUB_REPO` n'est pas configuré, ouvre quand même la page racine
+ * du dépôt en fallback (l'utilisateur trouvera Discussions à la main).
+ */
+export function proposeImprovement(): void {
+  if (!GITHUB_REPO) return;
+  const url =
+    `https://github.com/${GITHUB_REPO}/discussions/new`
+    + '?category=ideas'
+    + `&body=${encodeURIComponent(`<!-- Version Vespry : ${getVersion()} -->\n\n`)}`;
+  window.open(url, '_blank', 'noopener');
+}

@@ -1,0 +1,52 @@
+title: "[Idée] "
+labels: ["idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci pour ta proposition. Pour qu'elle ait des chances d'être
+        retenue, raconte-la en partant du problème que tu vis, pas de la
+        solution. Une idée bien posée vaut dix idées vagues.
+
+  - type: textarea
+    id: usecase
+    attributes:
+      label: Le cas d'usage
+      description: Décris ce que tu essaies de faire avec Vespry et ce qui te bloque ou te fait perdre du temps actuellement.
+      placeholder: |
+        Exemple : « Je veux archiver un serveur Discord avant qu'il ferme,
+        et après l'export j'aimerais pouvoir chercher rapidement un mot
+        dans tous les salons sans ouvrir chaque fichier HTML. »
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: Ce que tu fais aujourd'hui
+      description: Quelle est ta solution actuelle (autre outil, contournement, abandon) ?
+      placeholder: |
+        Exemple : « J'utilise grep en ligne de commande, mais ça ne marche
+        que pour le TXT, pas pour le HTML qui a tous les contenus. »
+    validations:
+      required: false
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: Ton idée (optionnel)
+      description: Si tu as une intuition de solution, vas-y. Sinon laisse vide, l'important c'est le problème.
+      placeholder: |
+        Exemple : « Une page search.html dans le zip avec un index local
+        des messages, accessible hors ligne. »
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Version Vespry
+      description: Tu peux la trouver dans le popup de l'extension.
+      placeholder: "0.1.0"
+    validations:
+      required: false
